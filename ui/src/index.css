@@ -1,0 +1,294 @@
+/* ============================================================================
+   TOKENS — la charte de couleurs de Memoglyph.
+
+   Les ratios cités sont calculés sur les fonds réellement employés par cette
+   interface (`tests/unit/test_charte_contraste.py`), jamais estimés. Un fond qui
+   n'existe pas ici n'a pas été vérifié.
+
+   Deux règles :
+   - **Inter reste la police.** Cette UI tient sa hiérarchie sur 17 graisses
+     distinctes ; une police à graisse unique demanderait une refonte
+     typographique complète.
+   - **Le violet reste** la marque du contenu produit par un LLM.
+   ============================================================================ */
+:root {
+  /* --- marque « Premium » (martin-pêcheur).
+     Convergence vers la maquette de référence : l'accent
+     devient le TEAL du martin-pêcheur, décliné en un teal PROFOND porteur de
+     texte (AA) et un teal VIF réservé aux dégradés et motifs (onde, boutons de
+     lecture) — jamais du texte fin. L'orange du poitrail est l'accent chaud
+     décoratif (onde lue, horodatages), distinct du rouge d'erreur. --- */
+  --encre: #0e2a2e;          /* encre teintée pétrole (titres) */
+  --petrole: #0a7178;        /* teal profond = accent porteur de texte ; AA (≥4.5) jusque sur le survol de ligne --panel-3 */
+  --kf-vif: #14b8c0;         /* teal vif : dégradés & motifs, PAS de texte fin */
+  --kf-menthe: #37d3b0;      /* fin du dégradé signature */
+  --grad: linear-gradient(120deg, var(--kf-vif) 0%, var(--kf-menthe) 100%);
+  --breast: #cf6a3f;         /* orange poitrail : onde lue, horodatages (décoratif/large) */
+  --breast-bg: #f6e7de;
+  --ink-on-teal: #04212a;    /* encre posée sur un fond teal VIF (dégradé) */
+  --celadon: #6ac6ac;
+  --terrecuite: #a9542f;
+  --bledore: #e3cd82;
+  --sable: #eadfcc;
+  --fond: #ffffff;
+  --encre-fond: #0a1417;     /* fond sombre teinté pétrole (mode sombre + rail) */
+
+  /* --- HORS CHARTE, et assumé plutôt que subi.
+     La charte n'a pas de violet, et aucune de ses quatre familles ne peut tenir
+     ce rôle : le pétrole est déjà la couleur d'action, le céladon « ne remplit
+     rien, il signale », la terre cuite se lit « critique », et le blé doré ne
+     porte pas de texte (1,54:1). --- */
+  --violet: #6d45a5; /* 5,99:1 au pire sur les fonds clairs d'ici */
+  --violet-clair: #ece4f7;
+
+  /* --- gris. Le 45 % n'est JAMAIS du texte : il plafonne à 2,71:1 sur le fond
+     le plus sombre d'ici. --- */
+  --gris-texte: #294b4f; /* texte courant, teinté pétrole (~9:1 sur blanc) */
+  --gris-legende: #476a6e; /* AA (≥4.5) jusque sur le survol de ligne --panel-3 — légendes, texte secondaire */
+  --gris-45: #85a7a9; /* bordures et repères, jamais un mot lu */
+  --gris-filet: #bcd4d4;
+
+  /* --- teintes claires, une par famille --- */
+  --petrole-clair: #dbeeef;
+  --celadon-clair: #e2f2ec;
+  --terrecuite-clair: #efddd3;
+  --bledore-clair: #f6efd5;
+  --sable-clair: #eef5f5;   /* fond de page refroidi (teinte teal) */
+
+  /* --- surfaces. Le papier reste CHAUD : `--sable-clair` de la charte est à
+     un cheveu du `#f7f5ef` d'origine. --- */
+  --bg: var(--sable-clair);
+  --panel: var(--fond);
+  --panel-2: #e8f2f2;
+  --panel-3: #ddecec; /* survol de ligne */
+  --border: #d5e6e6;
+  --border-strong: #5f8b8d; /* ~3:1 sur le survol de ligne, WCAG 1.4.11 */
+  --code-bg: #e8f2f2;
+
+  /* --- action. Le pétrole de MARQUE rend 6,74:1 au pire ici, mieux que le
+     `#0d615d` qu'il remplace (6,33:1). Adopter la couleur de marque est un
+     gain, pas un compromis. --- */
+  --accent: var(--petrole);
+  --accent-hover: #086b73; /* teal profond assombri */
+  --accent-bg: #e0f1f1;
+  --accent-border: #a6d9db;
+  --accent-text: #ffffff; /* label du bouton plein (blanc sur teal profond ~4.7:1) */
+  --halo: rgb(20 184 192 / 15%); /* halo teal vif, très diffus, en tête de page */
+
+  /* --- le céladon ne remplit rien, il SIGNALE. Il échoue comme texte (2,31:1)
+     et c'est cohérent : il ne marque que ce que l'on touche à l'instant. --- */
+  --focus-color: var(--celadon);
+  --focus: 0 0 0 3px rgb(123 169 143 / 34%);
+
+  /* --- statuts. Jamais la couleur seule : chaque état porte son mot, ce qui
+     règle aussi la capture en noir et blanc et le daltonisme. --- */
+  /* Assombris pour tenir AA jusque sur le survol de ligne d'ici. */
+  --ok: #396e52; /* 4,86:1 au pire */
+  --ok-bg: var(--celadon-clair);
+  --warn: #7d601b; /* 4,81:1 au pire — blé doré densifié */
+  --warn-bg: var(--bledore-clair);
+  --err: #9b4d2b; /* 5,23:1 au pire — terre cuite assombrie 8 % */
+  --err-bg: var(--terrecuite-clair);
+  --off: var(--gris-legende); /* CORRIGÉ : `--ink-400` échouait à 2,65:1 */
+
+  --llm: var(--violet);
+  --llm-bg: var(--violet-clair);
+  --llm-hover: #59368a;
+
+  /* --- surfaces nommées, autrefois en dur dans les composants --- */
+  --input-bg: rgb(255 255 255 / 80%); /* champ de recherche, blanc translucide cool */
+  --skeleton: #dbeaea; /* onde du squelette de chargement */
+  --badge-content-bg: #e3efef;
+  --backdrop: rgb(6 20 22 / 58%);
+  --bar-bg: rgb(238 246 246 / 82%); /* barres collantes, teintées teal, translucides */
+  --panel-glass: rgb(255 255 255 / 92%);
+  --accent-glow: rgb(20 184 192 / 26%); /* halo porté des boutons pleins (teal vif) */
+  --llm-glow: rgb(109 69 165 / 20%);
+  --shadow-tint: rgb(26 26 26 / 7%);
+
+  /* --- LE RAIL est sombre dans les DEUX modes : c'est un parti pris de
+     l'interface, pas un défaut. Il porte donc ses propres jetons, calés sur le
+     fond encre de la charte, et ne suit pas la bascule clair/sombre. --- */
+  --rail-bg: var(--encre-fond);
+  --rail-halo: rgb(30 90 102 / 34%); /* pétrole de la charte */
+  --rail-text: #dce9e6; /* 12,51:1 */
+  --rail-item: #9fb0ad; /* 6,90:1 — item de navigation au repos */
+  --rail-muted: #9aa0a2; /* 5,89:1. CORRIGE le #788b87 d'origine, qui tombait à
+     4,34:1 alors qu'il servait de texte à 10 px. */
+  --rail-ok: #5aa587; /* 5,32:1 — pastille « données locales » */
+  --rail-border: rgb(255 255 255 / 7%);
+  --rail-hover-bg: rgb(255 255 255 / 5%);
+  --rail-badge-bg: rgb(255 255 255 / 16%);
+  --rail-badge-neutre: rgb(148 163 184 / 18%);
+
+  /* --- texte --- */
+  --text: var(--gris-texte);
+  --text-h: var(--encre);
+  --muted: var(--gris-legende); /* était CONSOMMÉ 8 fois sans être défini */
+  --text-muted: var(--gris-legende); /* idem, une fois */
+
+  /* --- alias hérités. Les composants les nomment encore ; ils sont conservés
+     pour que la bascule de charte ne demande aucune retouche de composant. --- */
+  --ink-950: var(--encre);
+  --ink-800: #33413f;
+  --ink-600: var(--gris-texte);
+  --ink-400: var(--gris-45); /* décoratif seulement, voir plus haut */
+  --paper: var(--bg);
+  --surface: var(--panel);
+  --surface-soft: var(--panel-2);
+  --line: var(--border);
+  --line-strong: var(--gris-filet);
+  --petrol-700: var(--accent);
+  --petrol-600: #14746f;
+  --petrol-100: var(--petrole-clair);
+  --petrol-50: var(--accent-bg);
+  --violet-700: var(--violet);
+  --violet-100: var(--violet-clair);
+  --amber-700: var(--warn);
+  --amber-100: var(--warn-bg);
+  --red-700: var(--err);
+  --red-100: var(--err-bg);
+  --green-700: var(--ok);
+  --green-100: var(--ok-bg);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --shadow-xs: 0 1px 2px rgb(26 26 26 / 5%);
+  --shadow-sm: 0 8px 24px rgb(26 26 26 / 7%);
+  --shadow-md: 0 18px 50px rgb(26 26 26 / 10%);
+  --shadow-lg: 0 24px 64px rgb(26 26 26 / 14%); /* était CONSOMMÉ sans être défini
+     par `.merge-dialog` : la boîte de fusion n'avait donc aucune ombre. */
+  /* `--focus` est défini plus haut, en céladon. Une seconde déclaration ici
+     l'écrasait silencieusement en pétrole — dernière déclaration gagnante. */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --fast: 140ms var(--ease-out);
+  --normal: 220ms var(--ease-out);
+
+  --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'SFMono-Regular', Consolas, ui-monospace, monospace;
+
+  font: 15px/1.55 var(--sans);
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ============================================================================
+   SOMBRE — des pas RECALCULÉS sur #16262b, pas une inversion.
+
+   `--encre-fond` est le pétrole poussé au très sombre. Conséquence mécanique :
+   le pétrole de marque y tombe à 2,01:1, sous le plancher de 3:1. Le système
+   de couleur a donc deux jeux et non un, et c'est irréductible.
+
+   Le bouton primaire sombre porte un label ENCRE, pas blanc : sur ce fond,
+   aucun teal ne satisfait à la fois « surface à 3:1 de la page » et « label
+   blanc à 4,5:1 » — les deux exigences tirent en sens opposé. Ce n'est pas une
+   coquetterie, c'est la seule sortie arithmétique.
+
+   Il suit le système, et `data-theme` permet de le forcer dans les deux sens.
+   Le rail de navigation, lui, reste sombre dans les deux modes : c'est un
+   parti pris de l'interface, et ses jetons `--rail-*` ne basculent pas.
+
+   Le label d'un bouton PLEIN suit le mode : blanc en clair, ENCRE en sombre.
+   Mesuré : garder le blanc sur les fonds clairs du mode sombre donnerait 2,33
+   sur l'accent, 2,54 sur le violet et 2,42 sur l'erreur.
+   ============================================================================ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: var(--encre-fond);
+    --panel: #12242b;
+    --panel-2: #12242b;
+    --panel-3: #16303a;
+    --border: #1e3b44;
+    --border-strong: #5f8488; /* ≥3:1 (WCAG 1.4.11) jusque sur le --panel-3 sombre #16303a */
+    --code-bg: #0f2027;
+    --encre: #e9f2f2;
+    --gris-texte: #cbdedf;
+    /* Alias hérité du texte courant (`.markdown-view`, badges) : redéfini en
+       sombre, sinon il garde l'encre du mode clair. */
+    --ink-800: var(--gris-texte);
+    --gris-legende: #92b4b6;
+    --gris-45: #6f9296;
+    --gris-filet: #274a52;
+    --accent: #34c9d1;
+    --accent-hover: #55d6dd;
+    --accent-bg: #0f333a;
+    --accent-border: #245e66;
+    --accent-text: var(--encre-fond);
+    --breast: #f2895a;
+    --breast-bg: #37271f;
+    --focus-color: #9cbfab;
+    --focus: 0 0 0 3px rgb(156 191 171 / 30%);
+    --ok: #8fc4a5;
+    --ok-bg: #1e3a2f;
+    --warn: var(--bledore);
+    --warn-bg: #35301c;
+    --err: #d49679;
+    --err-bg: #3a2620;
+    --off: var(--gris-legende);
+    --violet: #b094d6;
+    --violet-clair: #2e2540;
+    --llm: var(--violet);
+    --llm-bg: var(--violet-clair);
+    --llm-hover: #c3aae0;
+    --input-bg: rgb(29 48 55 / 86%);
+    --skeleton: #253c44;
+    --badge-content-bg: #253c44;
+    --backdrop: rgb(4 9 11 / 68%);
+    --bar-bg: rgb(22 38 43 / 88%);
+    --panel-glass: rgb(29 48 55 / 94%);
+    --accent-glow: rgb(20 184 192 / 30%);
+    --llm-glow: rgb(176 148 214 / 22%);
+    --shadow-tint: rgb(0 0 0 / 34%);
+    --halo: rgb(20 184 192 / 16%);
+    --shadow-xs: 0 1px 2px rgb(0 0 0 / 30%);
+    --shadow-sm: 0 10px 30px rgb(0 0 0 / 28%);
+    --shadow-md: 0 18px 50px rgb(0 0 0 / 34%);
+    --shadow-lg: 0 24px 64px rgb(0 0 0 / 40%);
+  }
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  /* Le halo suit désormais la teinte claire du pétrole de la charte, et il est
+     tokenisé : en dur, il restait vert clair sur un fond sombre. */
+  background:
+    radial-gradient(circle at 8% 0%, var(--halo), transparent 28rem),
+    var(--bg);
+}
+::selection { color: var(--encre); background: var(--petrole-clair); }
+h1, h2, h3 { color: var(--text-h); font-weight: 650; letter-spacing: -.02em; margin: 0; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: .9em; background: var(--code-bg); padding: 2px 5px; border-radius: 5px; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+a { color: var(--accent); text-underline-offset: 3px; }
+:where(button, a, input, textarea, select):focus-visible { outline: none; box-shadow: var(--focus); }
+.icon { width: 1.05em; height: 1.05em; flex: none; vertical-align: -.15em; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

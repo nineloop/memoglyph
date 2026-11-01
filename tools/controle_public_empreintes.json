@@ -1,0 +1,278 @@
+{
+  "debuts": "bcdfgjkmnqrsv",
+  "empreintes": [
+    {
+      "compact": false,
+      "longueur": 4,
+      "mot_entier": true,
+      "sha256": "5198af83745eb0acdff7563933bec7572d61467478c83620945f55a2170ec38a",
+      "terme": "5198af83745eb0acdff7563933bec7572d61467478c83620945f55a2170ec38a"
+    },
+    {
+      "compact": false,
+      "longueur": 4,
+      "mot_entier": true,
+      "sha256": "d9ad4a57b5d0a01093881af7a7fdec0a0de0ab39bb066580ed1db21776d3728b",
+      "terme": "d9ad4a57b5d0a01093881af7a7fdec0a0de0ab39bb066580ed1db21776d3728b"
+    },
+    {
+      "compact": false,
+      "longueur": 4,
+      "mot_entier": true,
+      "sha256": "e241fd28cf7f888728983d483fa9bddfdb15bfe18e2feeb5138177b9a1f9ebb2",
+      "terme": "e241fd28cf7f888728983d483fa9bddfdb15bfe18e2feeb5138177b9a1f9ebb2"
+    },
+    {
+      "compact": false,
+      "longueur": 5,
+      "mot_entier": true,
+      "sha256": "05b390a5c4c0d937aed659a9c26923684620e6b29ff15ca3d7f0b4841a5bf10b",
+      "terme": "05b390a5c4c0d937aed659a9c26923684620e6b29ff15ca3d7f0b4841a5bf10b"
+    },
+    {
+      "compact": false,
+      "longueur": 5,
+      "mot_entier": true,
+      "sha256": "de67c4565215ccd1cfc593213a3eca69cc3d6ec67d8bbc09d8b89953da522291",
+      "terme": "de67c4565215ccd1cfc593213a3eca69cc3d6ec67d8bbc09d8b89953da522291"
+    },
+    {
+      "compact": false,
+      "longueur": 6,
+      "mot_entier": false,
+      "sha256": "1393f42b9d0ad9a93e7809b2d1bf6e5cbf7004ee217f980e6bcdea6914d87055",
+      "terme": "1393f42b9d0ad9a93e7809b2d1bf6e5cbf7004ee217f980e6bcdea6914d87055"
+    },
+    {
+      "compact": false,
+      "longueur": 6,
+      "mot_entier": false,
+      "sha256": "750bd39768d2b52a276a0f16e37e8d89cc51808ed2aee34292a613728c215aec",
+      "terme": "750bd39768d2b52a276a0f16e37e8d89cc51808ed2aee34292a613728c215aec"
+    },
+    {
+      "compact": false,
+      "longueur": 7,
+      "mot_entier": true,
+      "sha256": "57c94be64d4d71c028665a40c249d427a4c713dc763d066c294a36729bac4103",
+      "terme": "57c94be64d4d71c028665a40c249d427a4c713dc763d066c294a36729bac4103"
+    },
+    {
+      "compact": false,
+      "longueur": 8,
+      "mot_entier": false,
+      "sha256": "18a4cba36b9074a96a3a89f0651626b165d352ff1f3df2b5647806043c04a78c",
+      "terme": "18a4cba36b9074a96a3a89f0651626b165d352ff1f3df2b5647806043c04a78c"
+    },
+    {
+      "compact": false,
+      "longueur": 8,
+      "mot_entier": false,
+      "sha256": "427b73b5af7012d09b6f72e856c31ea24f31b6508f7fe876af42c8c7acaec71e",
+      "terme": "427b73b5af7012d09b6f72e856c31ea24f31b6508f7fe876af42c8c7acaec71e"
+    },
+    {
+      "compact": false,
+      "longueur": 8,
+      "mot_entier": false,
+      "sha256": "4519e7c34c75bd63b4497b17eda344c5dbaf57d5a0ab1fa3bd35be6f2b150123",
+      "terme": "4519e7c34c75bd63b4497b17eda344c5dbaf57d5a0ab1fa3bd35be6f2b150123"
+    },
+    {
+      "compact": false,
+      "longueur": 8,
+      "mot_entier": false,
+      "sha256": "8de32486a4078f42e63e5a878430dfd22a4814a02dc46ade3d735d194de7e0e1",
+      "terme": "8de32486a4078f42e63e5a878430dfd22a4814a02dc46ade3d735d194de7e0e1"
+    },
+    {
+      "compact": false,
+      "longueur": 8,
+      "mot_entier": true,
+      "sha256": "aebe760150963624cfe82a32cb1ca25c0eb6ad98d664b9ee99867fc24dbe0877",
+      "terme": "aebe760150963624cfe82a32cb1ca25c0eb6ad98d664b9ee99867fc24dbe0877"
+    },
+    {
+      "compact": false,
+      "longueur": 9,
+      "mot_entier": false,
+      "sha256": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc",
+      "terme": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc"
+    },
+    {
+      "compact": false,
+      "longueur": 9,
+      "mot_entier": false,
+      "sha256": "5efbab7622f56c3b1862110bde969d5f925b5d1b0561e5d18bd6bbdc39a835ff",
+      "terme": "5efbab7622f56c3b1862110bde969d5f925b5d1b0561e5d18bd6bbdc39a835ff"
+    },
+    {
+      "compact": false,
+      "longueur": 9,
+      "mot_entier": true,
+      "sha256": "631c29ada4a6c3794c926b44e88cd18c81dc731bbf1f153010d085b6d929ad52",
+      "terme": "631c29ada4a6c3794c926b44e88cd18c81dc731bbf1f153010d085b6d929ad52"
+    },
+    {
+      "compact": false,
+      "longueur": 9,
+      "mot_entier": false,
+      "sha256": "f483487a71187157cb0cd680c12f4fffb2513e97b238238b6396c054e9c3e884",
+      "terme": "f483487a71187157cb0cd680c12f4fffb2513e97b238238b6396c054e9c3e884"
+    },
+    {
+      "compact": false,
+      "longueur": 10,
+      "mot_entier": false,
+      "sha256": "14b7129e285b5e8607ee17b9552dffc6a37accd93924fb74b3d93f32ea33b67d",
+      "terme": "14b7129e285b5e8607ee17b9552dffc6a37accd93924fb74b3d93f32ea33b67d"
+    },
+    {
+      "compact": true,
+      "longueur": 11,
+      "mot_entier": false,
+      "sha256": "c51300eeda269b2e04e987cf862d52782510c3e219e6dbb6a0a0900b09cc28f5",
+      "terme": "fb7c0e00b7e51d2061c3ee9408e607972bc35de6d7916cf6fff99f4c591b19d2"
+    },
+    {
+      "compact": true,
+      "longueur": 12,
+      "mot_entier": false,
+      "sha256": "2a656121e1cf9bfb1dc8be031dabc43cccef4c080291f9e85f870804ec4bd876",
+      "terme": "c3811e221e1a6c28b807112b0b9e967a8ddbdebae53518663e718b5ae1fcf600"
+    },
+    {
+      "compact": true,
+      "longueur": 12,
+      "mot_entier": false,
+      "sha256": "2de01189cdcecec41f5d2f5173f7434a8c9668017857c71b0f7f1e8937dc8d30",
+      "terme": "6c809d9150cc3882d94ac05e616101881bea37d971710ef7e7dd531ce6d5999e"
+    },
+    {
+      "compact": false,
+      "longueur": 12,
+      "mot_entier": false,
+      "sha256": "fb7c0e00b7e51d2061c3ee9408e607972bc35de6d7916cf6fff99f4c591b19d2",
+      "terme": "fb7c0e00b7e51d2061c3ee9408e607972bc35de6d7916cf6fff99f4c591b19d2"
+    },
+    {
+      "compact": true,
+      "longueur": 13,
+      "mot_entier": false,
+      "sha256": "61b0fc8c1001f8b7f21a24138b8e636b5ecf021fe2cc2e02b849083880e85c4d",
+      "terme": "89d3094b330c0beba0ddeff0c6e8d81bcf83939d15a00383122577afc84354ce"
+    },
+    {
+      "compact": false,
+      "longueur": 13,
+      "mot_entier": false,
+      "sha256": "6c809d9150cc3882d94ac05e616101881bea37d971710ef7e7dd531ce6d5999e",
+      "terme": "6c809d9150cc3882d94ac05e616101881bea37d971710ef7e7dd531ce6d5999e"
+    },
+    {
+      "compact": false,
+      "longueur": 13,
+      "mot_entier": false,
+      "sha256": "c3811e221e1a6c28b807112b0b9e967a8ddbdebae53518663e718b5ae1fcf600",
+      "terme": "c3811e221e1a6c28b807112b0b9e967a8ddbdebae53518663e718b5ae1fcf600"
+    },
+    {
+      "compact": false,
+      "longueur": 14,
+      "mot_entier": false,
+      "sha256": "89d3094b330c0beba0ddeff0c6e8d81bcf83939d15a00383122577afc84354ce",
+      "terme": "89d3094b330c0beba0ddeff0c6e8d81bcf83939d15a00383122577afc84354ce"
+    },
+    {
+      "compact": true,
+      "longueur": 14,
+      "mot_entier": false,
+      "sha256": "f4a22517358f2b07b53f00e828e919a73bc7f26b5eee2fc623f5149a521ba922",
+      "terme": "6d2695b09640d4c404e68e0f6a6602014e9df572cb63dfbc183e1012ba6aaf17"
+    },
+    {
+      "compact": false,
+      "longueur": 15,
+      "mot_entier": false,
+      "sha256": "6d2695b09640d4c404e68e0f6a6602014e9df572cb63dfbc183e1012ba6aaf17",
+      "terme": "6d2695b09640d4c404e68e0f6a6602014e9df572cb63dfbc183e1012ba6aaf17"
+    }
+  ],
+  "exceptions": [
+    {
+      "chemin": "core/pricing_official.py",
+      "empreinte": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc",
+      "occurrences": 5,
+      "raison": "présent dans la v1.0.0 publique ; provenance de tarif « local_… » écrite dans le magasin d'usage (valeur persistée) et phrases qui disent qu'un tarif local n'est pas une mesure"
+    },
+    {
+      "chemin": "core/usage_store.py",
+      "empreinte": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc",
+      "occurrences": 3,
+      "raison": "présent dans la v1.0.0 publique ; valeur persistée de `rate_source` dans le magasin d'usage : la renommer orphelinerait les lignes écrites"
+    },
+    {
+      "chemin": "docs/finops-pricing.md",
+      "empreinte": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc",
+      "occurrences": 3,
+      "raison": "présent dans la v1.0.0 publique ; documente la valeur persistée de `rate_source`"
+    },
+    {
+      "chemin": "tests/unit/test_finops_local_and_bootstrap.py",
+      "empreinte": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc",
+      "occurrences": 5,
+      "raison": "présent dans la v1.0.0 publique ; teste la valeur persistée de `rate_source`"
+    },
+    {
+      "chemin": "tests/unit/test_usage_pricing_ratification.py",
+      "empreinte": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc",
+      "occurrences": 5,
+      "raison": "présent dans la v1.0.0 publique ; teste la valeur persistée de `rate_source`"
+    },
+    {
+      "chemin": "tests/integration/test_ecl.py",
+      "empreinte": "d9ad4a57b5d0a01093881af7a7fdec0a0de0ab39bb066580ed1db21776d3728b",
+      "occurrences": 2,
+      "raison": "présent dans la v1.0.0 publique ; mot générique dans deux noms de tests (renommage possible en v1.0.1)"
+    },
+    {
+      "chemin": "tests/unit/test_noms_exportes.py",
+      "empreinte": "89d3094b330c0beba0ddeff0c6e8d81bcf83939d15a00383122577afc84354ce",
+      "occurrences": 1,
+      "raison": "présent dans la v1.0.0 publique ; motif de la garde qui INTERDIT ce vocabulaire dans les noms de fichiers"
+    }
+  ],
+  "motifs": [
+    {
+      "expression": "[\\w.+-]+@(?!(?:[\\w-]+\\.)*(?:example\\.(?:com|org|net)|memoglyph\\.invalid|users\\.noreply\\.github\\.com)\\b)[\\w-]+(?:\\.[\\w-]+)+",
+      "nom": "adresse"
+    },
+    {
+      "expression": "\\b(?:sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}|mgj_[A-Za-z0-9_-]{20,}|hf_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})",
+      "nom": "clé ou jeton"
+    },
+    {
+      "expression": "/Users/[A-Za-z0-9._-]+",
+      "nom": "chemin personnel"
+    },
+    {
+      "expression": "\\bPR\\s*#\\d+|(?<![\\w&#/:-])(?<!: )#\\d{2,4}\\b(?![\\w-])",
+      "ignorer_suffixes": [
+        ".css",
+        ".scss",
+        ".svg"
+      ],
+      "nom": "historique privé"
+    },
+    {
+      "expression": "\\bD-\\d{3}\\b",
+      "nom": "identifiant de décision"
+    },
+    {
+      "expression": "(?i)\\binputs/[^\\s`'\")\\]]+\\.(?:wav|mp3|m4a|mp4|mov|webm|flac|ogg)\\b",
+      "nom": "média privé"
+    }
+  ],
+  "motifs_messages": [],
+  "normalisation": 1
+}

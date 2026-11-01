@@ -1,0 +1,128 @@
+/* ============================================================================
+   Primitives de l'interface — vocabulaire réutilisable, bâti sur les jetons de la
+   charte (`index.css`). Aucune couleur en dur : tout passe par les variables.
+   ============================================================================ */
+
+/* -------------------------------------------------------------------- Button */
+.kw-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  font-weight: 550; line-height: 1; white-space: nowrap;
+  transition: background var(--fast), border-color var(--fast), color var(--fast), box-shadow var(--fast);
+}
+.kw-btn--md { padding: 9px 15px; font-size: 14px; }
+.kw-btn--sm { padding: 6px 11px; font-size: 13px; }
+.kw-btn--icon { padding: 0; width: 36px; height: 36px; }
+.kw-btn--sm.kw-btn--icon { width: 30px; height: 30px; }
+.kw-btn .icon { width: 1.1em; height: 1.1em; }
+
+.kw-btn--primary { background: var(--grad); color: var(--ink-on-teal); box-shadow: 0 10px 24px -12px var(--accent-glow); }
+.kw-btn--primary:hover:not(:disabled) { filter: brightness(1.05); }
+.kw-btn--ghost { background: transparent; border-color: var(--border); color: var(--text-h); }
+.kw-btn--ghost:hover:not(:disabled) { background: var(--panel-2); border-color: var(--border-strong); }
+.kw-btn--subtle { background: var(--panel-2); color: var(--text-h); }
+.kw-btn--subtle:hover:not(:disabled) { background: var(--panel-3); }
+.kw-btn--danger { background: transparent; border-color: var(--border); color: var(--err); }
+.kw-btn--danger:hover:not(:disabled) { background: var(--err-bg); border-color: var(--err); }
+.kw-btn:disabled { opacity: .55; }
+
+/* ---------------------------------------------------------------------- Card */
+.kw-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-xs);
+}
+
+/* ---------------------------------------------------------------------- Chip */
+.kw-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--radius-pill);
+  border: 1px solid var(--border); background: var(--panel);
+  color: var(--muted); font-size: 13px; line-height: 1.2;
+  transition: color var(--fast), border-color var(--fast), background var(--fast);
+}
+.kw-chip:hover { color: var(--text-h); border-color: var(--border-strong); }
+.kw-chip.is-active { color: var(--accent); background: var(--accent-bg); border-color: var(--accent-border); }
+.kw-chip .icon { width: 1em; height: 1em; }
+
+/* --------------------------------------------------------------------- Badge */
+.kw-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: var(--radius-pill);
+  font-size: 11.5px; font-weight: 600; line-height: 1.5; white-space: nowrap;
+}
+.kw-badge--neutral { background: var(--badge-content-bg); color: var(--muted); }
+.kw-badge--accent  { background: var(--accent-bg); color: var(--accent); }
+.kw-badge--ok      { background: var(--ok-bg);  color: var(--ok); }
+.kw-badge--warn    { background: var(--warn-bg); color: var(--warn); }
+.kw-badge--err     { background: var(--err-bg);  color: var(--err); }
+.kw-badge--llm     { background: var(--llm-bg);  color: var(--llm); }
+
+/* -------------------------------------------------------- SegmentedControl */
+.kw-seg {
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--panel-2); border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+}
+.kw-seg__item {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; background: transparent; color: var(--muted);
+  border-radius: var(--radius-pill); font-weight: 550; line-height: 1;
+  transition: background var(--fast), color var(--fast);
+}
+.kw-seg--md .kw-seg__item { padding: 7px 14px; font-size: 13px; }
+.kw-seg--sm .kw-seg__item { padding: 6px 9px; font-size: 12px; }
+.kw-seg__item:hover { color: var(--text-h); }
+.kw-seg__item.is-active { background: var(--panel); color: var(--text-h); box-shadow: var(--shadow-xs); }
+.kw-seg__item .icon { width: 1.05em; height: 1.05em; }
+
+/* --------------------------------------------------------------------- Field */
+.kw-field { display: flex; flex-direction: column; gap: 6px; }
+.kw-field__label { font-size: 12px; font-weight: 600; color: var(--text-h); }
+.kw-field__hint { font-size: 12px; color: var(--muted); }
+.kw-input {
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 12px; color: var(--text);
+  width: 100%; transition: border-color var(--fast);
+}
+.kw-input:hover { border-color: var(--border-strong); }
+
+/* ------------------------------------------------------------------ Skeleton */
+.kw-skel {
+  display: block;
+  background:
+    linear-gradient(90deg, var(--skeleton) 25%,
+      color-mix(in srgb, var(--accent) 10%, var(--skeleton)) 50%, var(--skeleton) 75%);
+  background-size: 200% 100%;
+  animation: kw-shimmer 1.4s linear infinite;
+}
+@keyframes kw-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .kw-skel { animation: none; } }
+
+/* ---------------------------------------------------------------- EmptyState */
+.kw-empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: var(--space-3); padding: var(--space-8) var(--space-5);
+  max-width: 42ch; margin-inline: auto;
+}
+.kw-empty__icon {
+  width: 46px; height: 46px; border-radius: var(--radius-pill);
+  display: grid; place-items: center; background: var(--accent-bg); color: var(--accent);
+}
+.kw-empty__icon .icon { width: 22px; height: 22px; }
+.kw-empty__title { font-size: 17px; }
+.kw-empty__body { color: var(--muted); line-height: 1.55; }
+.kw-empty__action { margin-top: var(--space-2); }
+
+/* ------------------------------------------------------------------ WaveBars */
+.kw-wave { display: flex; align-items: center; gap: 2px; height: 100%; width: 100%; color: var(--accent); }
+.kw-wave i { flex: 1 1 auto; min-width: 1px; border-radius: 2px; background: currentColor; opacity: .5; }
+.kw-wave i.is-played { background: var(--breast); opacity: 1; }
+
+/* ---------------------------------------------------------------- SpeakerDot */
+.kw-spk { display: inline-grid; place-items: center; border-radius: 50%; font-weight: 700; color: #fff; flex: none; }
+.kw-spk--s1 { background: var(--petrole); }
+.kw-spk--s2 { background: var(--celadon); color: var(--encre); }
+.kw-spk--s3 { background: var(--breast); }
+.kw-spk--s4 { background: var(--bledore); color: var(--encre); }
+.kw-spk--s5 { background: var(--violet); }
+.kw-spk--s6 { background: var(--gris-legende); }

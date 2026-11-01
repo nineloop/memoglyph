@@ -1,0 +1,10 @@
+# Diarisation (« qui parle ») + signature vocale. ~980 Mo supplémentaires.
+# Équivalent uv : `uv sync --locked --group diar`.
+#
+# Requiert en plus : HF_TOKEN dans .env, et les conditions acceptées sur
+# Hugging Face pour pyannote/speaker-diarization-community-1 (modèle 4.x —
+# incompatible avec pyannote 3.x).
+-r requirements.txt
+pyannote.audio==4.0.7
+torchaudio==2.11.0
+torchcodec==0.17.0   # charge libav* : dépend du ffmpeg de l'interpréteur (cf. requirements.txt)

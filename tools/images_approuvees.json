@@ -1,0 +1,104 @@
+{
+  "images": [
+    {
+      "sha256": "b8fdd09399de341d64417fa75f4b0419aec2f6b805e7d0f1173edf1d9568426e",
+      "chemin": "docs/assets/brand/memoglyph-partage-github.png"
+    },
+    {
+      "sha256": "ce746c3bba77c9289ff51e44ca66b586b7df9c5bad6a6603c86371a994717b98",
+      "chemin": "docs/ui/screenshots/reference/desktop/dark/01-transcribe.png"
+    },
+    {
+      "sha256": "5ce3823c0239bfbd77597c4cd87f2fc050483fa4e3926a537779afe22142b1a6",
+      "chemin": "docs/ui/screenshots/reference/desktop/dark/02-library.png"
+    },
+    {
+      "sha256": "f8960c2948b6116dab6bc1ed9df782fbfd8a01bf650fcaebcbbf8e555f94cebc",
+      "chemin": "docs/ui/screenshots/reference/desktop/dark/03-meeting-report.png"
+    },
+    {
+      "sha256": "42045c91b234c9395f0d3207ab227e5da71022c91307721fc07f2060e498a12c",
+      "chemin": "docs/ui/screenshots/reference/desktop/dark/04-transcript-player.png"
+    },
+    {
+      "sha256": "8f0fcf0db9b852f9d5f52a4eba8493cb73c19566dfe74cbd397ec43957198add",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/00-connexion.png"
+    },
+    {
+      "sha256": "8cbbb4707522ab51fde6502402cd7aa1a0b098feb1d2ec10ed9a3db426906648",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/01-transcribe.png"
+    },
+    {
+      "sha256": "d1543dfe3a9759582269146bb7c5758354f468af68c793472700e5c5793e82f1",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/02-library.png"
+    },
+    {
+      "sha256": "23a906464d201f371403a67ee1285a936c6e6bc77101f7319353d147fea85663",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/03-meeting-report.png"
+    },
+    {
+      "sha256": "2460bae8f317b16ec018e40733d55629279a5553473cd2e00973a322409c2b2a",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/04-transcript-player.png"
+    },
+    {
+      "sha256": "e7dc956db9093cf01f3ad834448152e8f26f90257964709fba24490ca4cb3070",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/05-search.png"
+    },
+    {
+      "sha256": "8084f2d2a3ba30abf3e9d4bef16846cb469f04086e4f6ad5040d61db4eb18ced",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/06-assistant.png"
+    },
+    {
+      "sha256": "84ee2db9735be381905aee4e9300fc147da6698b73f8130cdf71f8677b1456c9",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/07-voices.png"
+    },
+    {
+      "sha256": "30fdfd972fe3ed7b04f3d9a8b2ac001c3dbf08e71e7dbf439821c5542a994658",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/08-duplicates.png"
+    },
+    {
+      "sha256": "513bf8406cb65fde0e75fae03c371163cdd9be2f98159ee9187426fca9e6b591",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/09-trash.png"
+    },
+    {
+      "sha256": "225b9ca79b163f0f85eb74df3c6074f431fb51264dca42b0d9783e1f2e5c7ece",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/10-maintenance.png"
+    },
+    {
+      "sha256": "f66b85d33cfd7075766d3e095e0683b36742a39541184d0c9944e9b00a5ddae3",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/11-versions.png"
+    },
+    {
+      "sha256": "acb3442d3ce66f222cb05222ec648fd19d6e44cb188b832dc30b422028a63d21",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/12-information.png"
+    },
+    {
+      "sha256": "a0eee91893ed023f300aa7bcc62e6a922816f8f1f472929cc754bfda1c9d324a",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/13-library-empty.png"
+    },
+    {
+      "sha256": "5d4f0fdf109515892f0a249814e8384f59fbbdd5415217a5c15f4aaa4f09a567",
+      "chemin": "docs/ui/screenshots/reference/desktop/light/15-share.png"
+    },
+    {
+      "sha256": "1e5e8c4ab94cc662c7075925b04c957e4962c459fe713d61db0851debdff9520",
+      "chemin": "docs/ui/screenshots/reference/mobile/light/00-dock.png"
+    },
+    {
+      "sha256": "ad01394ea4c43b2c23abade3148c131cb0249fa2c2e9b2874dd4c3c8a1415d04",
+      "chemin": "docs/ui/screenshots/reference/mobile/light/01-transcribe.png"
+    },
+    {
+      "sha256": "89f47b77f7cc5db5f2b01f05941ea4989123595431f4d7916ee078da1bba1f5b",
+      "chemin": "docs/ui/screenshots/reference/mobile/light/03-meeting-report.png"
+    },
+    {
+      "sha256": "f44fade1bebb9922a3c9db8526b1b2b69d8535d414deec110b312111cc309222",
+      "chemin": "docs/ui/screenshots/reference/mobile/light/04-transcript-player.png"
+    },
+    {
+      "sha256": "449d00a2bc65960caaf3177dacd52f0d91075895f496618485f965d4c9d41101",
+      "chemin": "ui/public/apple-touch-icon.png"
+    }
+  ]
+}

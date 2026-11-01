@@ -1,0 +1,64 @@
+/* ============================================================================
+   SOMBRE EXPLICITE — miroir du bloc sombre de `index.css`.
+
+   `index.css` porte le sombre dans une requête média (`prefers-color-scheme`),
+   qui ne sait pas répondre à un choix MANUEL « sombre » quand l'OS est clair.
+   Ce bloc apporte ce seul cas : `data-theme='dark'` posé par le ThemeProvider.
+
+   Les VALEURS sont identiques à celles de `index.css` — c'est un miroir assumé,
+   pas une seconde charte. Toute évolution de la palette sombre doit toucher les
+   deux endroits ; la passe de simplification finale unifiera la source.
+   ============================================================================ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: var(--encre-fond);
+  --panel: #12242b;
+  --panel-2: #12242b;
+  --panel-3: #16303a;
+  --border: #1e3b44;
+  --border-strong: #5f8488; /* ≥3:1 (WCAG 1.4.11) jusque sur le --panel-3 sombre #16303a */
+  --code-bg: #0f2027;
+  --encre: #e9f2f2;
+  --gris-texte: #cbdedf;
+  /* Alias hérité du texte courant (`.markdown-view`, badges) : redéfini en
+     sombre, sinon il garde l'encre du mode clair. */
+  --ink-800: var(--gris-texte);
+  --gris-legende: #92b4b6;
+  --gris-45: #6f9296;
+  --gris-filet: #274a52;
+  --accent: #34c9d1;
+  --accent-hover: #55d6dd;
+  --accent-bg: #0f333a;
+  --accent-border: #245e66;
+  --accent-text: var(--encre-fond);
+  --breast: #f2895a;
+  --breast-bg: #37271f;
+  --focus-color: #9cbfab;
+  --focus: 0 0 0 3px rgb(156 191 171 / 30%);
+  --ok: #8fc4a5;
+  --ok-bg: #1e3a2f;
+  --warn: var(--bledore);
+  --warn-bg: #35301c;
+  --err: #d49679;
+  --err-bg: #3a2620;
+  --off: var(--gris-legende);
+  --violet: #b094d6;
+  --violet-clair: #2e2540;
+  --llm: var(--violet);
+  --llm-bg: var(--violet-clair);
+  --llm-hover: #c3aae0;
+  --input-bg: rgb(29 48 55 / 86%);
+  --skeleton: #253c44;
+  --badge-content-bg: #253c44;
+  --backdrop: rgb(4 9 11 / 68%);
+  --bar-bg: rgb(22 38 43 / 88%);
+  --panel-glass: rgb(29 48 55 / 94%);
+  --accent-glow: rgb(20 184 192 / 30%);
+  --llm-glow: rgb(176 148 214 / 22%);
+  --shadow-tint: rgb(0 0 0 / 34%);
+  --halo: rgb(20 184 192 / 16%);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 30%);
+  --shadow-sm: 0 10px 30px rgb(0 0 0 / 28%);
+  --shadow-md: 0 18px 50px rgb(0 0 0 / 34%);
+  --shadow-lg: 0 24px 64px rgb(0 0 0 / 40%);
+}

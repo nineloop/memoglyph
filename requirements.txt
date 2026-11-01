@@ -1,0 +1,78 @@
+# Memoglyph — noyau exécutable (API + moteurs STT).
+#
+# Manifeste de compatibilité pip. La source principale est pyproject.toml et
+# tests/unit/test_dependency_manifest.py empêche les deux de diverger.
+#
+# Versions figées sur l'environnement VALIDÉ le 2026-07-19 (macOS arm64,
+# CPython 3.11.14) : `make check` au vert et transcription complète — STT,
+# diarisation, profil LLM — vérifiée de bout en bout.
+#
+# Elles décrivent le venv du projet (.venv, CPython 3.11.14 géré par uv), qui
+# est désormais le SEUL interpréteur viable : l'environnement Anaconda a été
+# désinstallé, et /usr/bin/python3 est un 3.9 sans nos dépendances. Les scripts
+# de lancement et le Makefile détectent .venv/bin/python automatiquement.
+#
+# Prérequis NON pip : ffmpeg + ffprobe sur le PATH.
+#   Ils viennent de Homebrew (/opt/homebrew/bin/ffmpeg). C'est ce qu'il faut :
+#   torchcodec cherche ses `libav*` dans /opt/homebrew/opt/ffmpeg/lib. Chaque
+#   version de torchcodec ne charge qu'une plage de FFmpeg : la 0.11 s'arrêtait
+#   à FFmpeg 8 (`libavutil` 60) et la diarisation tombait dès que Homebrew
+#   passait en 9 ; la 0.17 couvre FFmpeg 4 à 9 et retrouve le rpath Homebrew.
+#   (Une note antérieure affirmait l'inverse — ffmpeg venait alors d'Anaconda,
+#   depuis désinstallé. Elle était devenue fausse.)
+
+# --- Backend API ---
+argon2-cffi==25.1.0         # hachage Argon2id des mots de passe
+fastapi==0.139.2
+uvicorn==0.51.0            # jamais importé : lancé en CLI par start.sh
+python-multipart==0.0.32   # jamais importé : exigé par FastAPI pour UploadFile/Form
+pydantic==2.13.4           # importé par api/main.py — n'était que transitif
+pyyaml==6.0.3              # front-matter ; repli manuel si absent
+sqlite-vec==0.1.9          # extension SQLite pour la recherche vectorielle
+httpx==0.28.1              # client HTTP des moteurs (core/llm_anthropic.py, core/llm_mlx.py)
+mcp==2.3.0                 # SDK officiel du Model Context Protocol : serveur
+                           # en lecture seule de `./memoglyph mcp` (api/mcp.py)
+openai==2.49.0             # client du moteur MLX local (core/llm_mlx.py).
+                           # `mlx_lm.server` parle le protocole d'OpenAI ; le
+                           # SDK officiel aussi, et il est MAINTENU. L'intérêt
+                           # n'est pas d'économiser 40 lignes de httpx, c'est
+                           # qu'un même chemin de code atteigne mlx, Ollama ou
+                           # un endpoint distant en ne changeant qu'une
+                           # `base_url` — donc de MESURER ce que l'offline
+                           # coûte en qualité, au lieu de le supposer.
+                           # Aucune clé OpenAI n'est lue ni requise : le
+                           # serveur est local et n'authentifie rien.
+requests==2.34.2           # chemin Mistral RÉEL : le SDK `mistralai` n'est pas
+                           # installé, tous les appels cloud passent par le repli
+                           # HTTP de core/stt_mistral.py et core/llm_mistral.py.
+                           # Il n'était présent que par transitivité — une
+                           # résolution future pouvait casser tout le cloud.
+
+# --- Cœur STT ---
+mlx==0.32.0                # jamais importé directement, pilote mlx-metal
+mlx-lm==0.31.3             # moteur LLM local (core/llm_mlx.py). Jamais importé
+                           # non plus : il est LANCÉ en CLI, `python -m
+                           # mlx_lm.server`, dans un processus enfant qui tient
+                           # les ~5,6 Go de poids. L'importer dans l'API en
+                           # dupliquerait le coût pour rien.
+                           # DÉLIBÉRÉMENT dans `[project].dependencies` et PAS
+                           # dans le groupe `dev` : la CI tourne sur Linux et
+                           # tenterait de l'installer.
+mlx-whisper==0.4.3
+numpy==2.4.6               # importé par core/stt_whisper.py — n'était que transitif.
+                           # La borne basse venait de parakeet-mlx (>=2.2.5), retiré
+                           # depuis : plus que numba <2.5 côté haut.
+torch==2.11.0              # PAS optionnel : dépendance DURE de mlx-whisper.
+transformers==5.14.1       # moteur d'embedding PAR DÉFAUT (core/embed.py).
+                           # Requis dans les trois manifestes : sans lui, un
+                           # `uv sync --locked` propre ne l'installe pas et la
+                           # recherche par le sens meurt sur machine neuve.
+                           # L'ancien fichier le mettait en commentaire, laissant
+                           # croire qu'on pouvait s'en passer. C'était faux.
+
+# --- Voir aussi ---
+#   requirements-diar.txt           diarisation / signature vocale
+#   requirements-dev.txt            suite de tests (profil de la CI)
+#   requirements-legacy-gradio.txt  UI Gradio — à NE PAS installer ici : c'est la
+#                                   source des seuls conflits réels du périmètre,
+#                                   et rien dans core/, api/ ou tests/ ne l'importe

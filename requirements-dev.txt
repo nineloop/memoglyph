@@ -1,0 +1,32 @@
+# Suite rapide : aucun runtime ML. La CI installe le groupe `dev` équivalent
+# avec `uv sync --only-group dev --locked`.
+#
+# Versions alignées sur le venv du projet (.venv), seul interpréteur viable
+# depuis la désinstallation d'Anaconda.
+#
+# Précaution héritée : ces épinglages doivent refléter ce qui est RÉELLEMENT
+# importé, pas ce que `pip show` déclare. Sur l'ancien environnement, pytest
+# annonçait 7.4.4 pour du code en 8.4.2 — un `dist-info` périmé coexistait avec
+# le vrai. Vérifier par import (`pytest.__version__`) avant de figer une version.
+argon2-cffi==25.1.0         # hachage Argon2id des mots de passe
+fastapi==0.139.2
+httpx==0.28.1
+mcp==2.3.0                  # importé au niveau module par api/mcp.py
+python-multipart==0.0.32
+pydantic==2.13.4
+pyyaml==6.0.3
+sqlite-vec==0.1.9
+pytest==9.1.1
+pytest-cov==7.1.0
+ruff==0.15.22
+# Sans eux, la COLLECTE pytest s'interrompt en CI et AUCUN
+# test ne tourne. `pyannote.core` est la structure de données, pas le modèle.
+numpy==2.4.6
+pyannote.core==6.0.1
+requests==2.34.2
+# Même raison : `core/llm_mlx.py` importe `openai` au
+# niveau module et `core/llm.py` l'importe, donc son absence interrompt la
+# collecte entière. Client HTTP en Python pur — le profil reste sans runtime ML.
+openai==2.49.0
+# NB : Memoglyph n'a aucun test asyncio (pytest.ini sans asyncio_mode, zéro
+# occurrence dans tests/) — pytest-asyncio n'est donc pas déclaré.

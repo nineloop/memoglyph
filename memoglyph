@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Commandes de maintenance sur la machine (api/cli.py).
+#   ./memoglyph reset-password <utilisateur>
+#   ./memoglyph attribuer-bibliotheque <utilisateur> [--appliquer]
+#   ./memoglyph ecl-extraire [--appliquer]
+#   ./memoglyph sensibilite-reunions [--appliquer]
+#   ./memoglyph mcp <utilisateur>
+set -euo pipefail
+cd "$(dirname "$0")"
+PYTHON=".venv/bin/python"
+[ -x "$PYTHON" ] || PYTHON="python3"
+exec "$PYTHON" -m api.cli "$@"

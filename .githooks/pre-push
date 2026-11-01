@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#
+# Vérifie le code AVANT de le partager — pas avant de le lancer.
+#
+# `make check` n'a pas sa place dans start.sh : il répond à « le code
+# est-il correct ? » quand le démarrage a besoin de « l'environnement est-il
+# sain ? ». On a constaté des tests verts pendant que l'API servait du code
+# périmé. Et un test rouge ne doit pas empêcher de lancer l'app — c'est souvent
+# en la lançant qu'on comprend pourquoi il est rouge.
+#
+# Ici en revanche, la question est la bonne : on s'apprête à publier.
+#
+# Vers le dépôt public, le contrôle des termes interdits passe d'abord : il lit le
+# COMMIT poussé (pas l'arbre de travail) et le nom de la référence poussée.
+# La CI du dépôt public rejoue le même contrôle sur chaque PR.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+remote_url="${2:-}"
+entree="$(cat)"
+
+if [ -x ".venv/bin/python" ]; then PY=".venv/bin/python"; else PY="python3"; fi
+
+if printf '%s' "$remote_url" | grep -Eq 'github\.com[:/]nineloop/memoglyph(\.git)?/?$'; then
+  echo "🔎 pre-push — contrôle des termes interdits…"
+  while read -r _ref_locale sha_local ref_distante sha_distant; do
+    [ -n "${sha_local:-}" ] || continue
+    case "$sha_local" in 0000000000000000000000000000000000000000) continue ;; esac
+    nom="${ref_distante#refs/heads/}"; nom="${nom#refs/tags/}"
+    if ! "$PY" tools/controle_public.py tout --commit "$sha_local" --base "${sha_distant:-}" --nom "$nom"; then
+      echo ""
+      echo "❌ contrôle des termes interdits : push interrompu."
+      exit 1
+    fi
+  done <<< "$entree"
+fi
+
+echo "🔎 pre-push — make check…"
+if ! make check; then
+  echo ""
+  echo "❌ make check a échoué : push interrompu."
+  echo "   Corrige, puis relance : la CI du dépôt public rejoue ces contrôles."
+  exit 1
+fi
+echo "✅ pre-push — tout est vert."

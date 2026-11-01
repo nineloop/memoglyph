@@ -1,0 +1,167 @@
+name: Tests
+
+# Un passage par événement utile, pas deux : `push` ne vise que `main` (le
+# résultat réellement fusionné), et une branche n'est testée que par sa PR.
+# Sans ce filtre, chaque push de branche de PR lançait `push` ET `pull_request`.
+#
+# `paths` : une modification de la seule documentation ne lance rien. Elle est
+# nommée, pas déduite de l'extension : les `.md` de la racine (`*` ne traverse
+# pas les dossiers), `docs/`, ceux de `compagnon/` et `ui/README.md`. Un `.md`
+# ailleurs relance la CI : une fixture sous `tests/`, ou un fichier glissé dans
+# un dossier gardé contre les fuites (`inputs/`, `output/`),
+# doit passer par le garde qui le refuse. Les documents lus
+# par des tests sont ré-inclus après la négation (le dernier motif qui
+# correspond l'emporte). `tests/unit/test_ci_workflow.py` tient cette liste.
+# `paths` et `paths-ignore` ne se combinent pas, d'où les négations. Même liste
+# sur les deux événements.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+      - "!*.md"
+      - "!docs/**"
+      - "!compagnon/*.md"
+      - "!ui/README.md"
+      - "README.md"
+      - "README.fr.md"
+      - "SECURITY.md"
+      - "docs/ecl.md"
+      - "docs/REPORT_TEMPLATES.md"
+  pull_request:
+    paths:
+      - "**"
+      - "!*.md"
+      - "!docs/**"
+      - "!compagnon/*.md"
+      - "!ui/README.md"
+      - "README.md"
+      - "README.fr.md"
+      - "SECURITY.md"
+      - "docs/ecl.md"
+      - "docs/REPORT_TEMPLATES.md"
+
+# Un nouveau push sur une PR annule le passage en cours de cette PR. Sur `main`,
+# le groupe porte l'empreinte du commit : deux fusions rapprochées ne partagent
+# jamais un groupe, et aucune n'est annulée, ni en cours ni en attente (GitHub
+# annule le passage EN ATTENTE d'un groupe même sans `cancel-in-progress`).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.sha) || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    # Ne tourne que dans le dépôt `nineloop/memoglyph` : ailleurs (copie ou fork), le job
+    # est sauté, et un job sauté ne consomme pas de minutes.
+    if: github.repository == 'nineloop/memoglyph'
+    runs-on: ubuntu-latest
+    steps:
+      # `fetch-depth: 0` — historique COMPLET, et c'est nécessaire.
+      #
+      # Le défaut d'`actions/checkout` est un clone superficiel d'un seul
+      # commit. `tests/unit/test_porte_ml.py` compte les commits touchant
+      # `core/` depuis le dernier passage des tests ML : sans historique, ce
+      # compte est impossible. Le test échoue alors bruyamment plutôt que de se
+      # taire — mais autant lui donner ce dont il a besoin.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      # Toutes les actions sont épinglées par l'empreinte de leur commit : une
+      # étiquette se déplace, une empreinte non. Celle-ci est déjà en node24.
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+
+      # `cache: npm` reste EXPLICITE, et ce n'est pas de la redondance.
+      # setup-node v5 a introduit un cache automatique déclenché par le champ
+      # `packageManager` de `package.json`. Ce dépôt n'a pas ce champ et son
+      # `package.json` n'est pas à la racine — l'automatisme ne prendrait donc
+      # pas le relais si on retirait ces deux lignes.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      # `ffmpeg` n'est pas fourni par le runner. Sans lui, une partie des tests
+      # d'intégration du pipeline échoue et d'autres se sautent : la chaîne
+      # média — le cœur du produit — n'est plus vérifiée.
+      #
+      # Pas de nombres exacts ici : ils annonçaient « quatre échecs et huit
+      # sauts » là où la mesure en donnait 8 et 35, faux moins d'un jour après
+      # avoir été écrits. Un commentaire chiffré non tenu à jour ment plus
+      # qu'il n'informe.
+      #
+      # Par une action de cache des paquets apt, épinglée par l'empreinte de son
+      # commit : `apt-get update` à chaque passage dépendait des miroirs, de
+      # quelques secondes à une demi-heure. Le premier passage remplit le cache ; les
+      # suivants restaurent les paquets sans interroger les miroirs. `version`
+      # change pour forcer un nouveau remplissage. Le délai borne un miroir figé.
+      #
+      # `execute_install_scripts` : une restauration ne remet que des fichiers. Sans
+      # les scripts post-installation, les liens d'`update-alternatives` manquent
+      # (`libblas.so.3`) et ffmpeg ne démarre plus, alors que le remplissage passait.
+      - name: Install ffmpeg
+        timeout-minutes: 10
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: ffmpeg
+          version: "2"
+          execute_install_scripts: true
+
+      # Une vraie conversion, pas `-version | head` : le code de sortie d'un tube
+      # est celui de `head`, vert même quand ffmpeg ne charge pas ses bibliothèques.
+      # Le README de l'action ne garantit pas les scripts : repli par apt, signalé.
+      - name: Vérifier ffmpeg
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          if ! ffmpeg -v error -f lavfi -i sine=duration=0.1 -f null -; then
+            echo "::warning::ffmpeg restauré incomplet : réinstallation par apt"
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+            ffmpeg -v error -f lavfi -i sine=duration=0.1 -f null -
+          fi
+          ffprobe -v error -version > /dev/null
+          ffmpeg -version | head -1
+
+      - name: Install Python test dependencies
+        run: uv sync --only-group dev --locked
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix ui
+
+      # Étapes SÉPARÉES, délibérément.
+      #
+      # Tout tenait dans `make check` : un échec Python arrêtait la recette et
+      # l'on n'apprenait RIEN sur l'interface. Dix-neuf push de suite, dont
+      # huit touchant `ui/`, sans qu'un seul des 113 tests UI ne tourne.
+      # `if: always()` garantit qu'un échec d'un côté ne masque plus l'autre.
+      - name: Verrou de dépendances
+        run: make lock-check
+
+      - name: Lint Python
+        if: always()
+        run: make lint-python
+
+      - name: Tests Python
+        if: always()
+        run: make test-python
+
+      # Étape SÉPARÉE, et en `always()` comme les autres : une chute de
+      # couverture ne doit pas masquer un échec de test, ni l'inverse.
+      - name: Couverture Python
+        if: always()
+        run: make test-cov
+
+      - name: Tests interface
+        if: always()
+        run: make test-ui
+
+      - name: Lint et build interface
+        if: always()
+        run: npm --prefix ui run lint && npm --prefix ui run build

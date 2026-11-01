@@ -1,0 +1,100 @@
+CLAUDE.md
+.claude/
+.verification/
+node_modules/
+
+# --- Secrets ---
+# HF_TOKEN (pyannote) — jamais committé (.env.example l'est)
+#
+# `.env` seul ne couvrait QUE ce nom : `.env.local`, `.env.production`,
+# `.env.bak` étaient suivables. Un nom exact ne protège que du cas déjà vu.
+.env*
+!.env.example
+
+# --- Entrées, sorties & cache runtime ---
+# médias de test (audio/vidéo)
+inputs/
+# transcripts .md générés + annexes (.audio/, .voiceprints.json, .trash/)
+output/
+# index dérivé SQLite (reconstructible depuis output/) + ses fichiers annexes
+# Index SQLite dérivé (reconstructible, données personnelles) — motif GÉNÉRIQUE :
+# nommer la base par le produit avait déjà causé un bug de renommage et l'oubli
+# de l'ignore. Tout .db à la racine est un index dérivé, jamais versionné.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+# WAV temporaires (ffmpeg) + caches
+.cache/
+*.wav
+*.srt
+*.vtt
+*.mp4
+*.mov
+*.mkv
+*.m4a
+*.mp3
+
+# --- Modèles / caches Hugging Face & MLX ---
+.cache/huggingface/
+hf_cache/
+*.safetensors
+*.mlx
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.python-version
+
+# --- Outils / IDE / OS ---
+.DS_Store
+.ipynb_checkpoints/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.vscode/
+.idea/
+
+# --- Runtime serveur (start.sh / stop.sh / dev.sh) ---
+.memoglyph*.pid
+.memoglyph-ports
+# Code d'installation à usage unique (api/auth.py), supprimé à la création du premier compte.
+.memoglyph-installation
+# Traitements en cours (api/jobs.py), lus par stop.sh ; retirés quand plus rien ne tourne.
+.memoglyph-traitements.json*
+# Journaux d'exécution : motif générique. Des noms un par un (`api.log`, `ui.log`…)
+# ne couvriraient que les journaux déjà vus.
+*.log
+
+# --- Assistants de développement (instructions et état locaux) ---
+# Ces fichiers décrivent un environnement/session d'agent, pas le produit.
+AGENTS.md
+CLAUDE.md
+CODEX.md
+GEMINI.md
+.agents/
+.claude/
+.codex/
+.github/copilot-instructions.md
+.github/instructions/
+
+# Photo de l'ancien environnement Anaconda (désinstallé) — 1123 lignes avec des
+# chemins file:// propres à la machine. Aucune valeur de reproductibilité.
+requirements-before-upgrade.txt
+
+# Audio de référence des tests ML — données personnelles, non versionnées.
+tests/fixtures/audio/*
+!tests/fixtures/audio/.gitkeep
+
+# Kit multi-agents local
+xag-kit/
+
+# Corpus de démo (AMI, CC BY 4.0) : récupéré par tools/corpus_demo.py, jamais versionné.
+demo/

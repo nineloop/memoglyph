@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>org.memoglyph.compagnon</string>
+	<key>CFBundleName</key>
+	<string>Memoglyph compagnon</string>
+	<key>CFBundleExecutable</key>
+	<string>memoglyph-compagnon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.4</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Memoglyph enregistre votre micro pendant une visio, à votre demande, pour la transcrire sur ce Mac.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Memoglyph enregistre le son de l'application de visio choisie, à votre demande, pour la transcrire sur ce Mac.</string>
+</dict>
+</plist>

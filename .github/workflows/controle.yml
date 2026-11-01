@@ -1,0 +1,54 @@
+name: Contrôle
+
+# Contrôle des termes interdits, sur chaque PR (contenu, messages, titre et description) et sur
+# chaque push de `main` (contenu). Léger par construction : Python de la bibliothèque standard,
+# ni `uv`, ni `node`, ni `ffmpeg`. Aucun filtre de chemins : une PR de documentation passe aussi
+# par ce contrôle, son titre et sa description en font partie.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+
+concurrency:
+  group: controle-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  controle:
+    # Ne tourne que dans le dépôt `nineloop/memoglyph` : ailleurs (copie ou fork), le job
+    # est sauté, et un job sauté ne consomme pas de minutes.
+    if: github.repository == 'nineloop/memoglyph'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Historique complet : le contrôle lit les messages de l'intervalle de la PR.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      # Titre et description passent par l'environnement, jamais par le script (injection).
+      - name: Termes interdits (contenu, messages, titre et description de la PR)
+        if: github.event_name == 'pull_request'
+        env:
+          TITRE: ${{ github.event.pull_request.title }}
+          CORPS: ${{ github.event.pull_request.body }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          TETE: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          printf '%s\n\n%s\n' "$TITRE" "$CORPS" > "$RUNNER_TEMP/texte-pr.txt"
+          python tools/controle_public.py tout --commit "$TETE" --base "$BASE" --texte "$RUNNER_TEMP/texte-pr.txt"
+
+      # Sur `main`, le message d'une fusion en squash porte le numéro de la PR : seul le contenu est contrôlé.
+      - name: Termes interdits (contenu)
+        if: github.event_name == 'push'
+        run: python tools/controle_public.py arbre "$GITHUB_SHA"

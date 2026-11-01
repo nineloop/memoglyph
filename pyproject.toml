@@ -1,0 +1,91 @@
+[project]
+name = "memoglyph"
+version = "0.6.0"
+description = "Transcription locale, diarisation et recherche dans des réunions"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = "==3.11.*"
+dependencies = [
+    "argon2-cffi==25.1.0",
+    "fastapi==0.139.2",
+    "httpx==0.28.1",
+    "mcp==2.3.0",
+    "mlx==0.32.0",
+    "mlx-lm==0.31.3",
+    "mlx-whisper==0.4.3",
+    "numpy==2.4.6",
+    "openai==2.49.0",
+    "pydantic==2.13.4",
+    "python-multipart==0.0.32",
+    "pyyaml==6.0.3",
+    "requests==2.34.2",
+    "sqlite-vec==0.1.9",
+    "torch==2.11.0",
+    "transformers==5.14.1",
+    "uvicorn==0.51.0",
+]
+
+[dependency-groups]
+# Profil léger de la CI : aucun runtime ML. Les dépendances backend sont
+# répétées volontairement pour que `uv sync --only-group dev` omette MLX/Torch.
+dev = [
+    # Hachage Argon2id des mots de passe : importé par les tests
+    # d'authentification, donc requis par le profil de la CI.
+    "argon2-cffi==25.1.0",
+    "fastapi==0.139.2",
+    "httpx==0.28.1",
+    # SDK officiel du Model Context Protocol : `api/mcp.py` l'importe au niveau
+    # module, et `tests/integration/test_mcp.py` importe `api.mcp` de même.
+    # Python pur, sans runtime ML.
+    "mcp==2.3.0",
+    # `numpy`, `pyannote.core` et `requests` sont dans `[project].dependencies`
+    # ou tirés en transitif ailleurs, mais la CI n'installe QUE ce groupe. Sans
+    # eux, `tests/unit/test_empreintes_bornes.py` et
+    # `test_contrat_diarisation_cloud.py` importent dans le vide — et un import
+    # RATÉ AU NIVEAU MODULE interrompt la COLLECTE pytest entière : zéro test
+    # exécuté, pas un de moins. Quinze runs CI y sont passés sans que personne
+    # ne le voie.
+    #
+    # `pyannote.core` n'est PAS le modèle : c'est la structure de données
+    # (Segment, Timeline). Mesuré : il tire pandas, il ne tire pas torch. Le
+    # profil reste sans runtime ML, ce que le commentaire ci-dessus promet.
+    "numpy==2.4.6",
+    # `openai` est importé AU NIVEAU MODULE par `core/llm_mlx.py`, lui-même
+    # importé par `core/llm.py` — donc par presque toute la suite. Absent, la
+    # COLLECTE pytest s'interrompt et ZÉRO test s'exécute, sans que rien ne
+    # rougisse d'autre. C'est le défaut que `test_profil_ci_suffit.py` traque,
+    # et il l'a attrapé sur ce lot même.
+    #
+    # Il a sa place dans ce profil sans runtime ML : c'est un client HTTP en
+    # Python pur (il tire `distro`, `jiter`, `sniffio`), portable sur Linux, au
+    # même titre que `httpx`. Le runtime MLX, lui, reste dehors —
+    # `mlx-lm` n'est jamais importé, il est LANCÉ en sous-processus.
+    "openai==2.49.0",
+    "pyannote.core==6.0.1",
+    "pydantic==2.13.4",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "python-multipart==0.0.32",
+    "pyyaml==6.0.3",
+    "requests==2.34.2",
+    "ruff==0.15.22",
+    "sqlite-vec==0.1.9",
+]
+diar = [
+    "pyannote.audio==4.0.7",
+    "torchaudio==2.11.0",
+    "torchcodec==0.17.0",
+]
+
+[tool.uv]
+# Le dépôt est exécuté depuis sa racine ; api/ et core/ n'ont pas besoin d'être
+# copiés dans site-packages.
+package = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+# Profil standard de Ruff : erreurs pycodestyle structurantes + Pyflakes.
+select = ["E4", "E7", "E9", "F"]
