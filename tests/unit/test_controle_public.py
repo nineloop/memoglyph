@@ -227,3 +227,58 @@ def test_cli_tout_controle_les_messages_de_l_intervalle_base_commit(tmp_path):
     options = ["--depot", str(depot), "--empreintes", str(empreintes), "--images", str(images)]
     assert cp.main(["tout", "--commit", tete, "--base", base, *options]) == 1       # le message est fautif
     assert cp.main(["tout", "--commit", base, "--base", base, *options]) == 0
+
+
+# --- étiquettes annotées : l'auteur (tagger) est lu comme le reste -----------------------------
+
+def _etiquette(depot: Path, nom: str, tagger: str | None, message: str = "Version essai") -> str:
+    """Crée une étiquette annotée dont le « tagger » est donné (« Nom <adresse> »), sans toucher la configuration."""
+    commit = _git(depot, "rev-parse", "HEAD").strip()
+    ligne = f"tagger {tagger} 1700000000 +0000\n" if tagger else ""
+    objet = _git_entree(depot, ["mktag"], f"object {commit}\ntype commit\ntag {nom}\n{ligne}\n{message}\n").strip()
+    _git(depot, "update-ref", f"refs/tags/{nom}", objet)
+    return objet
+
+
+def _git_entree(depot: Path, args: list[str], entree: str) -> str:
+    return subprocess.run(["git", *args], cwd=depot, input=entree, capture_output=True, text=True, check=True).stdout
+
+
+def test_une_etiquette_a_l_identite_neutre_passe(tmp_path):
+    depot = _depot(tmp_path, {"a.txt": "ok\n"})
+    objet = _etiquette(depot, "v1", "Projet <noreply@memoglyph.invalid>")
+    assert cp.controler_etiquette(depot, objet, CONFIG) == []
+
+
+# Adresses assemblées à l'exécution : le fichier est exporté, il ne doit contenir aucune adresse en clair.
+@pytest.mark.parametrize("tagger", ["Quelqu'un <quelqu.un" + "@fournisseur.net>", "Zebre Dupont <noreply@memoglyph.invalid>",
+                                     "Un Nom <perso" + "@fournisseur.fr>"])
+def test_une_adresse_personnelle_ou_un_terme_interdit_dans_le_tagger_est_bloque(tmp_path, tagger):
+    depot = _depot(tmp_path, {"a.txt": "ok\n"})
+    objet = _etiquette(depot, "v1", tagger)
+    violations = cp.controler_etiquette(depot, objet, cp.fabriquer(
+        ["zebre"], motifs=[{"nom": "adresse", "expression": r"[\w.+-]+@(?!(?:[\w-]+\.)*(?:example\.(?:com|org|net)|memoglyph\.invalid)\b)[\w-]+(?:\.[\w-]+)+"}]))
+    assert violations
+    assert all("zebre" not in str(v).lower() for v in violations)       # jamais le terme réaffiché
+
+
+def test_le_message_d_une_etiquette_est_controle_aussi(tmp_path):
+    depot = _depot(tmp_path, {"a.txt": "ok\n"})
+    objet = _etiquette(depot, "v1", "Projet <noreply@memoglyph.invalid>", message="notes sur le zebre")
+    assert cp.controler_etiquette(depot, objet, CONFIG)
+
+
+def test_une_etiquette_legere_ou_un_commit_n_a_pas_de_tagger(tmp_path):
+    depot = _depot(tmp_path, {"a.txt": "ok\n"})
+    assert cp.controler_etiquette(depot, _git(depot, "rev-parse", "HEAD").strip(), CONFIG) == []
+
+
+def test_cli_tout_controle_les_objets_d_etiquette_donnes(tmp_path):
+    empreintes, images = _ecrire_config(tmp_path)
+    (tmp_path / "d").mkdir()
+    depot = _depot(tmp_path / "d", {"a.txt": "propre\n"})
+    objet = _etiquette(depot, "v1", "Zebre <noreply@memoglyph.invalid>")
+    options = ["--depot", str(depot), "--empreintes", str(empreintes), "--images", str(images)]
+    assert cp.main(["tout", "--commit", "HEAD", "--etiquette", objet, *options]) == 1
+    propre = _etiquette(depot, "v2", "Projet <noreply@memoglyph.invalid>")
+    assert cp.main(["tout", "--commit", "HEAD", "--etiquette", propre, *options]) == 0

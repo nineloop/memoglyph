@@ -13,6 +13,17 @@
 
 Record a call or import a file, and Memoglyph gives you a timestamped transcript with speakers, a meeting report with decisions, actions and open questions, and answers to your questions across meetings. Every quoted claim links back to the second it was said.
 
+![The Memoglyph library: projects and recent meetings](docs/assets/screenshots/library.png)
+*The library: the meetings of a project.*
+
+![A meeting transcript with speakers, waveform and timestamps](docs/assets/screenshots/meeting-transcript.png)
+*A meeting: transcript with speakers, waveform and timestamps.*
+
+![A meeting report where each statement carries timestamped citations](docs/assets/screenshots/report-citations.png)
+*The report: each statement carries timestamped citations; a click plays the audio at that moment.*
+
+<sub>Screenshots of the current version, with demo data only: meeting IS1009a of the AMI Meeting Corpus (University of Edinburgh and the AMI project partners), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Reference: J. Carletta et al., "The AMI Meeting Corpus: A Pre-announcement", *Machine Learning for Multimodal Interaction* (MLMI), 2005.</sub>
+
 - **Verifiable**: each claim cites its timestamp, and a number that was never spoken is dropped.
 - **Local by default**: Whisper and a local model on Apple Silicon. Mistral, OpenAI, Anthropic or a self-hosted OpenAI-compatible server, only if you pick them.
 - **For you, or a small team, self-hosted**: accounts, one private space each, read-only sharing.

@@ -13,6 +13,17 @@
 
 Enregistrez un appel ou importez un fichier : Memoglyph vous donne une transcription horodatée avec les locuteurs, un compte rendu avec décisions, actions et questions ouvertes, et des réponses à vos questions sur l'ensemble de vos réunions. Chaque affirmation citée renvoie à la seconde où elle a été dite.
 
+![La bibliothèque de Memoglyph : projets et réunions récentes](docs/assets/screenshots/library-fr.png)
+*La bibliothèque : vos projets et vos réunions récentes.*
+
+![La transcription d'une réunion, avec locuteurs, frise d'onde et horodatages](docs/assets/screenshots/meeting-transcript-fr.png)
+*Une réunion : transcription avec locuteurs, frise d'onde et horodatages.*
+
+![Un compte rendu dont chaque affirmation porte des citations horodatées](docs/assets/screenshots/report-citations-fr.png)
+*Le compte rendu : chaque affirmation porte des citations horodatées ; un clic joue l'audio à cet instant.*
+
+<sub>Captures de la version actuelle, avec des données de démonstration uniquement : la réunion IS1009a de l'AMI Meeting Corpus (University of Edinburgh et partenaires du projet AMI), sous licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Référence : J. Carletta et al., « The AMI Meeting Corpus: A Pre-announcement », *Machine Learning for Multimodal Interaction* (MLMI), 2005.</sub>
+
 - **Vérifiable** : chaque affirmation cite son horodatage, et un chiffre qui n'a jamais été prononcé est écarté.
 - **Local par défaut** : Whisper et un modèle local sur Apple Silicon. Mistral, OpenAI, Anthropic ou un serveur auto-hébergé compatible OpenAI, seulement si vous les choisissez.
 - **Pour vous, ou pour une petite équipe, auto-hébergé** : des comptes, un espace privé chacun, un partage en lecture seule.

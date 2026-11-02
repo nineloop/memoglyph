@@ -244,6 +244,19 @@ def controler_arbre(depot: Path, commit: str, config: dict, images: dict[str, st
     return violations
 
 
+def controler_etiquette(depot: Path, objet: str, config: dict) -> list[Violation]:
+    """Une étiquette ANNOTÉE (objet de type `tag`) : son auteur (`tagger`) et son message sont lus comme le reste.
+
+    Le contrôle d'un commit ne regarde pas l'identité de l'auteur d'une étiquette : une étiquette
+    posée avec l'identité personnelle de son auteur la publierait (`git show <étiquette>`). Un
+    commit ou une étiquette légère n'ont pas de `tagger` : rien à lire.
+    """
+    if _git(depot, "cat-file", "-t", objet).decode().strip() != "tag":
+        return []
+    contenu = _git(depot, "cat-file", "-p", objet).decode("utf-8", "replace")
+    return _controler(contenu, f"étiquette {objet[:10]}", _Regles(config), chemin=None, messages=True)
+
+
 def controler_messages(depot: Path, intervalle: str, config: dict, *, limite: int | None = None) -> list[Violation]:
     """Messages des commits de l'intervalle (`a..b`), ou du seul commit donné avec `limite=1`."""
     regles = _Regles(config)
@@ -295,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
     o_.add_argument("--base")
     o_.add_argument("--texte", action="append", default=[])
     o_.add_argument("--nom", action="append", default=[])
+    o_.add_argument("--etiquette", action="append", default=[], help="objet d'une étiquette annotée à contrôler")
     a = p.parse_args(argv)
     try:
         config = _charger_json(a.empreintes, "fichier d'empreintes")
@@ -316,6 +330,8 @@ def main(argv: list[str] | None = None) -> int:
                 violations += controler_texte(_lire_texte(source), source, config, messages=True)
             for nom in a.nom:
                 violations += controler_nom(nom, config)
+            for objet in a.etiquette:
+                violations += controler_etiquette(a.depot, objet, config)
     except ErreurDeLecture as e:
         print(f"❌ contrôle impossible : {e}", file=sys.stderr)
         return 2

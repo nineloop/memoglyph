@@ -27,7 +27,10 @@ if printf '%s' "$remote_url" | grep -Eq 'github\.com[:/]nineloop/memoglyph(\.git
     [ -n "${sha_local:-}" ] || continue
     case "$sha_local" in 0000000000000000000000000000000000000000) continue ;; esac
     nom="${ref_distante#refs/heads/}"; nom="${nom#refs/tags/}"
-    if ! "$PY" tools/controle_public.py tout --commit "$sha_local" --base "${sha_distant:-}" --nom "$nom"; then
+    # Une étiquette annotée porte un auteur (tagger) : il est lu comme le reste.
+    etiquette=()
+    case "$ref_distante" in refs/tags/*) etiquette=(--etiquette "$sha_local") ;; esac
+    if ! "$PY" tools/controle_public.py tout --commit "$sha_local" --base "${sha_distant:-}" --nom "$nom" ${etiquette[@]+"${etiquette[@]}"}; then
       echo ""
       echo "❌ contrôle des termes interdits : push interrompu."
       exit 1

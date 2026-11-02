@@ -5,6 +5,30 @@
       "chemin": "docs/assets/brand/memoglyph-partage-github.png"
     },
     {
+      "sha256": "e75b0721f611384bb61cd564ded16d311cc80ed6f43d93fe71e849579f369fcc",
+      "chemin": "docs/assets/screenshots/library-fr.png"
+    },
+    {
+      "sha256": "f628be1c6869e66b204a6ca9c2e735536ecdc27b150fa4d74e475ee78b0d7f2e",
+      "chemin": "docs/assets/screenshots/library.png"
+    },
+    {
+      "sha256": "c05b6802bd7f2a02e7d6f8681512170902f18d39f7fc54fc2aae68959c8886e7",
+      "chemin": "docs/assets/screenshots/meeting-transcript-fr.png"
+    },
+    {
+      "sha256": "6a5b1a8a31434fa077608e8d49685d1b3b5c8d56bf12bf9d30744104ed792dda",
+      "chemin": "docs/assets/screenshots/meeting-transcript.png"
+    },
+    {
+      "sha256": "4e254b8b43a2f076c950cf3a1ed4366ca0c587ad4ee8eaec67f412a77ebd5993",
+      "chemin": "docs/assets/screenshots/report-citations-fr.png"
+    },
+    {
+      "sha256": "b153f3f2324b4374eb8398506d93d3189f43f05ded0e128ff14b400719334122",
+      "chemin": "docs/assets/screenshots/report-citations.png"
+    },
+    {
       "sha256": "ce746c3bba77c9289ff51e44ca66b586b7df9c5bad6a6603c86371a994717b98",
       "chemin": "docs/ui/screenshots/reference/desktop/dark/01-transcribe.png"
     },
