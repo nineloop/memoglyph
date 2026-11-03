@@ -429,7 +429,14 @@ VOICE_THRESHOLD = float(getenv_compat("VOICE_THRESHOLD", "0.5"))
 MAX_UPLOAD_MB = int(getenv_compat("MAX_UPLOAD_MB", "2048"))
 MAX_ACTIVE_JOBS = int(getenv_compat("MAX_ACTIVE_JOBS", "2"))
 MAX_HEAVY_TASKS = int(getenv_compat("MAX_HEAVY_TASKS", "1"))
+# Historique des traitements : 50 terminés PAR COMPTE, 200 au total (un compte très actif
+# n'efface pas l'historique d'un autre).
 MAX_JOB_HISTORY = int(getenv_compat("MAX_JOB_HISTORY", "50"))
+MAX_JOB_HISTORY_TOTAL = int(getenv_compat("MAX_JOB_HISTORY_TOTAL", "200"))
+# Attente du créneau lourd pour un traitement lancé comme job par l'API : 3 h (un compte rendu
+# derrière une transcription longue ne doit pas échouer). Le pipeline en ligne de commande garde
+# sa valeur d'avant (900 s).
+ATTENTE_DE_FOND_API_S = 3 * 3600
 
 # --- Rapport expérimental (HORS défaut, derrière un drapeau) ---
 # Architecture « richer report » : extraction atomique

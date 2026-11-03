@@ -1,7 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 
 import { connecter, deconnecter, getEtatAuth, installer, type Utilisateur } from '../api'
 import { useLang } from '../lib/langContext'
+import { SessionContext } from '../lib/sessionContext'
+import type { Session } from '../lib/sessionContext'
 
 /**
  * Barrière de connexion : la connexion est obligatoire partout, en local
@@ -20,13 +22,6 @@ import { useLang } from '../lib/langContext'
 type Etape = 'chargement' | 'installation' | 'connexion' | 'pret'
 
 export const EVENEMENT_SESSION_EXPIREE = 'memoglyph:session-expiree'
-
-interface Session {
-  utilisateur: Utilisateur | null
-  deconnexion: () => Promise<void>
-}
-
-const SessionContext = createContext<Session | null>(null)
 
 export function useSession(): Session | null {
   return useContext(SessionContext)

@@ -224,6 +224,41 @@ export interface TranscribeOptions {
   sensitivity?: string
 }
 
+// ---------- Traitements (chantier 003, tranche B) ----------
+
+export type StatutTraitement = 'pending' | 'running' | 'done' | 'error'
+
+/** Un traitement du compte, tel que `GET /api/jobs` le décrit : léger, sans texte de transcript. */
+export interface Traitement {
+  id: string
+  nature: string
+  statut: StatutTraitement
+  /** Vrai tant que le créneau de calcul lourd n'est pas obtenu : le traitement n'a pas commencé. */
+  en_attente: boolean
+  progression: number
+  titre: string
+  projet_id: string | null
+  projet_nom: string
+  etape: number | null
+  etapes: number | null
+  message_code: string | null
+  message_params: Record<string, string | number>
+  /** Secondes depuis l'époque. */
+  debut: number
+  meeting: { name: string; meeting_id?: string; project_id?: string } | null
+  erreur: string | null
+  erreur_code: string | null
+  erreur_params: Record<string, string | number>
+}
+
+export interface ListeTraitements {
+  traitements: Traitement[]
+  actifs: number
+  en_attente: number
+}
+
+export const getTraitements = () => fetch('/api/jobs').then(j<ListeTraitements>)
+
 export type JobEvent =
   | {
       type: 'progress'
@@ -235,7 +270,7 @@ export type JobEvent =
   | { type: 'partial'; text: string }
   | { type: 'warning'; text: string }
   | { type: 'done'; result: { name: string; content: string; warnings?: string[] } }
-  | { type: 'error'; error: string }
+  | { type: 'error'; error: string; code?: string | null; params?: Record<string, string | number> }
 
 export interface JobStatus {
   id: string
@@ -246,6 +281,8 @@ export interface JobStatus {
   message_params?: Record<string, string | number>
   result: { name: string; content: string } | null
   error: string | null
+  error_code?: string | null
+  error_params?: Record<string, string | number>
 }
 
 async function j<T>(r: Response): Promise<T> {
@@ -753,6 +790,16 @@ export const makeReport = (name: string, viewScope: string, provider?: string) =
   })
     .then(j<ReportResult>)
 
+/** Régénère un compte rendu comme un TRAITEMENT suivi (vue des traitements, indicateur) ; rend son identifiant.
+ * La nouvelle version s'ajoute aux existantes. Les refus (403 règle d'envoi, 429 trop de travail) sont des
+ * erreurs `HTTP <statut>: …`, lues par l'appelant. */
+export const lancerCompteRendu = (name: string, viewScope: string, provider: string) =>
+  fetch(withViewScope(`/api/transcript/${encodeURIComponent(name)}/report/jobs`, viewScope), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ llm_provider: provider }),
+  }).then(j<{ job_id: string }>)
+
 // ---- Voix (signature vocale) ----
 export interface VoiceOccurrence {
   name: string
@@ -882,7 +929,8 @@ export function streamJob(
     onPartial?: (text: string) => void
     onWarning?: (text: string) => void
     onDone?: (result: { name: string; content: string; warnings?: string[] }) => void
-    onError?: (err: string) => void
+    /** `etape` : le code de l'échec, que l'interface traduit ; `err` reste le texte brut du serveur. */
+    onError?: (err: string, etape?: EtapeJob) => void
   },
 ): () => void {
   const es = new EventSource(`/api/jobs/${jobId}/events`)
@@ -906,10 +954,10 @@ export function streamJob(
     handlers.onDone?.(result)
     close()
   }
-  const fail = (error: string) => {
+  const fail = (error: string, etape?: EtapeJob) => {
     if (settled || stopped) return
     settled = true
-    handlers.onError?.(error)
+    handlers.onError?.(error, etape)
     close()
   }
   const recoverFromStatus = async () => {
@@ -921,7 +969,8 @@ export function streamJob(
         if (status.result) done(status.result)
         else fail('Le job est terminé sans résultat récupérable.')
       } else if (status.status === 'error') {
-        fail(status.error || 'Le traitement a échoué.')
+        fail(status.error || 'Le traitement a échoué.', status.error_code
+          ? { code: status.error_code, params: status.error_params ?? {}, message: status.error ?? '' } : undefined)
       } else {
         handlers.onProgress?.(status.progress, status.message, {
           code: status.message_code ?? null,
@@ -957,7 +1006,9 @@ export function streamJob(
     // Une étape dérivée a échoué sans perdre le Markdown : à signaler, pas à taire.
     else if (ev.type === 'warning') handlers.onWarning?.(ev.text)
     else if (ev.type === 'done') done(ev.result)
-    else if (ev.type === 'error') fail(ev.error)
+    else if (ev.type === 'error') {
+      fail(ev.error, ev.code ? { code: ev.code, params: ev.params ?? {}, message: ev.error } : undefined)
+    }
   }
   es.onerror = () => {
     connected = false

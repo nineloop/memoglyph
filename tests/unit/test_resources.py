@@ -162,3 +162,87 @@ def test_backfill_fidele_passe_par_le_verrou_global(tmp_path):
 
     assert len(result) == 1
     assert isinstance(result[0], resources.ResourcesBusy)
+
+
+# ---------- Chantier 003, tranche B : l'attente se voit ----------
+
+def test_on_wait_n_est_appele_que_si_le_creneau_est_occupe():
+    appels: list[str] = []
+    with resources.heavy(wait=1, label="a", on_wait=lambda: appels.append("attend"),
+                         on_acquired=lambda: appels.append("obtenu")):
+        pass
+    # Créneau libre : rien n'a attendu ; l'obtention est quand même signalée.
+    assert appels == ["obtenu"]
+
+
+def test_on_wait_precede_l_obtention_quand_le_creneau_est_pris():
+    appels: list[str] = []
+    liberer = threading.Event()
+    pris = threading.Event()
+
+    def occupant() -> None:
+        with resources.heavy(label="occupant"):
+            pris.set()
+            liberer.wait(timeout=5)
+
+    t = threading.Thread(target=occupant)
+    t.start()
+    assert pris.wait(timeout=2)
+
+    def attendant() -> None:
+        with resources.heavy(wait=5, label="b", on_wait=lambda: appels.append("attend"),
+                             on_acquired=lambda: appels.append("obtenu")):
+            appels.append("travail")
+
+    a = threading.Thread(target=attendant)
+    a.start()
+    deadline = time.time() + 2
+    while "attend" not in appels and time.time() < deadline:
+        time.sleep(0.01)
+    assert appels == ["attend"]            # il attend, et le dit AVANT d'obtenir
+    liberer.set()
+    a.join(timeout=5)
+    t.join(timeout=5)
+    assert appels == ["attend", "obtenu", "travail"]
+
+
+def test_les_rappels_ne_sont_pas_appeles_en_cas_de_reentrance():
+    appels: list[str] = []
+    with resources.heavy(label="externe"):
+        with resources.heavy(wait=1, label="interne", on_wait=lambda: appels.append("attend"),
+                             on_acquired=lambda: appels.append("obtenu")):
+            pass
+    assert appels == []
+
+
+def test_le_delai_depasse_leve_une_erreur_au_code_stable():
+    pris = threading.Event()
+    liberer = threading.Event()
+
+    def occupant() -> None:
+        with resources.heavy(label="occupant"):
+            pris.set()
+            liberer.wait(timeout=5)
+
+    t = threading.Thread(target=occupant)
+    t.start()
+    assert pris.wait(timeout=2)
+    attente: list[str] = []
+    try:
+        with pytest.raises(resources.ResourcesBusy) as exc:
+            with resources.heavy(wait=0.2, label="traitement", on_wait=lambda: attente.append("a")):
+                pass
+        assert getattr(exc.value.args[0], "code", None) == "step.error.waitTooLong"
+        assert attente == ["a"]
+    finally:
+        liberer.set()
+        t.join(timeout=5)
+
+
+def test_l_attente_de_fond_des_jobs_de_l_api_est_de_trois_heures():
+    from core import config
+    assert config.ATTENTE_DE_FOND_API_S == 10_800
+    # Le pipeline en CLI garde sa valeur d'avant.
+    import inspect
+    from core import pipeline
+    assert "wait=900" in inspect.getsource(pipeline)

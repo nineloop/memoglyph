@@ -102,6 +102,12 @@
   --backdrop: rgb(6 20 22 / 58%);
   --bar-bg: rgb(238 246 246 / 82%); /* barres collantes, teintées teal, translucides */
   --panel-glass: rgb(255 255 255 / 92%);
+  /* Dock (retour 4) : plus foncé que la page, ≥ 3:1 (voir test/contraste.test.ts). */
+  --dock-bg: #1b3a40;
+  --dock-fg: #e8f5f5;
+  --dock-muted: #bcd6d8;
+  --dock-survol: rgb(255 255 255 / 12%);
+  --dock-bordure: rgb(255 255 255 / 14%);
   --accent-glow: rgb(20 184 192 / 26%); /* halo porté des boutons pleins (teal vif) */
   --llm-glow: rgb(109 69 165 / 20%);
   --shadow-tint: rgb(26 26 26 / 7%);
@@ -250,6 +256,11 @@
     --backdrop: rgb(4 9 11 / 68%);
     --bar-bg: rgb(22 38 43 / 88%);
     --panel-glass: rgb(29 48 55 / 94%);
+    --dock-bg: #2a4a52;
+    --dock-fg: #eaf6f6;
+    --dock-muted: #c0d9db;
+    --dock-survol: rgb(255 255 255 / 12%);
+    --dock-bordure: rgb(255 255 255 / 16%);
     --accent-glow: rgb(20 184 192 / 30%);
     --llm-glow: rgb(176 148 214 / 22%);
     --shadow-tint: rgb(0 0 0 / 34%);

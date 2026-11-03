@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LibraryQuery, Meeting, Project } from '../api'
 import { archiveMeeting, getLanguages, getMeetings, moveMeeting, porteeDocument } from '../api'
-import { displayMeetingTitle, reunionDepuisApi } from '../lib/meetings'
+import { libelleProjet } from '../lib/libelleProjet'
+import { displayMeetingTitle, reunionDepuisApi, voisines } from '../lib/meetings'
+import { FilAriane } from './FilAriane'
+import { NavigationReunion } from './NavigationReunion'
 import { MeetingView } from './MeetingView'
 import { Icon } from './Icon'
 import { useLatestRequest } from '../lib/latestRequest'
@@ -45,8 +48,17 @@ type LibProps = {
   /** Onglet de réunion imposé par l'URL, et son écho vers le parent. */
   meetingTab?: string | null
   onMeetingTabChange?: (onglet: string) => void
-  /** Ouvre un projet depuis la galerie (même logique que le sélecteur de portée). */
+  /** Ouvre un projet (galerie, fil d'Ariane) : le même chemin que le panneau des projets. */
   onSelectProject?: (id: string) => void
+  /** Nom du projet consulté, pour l'en-tête et le fil d'Ariane. */
+  titre?: string
+  /**
+   * Avec qui le projet consulté est partagé. `undefined` : on ne sait pas, ou le projet ne se
+   * partage pas (réception, « tous mes projets », lecture seule) — la ligne n'est alors pas écrite.
+   */
+  partageAvec?: string[]
+  /** Ouvre le partage du projet consulté (propriétaire seulement). */
+  onPartager?: () => void
 }
 
 function formatDate(value: string, t: Traduire): string {
@@ -57,9 +69,9 @@ function formatDate(value: string, t: Traduire): string {
 export function LibraryPanel({
   reloadKey, viewScope = '', projects = [], onChanged, onVoirDoublons, onTranscrire,
   openDocumentName, onInitialMeetingOpened, openMeetingId, onMeetingChanged,
-  meetingTab, onMeetingTabChange, onSelectProject,
+  meetingTab, onMeetingTabChange, onSelectProject, titre, partageAvec, onPartager,
 }: LibProps) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   // Lecture seule (partage reçu) : ni classer, ni archiver.
   const { lectureSeule } = usePartage()
   const [meetings, setMeetings] = useState<Meeting[]>([])
@@ -205,21 +217,57 @@ export function LibraryPanel({
 
   const ouverte = selected ? reunions.find((m) => m.cle === selected) : undefined
   if (ouverte) {
+    // Le fil d'Ariane et les flèches suivent le projet de la RÉUNION, pas le projet consulté :
+    // ouverte depuis « Tous mes projets », elle garde pour voisines celles de son projet.
+    const idProjet = ouverte.retenu.project_id
+    const projetDeLaReunion = projects.find((p) => p.id === idProjet)
+    const { precedente, suivante } = voisines(reunions, ouverte.cle)
+    const voisine = (r?: typeof precedente) => r && { cle: r.cle, titre: displayMeetingTitle(r.titre, r.source) }
     return <MeetingView key={ouverte.cle} reunion={ouverte} onBack={() => choisir(null)}
                         initialTab={meetingTab} onTabChange={onMeetingTabChange}
-                        onVoirDoublons={onVoirDoublons} onChanged={onChanged} />
+                        onVoirDoublons={onVoirDoublons} onChanged={onChanged}
+                        ariane={
+                          <FilAriane
+                            // Un projet reçu n'est pas dans `projects` : on garde son niveau avec le nom de la réunion.
+                            projet={idProjet ? { id: idProjet, nom: libelleProjet(projetDeLaReunion?.name ?? ouverte.projet, t, projetDeLaReunion?.kind) } : undefined}
+                            reunion={displayMeetingTitle(ouverte.titre, ouverte.source)}
+                            surBibliotheque={() => { choisir(null); onSelectProject?.('all') }}
+                            surProjet={() => { choisir(null); if (idProjet) onSelectProject?.(idProjet) }} />
+                        }
+                        navigation={
+                          <NavigationReunion precedente={voisine(precedente)} suivante={voisine(suivante)}
+                                             surAller={choisir} />
+                        } />
   }
 
   return (
     <section className="card library-card">
+      <FilAriane
+        projet={titre && viewScope !== 'all' && viewScope !== 'shared' ? { id: viewScope, nom: titre } : undefined}
+        surBibliotheque={() => onSelectProject?.('all')}
+        surProjet={() => onSelectProject?.(viewScope)} />
       <div className="library-heading">
         <div>
-          <h2>{t('library.title')}</h2>
-          <p className="muted small">{t(pluralKey('library.count', count), { n: count })}</p>
+          <h2>{titre ?? t('library.title')}</h2>
+          <p className="muted small">
+            {t(pluralKey('library.count', count, lang), { n: count })}
+            {lectureSeule && <> · {t('nav.project.readOnly')}</>}
+            {partageAvec && <> · {partageAvec.length > 0
+              ? t('nav.project.sharedWith', { noms: partageAvec.join(', ') })
+              : t('nav.project.sharedNobody')}</>}
+          </p>
         </div>
-        <input className="search library-search" type="search" aria-label={t('library.filter.aria')}
-               placeholder={t('library.filter.placeholder')} value={q}
-               onChange={(e) => setQ(e.target.value)} />
+        <div className="library-heading-actions">
+          {onPartager && (
+            <button type="button" className="btn" onClick={onPartager}>{t('share.button')}</button>
+          )}
+          <button type="button" className="btn" onClick={() => onChanged?.()}>
+            <Icon name="refresh" /> {t('nav.refresh')}
+          </button>
+          <input className="search library-search" type="search" aria-label={t('library.filter.aria')}
+                 placeholder={t('library.filter.placeholder')} value={q}
+                 onChange={(e) => setQ(e.target.value)} />
+        </div>
       </div>
 
       {error && <p className="error"><Icon name="error" /> {error}</p>}
@@ -256,9 +304,9 @@ export function LibraryPanel({
                       onClick={() => onSelectProject(projet.id!)}>
                 <span className="project-card-glyph"><Icon name="folder" /></span>
                 <span className="project-card-body">
-                  <span className="project-card-name">{projet.name}</span>
+                  <span className="project-card-name">{libelleProjet(projet.name, t, projet.kind)}</span>
                   <span className="project-card-count">
-                    {t(pluralKey('library.project.count', projet.count), { n: projet.count })}
+                    {t(pluralKey('library.project.count', projet.count, lang), { n: projet.count })}
                   </span>
                 </span>
               </button>
@@ -335,7 +383,7 @@ export function LibraryPanel({
             const portee = porteeDocument(meeting.retenu.project_id)
             return (
             <li key={meeting.cle} className={`meeting-row ${menuOpen ? 'menu-open' : ''}`}>
-              <div className="meeting-summary" role="button" tabIndex={0}
+              <div className={`meeting-summary ${viewScope === 'all' || viewScope === 'shared' ? 'avec-projet' : ''}`} role="button" tabIndex={0}
                    aria-label={t('library.open.aria', { titre: title })}
                    onClick={() => choisir(meeting.cle)}
                    onKeyDown={(event) => {
@@ -353,7 +401,10 @@ export function LibraryPanel({
                   <span title={t('library.row.duration.aria')}><Icon name="clock" /> {meeting.duree || '—'}</span>
                   <span className="meeting-language" title={t('library.row.language.aria')}>{meeting.langue?.toUpperCase() || '—'}</span>
                   <span title={t('library.row.speakers.aria')}><Icon name="users" /> {meeting.nSpeakers ?? '—'}</span>
-                  <span className="meeting-project" title={t('library.row.project.aria')}><Icon name="folder" /> {meeting.projet || t('common.unclassified')}</span>
+                  {/* Un seul projet affiché : la colonne répéterait le projet consulté. */}
+                  {(viewScope === 'all' || viewScope === 'shared') && (
+                    <span className="meeting-project" title={t('library.row.project.aria')}><Icon name="folder" /> {libelleProjet(meeting.projet || t('common.unclassified'), t)}</span>
+                  )}
                 </div>
 
                 <div className="meeting-status">
@@ -362,7 +413,7 @@ export function LibraryPanel({
                   </Badge>
                   <Badge tone={meeting.comptesRendus.length ? 'llm' : 'neutral'}>
                     {meeting.comptesRendus.length
-                      ? t(pluralKey('library.badge.reports', meeting.comptesRendus.length), { n: meeting.comptesRendus.length })
+                      ? t(pluralKey('library.badge.reports', meeting.comptesRendus.length, lang), { n: meeting.comptesRendus.length })
                       : t('library.badge.noReport')}
                   </Badge>
                   {meeting.avertissements > 0 && (
@@ -403,7 +454,7 @@ export function LibraryPanel({
                                 value={meeting.retenu.project_id ?? ''}
                                 onChange={(event) => move(meeting.cle, event.target.value, portee)}>
                           {projects.filter((candidate) => candidate.id).map((candidate) => (
-                            <option key={candidate.id!} value={candidate.id!}>{candidate.name}</option>
+                            <option key={candidate.id!} value={candidate.id!}>{libelleProjet(candidate.name, t, candidate.kind)}</option>
                           ))}
                         </select>
                       </label>

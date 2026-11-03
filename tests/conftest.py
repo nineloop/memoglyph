@@ -384,6 +384,12 @@ def _listener_sur(port: int) -> bool:
         return False
 
 
+# Port -> « occupé au tout début de la session ? » (première mesure, jamais refaite) ;
+# ports déjà signalés à l'utilisateur.
+_ETAT_AU_DEPART: dict[int, bool] = {}
+_SIGNALES: set[int] = set()
+
+
 @pytest.fixture(autouse=True)
 def aucun_listener_sur_le_port_de_production(request):
     """TÉMOIN : aucun test ne laisse un listener sur le port de production.
@@ -405,19 +411,43 @@ def aucun_listener_sur_le_port_de_production(request):
     traque partout ailleurs. Déplacer ce garde ailleurs doit emporter les deux
     mesures : en perdre une ne se voit pas.
 
-    Les deux verdicts sont donc DISTINCTS, et c'est le point :
+    Les verdicts sont donc DISTINCTS, et c'est le point :
 
-    - port déjà pris AVANT → précondition d'environnement. On échoue, mais on
-      n'accuse personne : le test n'y est pour rien, et le nommer enverrait
-      chercher le défaut au mauvais endroit ;
+    - port déjà pris au TOUT DÉBUT de la session → c'est l'instance de
+      l'utilisateur : on ne dit rien contre les tests (une note, une fois). Sans
+      cette exception, le crochet de poussée échouait dès que l'utilisateur
+      laissait son application ouverte ;
+    - port pris AVANT ce test, mais libre au début → précondition
+      d'environnement apparue en cours de route. On échoue, mais on n'accuse
+      personne : le test n'y est pour rien, et le nommer enverrait chercher le
+      défaut au mauvais endroit ;
     - libre avant, pris après → CE test fuit, et on le nomme.
     """
     from core import config
 
     occupe_avant = _listener_sur(config.MLX_PORT)
+    # TROISIÈME mesure, prise UNE fois : le port était-il déjà occupé au tout début
+    # de la session ? Si oui, ce listener n'est ni d'un test ni d'un run antérieur
+    # du dépôt, c'est celui de l'utilisateur (son instance ouverte pendant qu'il
+    # développe) : il ne peut ni être accusé ni masquer une fuite (un test ne peut
+    # pas ouvrir un second listener sur un port pris). On ne le compte pas contre
+    # les tests, et on le dit une fois. Un listener apparu EN COURS de session
+    # reste une précondition (cas ci-dessous), et une fuite reste nommée.
+    occupe_au_depart = _ETAT_AU_DEPART.setdefault(config.MLX_PORT, occupe_avant)
+    if occupe_au_depart and config.MLX_PORT not in _SIGNALES:
+        _SIGNALES.add(config.MLX_PORT)
+        import sys
+
+        print(
+            f"\n[tests] le port {config.MLX_PORT} est occupé dès le départ de la session "
+            "(votre instance ?) : le témoin de fuite ne s'applique pas à ce port.",
+            file=sys.stderr,
+        )
     yield
     occupe_apres = _listener_sur(config.MLX_PORT)
 
+    if occupe_au_depart and occupe_avant:
+        return  # l'instance de l'utilisateur écoutait déjà : rien à reprocher à ce test
     if occupe_avant:
         raise AssertionError(
             f"PRÉCONDITION : le port de production {config.MLX_PORT} était déjà "

@@ -62,13 +62,15 @@ it('affiche la destination et désactive les enrichissements indisponibles', () 
   const { container } = render(
     <TranscribePanel
       config={{ ...config, diarization_available: false, llm_available: false }}
-      destinationProjectName="Produit"
+      projects={[{ id: 'p1', project: 'Produit', name: 'Produit', kind: 'regular', owner: 'moi', count: 1 }]}
+      destinationProjectId="p1"
       onCompleted={vi.fn()}
     />,
   )
   selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-  expect(screen.getByText('Produit')).toBeInTheDocument()
+  // « Ranger dans » est visible dès l'ouverture et affiche la destination courante.
+  expect(screen.getByRole('combobox', { name: /ranger dans|save to/i })).toHaveValue('Produit')
   expect(screen.getByRole('checkbox', { name: /Identifier les locuteurs/ })).toBeDisabled()
   expect(screen.getByRole('checkbox', { name: /Profilage LLM/ })).toBeDisabled()
   expect(screen.getByRole('checkbox', { name: /Compte-rendu automatique/ })).toBeDisabled()
@@ -421,7 +423,6 @@ it('soumet les choix puis affiche la progression et le résultat', async () => {
     <TranscribePanel
       config={config}
       destinationProjectId="01KY243SVP5GA31F6KSBYXEAHR"
-      destinationProjectName="Non classé"
       onCompleted={completed}
       onViewMeeting={viewMeeting}
     />,
@@ -494,7 +495,6 @@ it('affiche l’état de TÉLÉCHARGEMENT du modèle au premier usage', async ()
     <TranscribePanel
       config={config}
       destinationProjectId="01KY243SVP5GA31F6KSBYXEAHR"
-      destinationProjectName="Non classé"
       onCompleted={vi.fn()}
     />,
   )
@@ -842,4 +842,132 @@ describe('encart du compagnon de capture', () => {
     expect(within(encart).queryByRole('button')).not.toBeInTheDocument()
     expect(within(encart).queryByRole('link')).not.toBeInTheDocument()
   })
+})
+
+
+// ---------- Chantier 003, tranche B : la confirmation « Rangé dans… » et « Suivre » (T044) ----------
+
+describe('confirmation d\'un envoi accepté (SC-003)', () => {
+  const projets = [
+    { id: 'inbox', project: 'Non classé', name: 'Non classé', kind: 'inbox' as const, owner: 'moi', count: 0 },
+    { id: 'p1', project: 'Réunions AMI', name: 'Réunions AMI', kind: 'regular' as const, owner: 'moi', count: 2 },
+  ]
+
+  async function lancer(props: Partial<React.ComponentProps<typeof TranscribePanel>> = {}) {
+    const user = userEvent.setup()
+    vi.mocked(submitTranscribe).mockResolvedValue('job-7')
+    vi.mocked(streamJob).mockImplementation(() => vi.fn())
+    const { container } = render(
+      <TranscribePanel config={config} projects={projets} destinationProjectId="p1"
+                       onCompleted={vi.fn()} {...props} />)
+    selectFile(container, new File(['audio'], 'visio.mp3', { type: 'audio/mpeg' }))
+    await user.click(screen.getByRole('button', { name: /lancer la transcription|start the transcription/i }))
+    return user
+  }
+
+  it('dit où la réunion est rangée et propose de la suivre', async () => {
+    const onSuivre = vi.fn()
+    const onSubmitted = vi.fn()
+    const user = await lancer({ onSuivre, onSubmitted })
+    const confirmation = await screen.findByRole('status', { name: /envoi accepté/i })
+    expect(confirmation).toHaveTextContent('Rangé dans Réunions AMI.')
+    expect(onSubmitted).toHaveBeenCalledWith('job-7')
+    await user.click(within(confirmation).getByRole('button', { name: 'Suivre' }))
+    expect(onSuivre).toHaveBeenCalledTimes(1)
+  })
+
+  it('traduit la réception du système : « Saved to Unclassified » en anglais', async () => {
+    localStorage.setItem('memoglyph.lang', 'en')
+    await lancer({ destinationProjectId: 'inbox' })
+    expect(await screen.findByRole('status', { name: /upload accepted/i })).toHaveTextContent('Saved to Unclassified.')
+  })
+
+  it('le formulaire reste PRÊT pour un autre envoi dès que le premier est accepté (spec US5, scénario 6)', async () => {
+    const arret1 = vi.fn()
+    vi.mocked(submitTranscribe).mockResolvedValueOnce('job-1').mockResolvedValueOnce('job-2')
+    vi.mocked(streamJob).mockReset()
+    vi.mocked(streamJob).mockReturnValueOnce(arret1).mockReturnValue(vi.fn())
+    const user = userEvent.setup()
+    const { container } = render(
+      <TranscribePanel config={config} projects={projets} destinationProjectId="p1" onCompleted={vi.fn()} />)
+    selectFile(container, new File(['a'], 'premier.mp3', { type: 'audio/mpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+    await screen.findByRole('status', { name: /envoi accepté/i })
+
+    // Le premier est accepté : rien n'est verrouillé, on peut déposer et lancer un autre fichier, et le
+    // bouton LE DIT (il n'affiche plus « Traitement en cours… » grisé).
+    expect(screen.getByRole('combobox', { name: /ranger dans/i })).toBeEnabled()
+    expect(screen.queryByText('Traitement en cours…')).not.toBeInTheDocument()
+    const lancer = screen.getByRole('button', { name: 'Transcrire un autre enregistrement' })
+    expect(lancer).toBeEnabled()
+    selectFile(container, new File(['b'], 'second.mp3', { type: 'audio/mpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Transcrire un autre enregistrement' }))
+    await waitFor(() => expect(submitTranscribe).toHaveBeenCalledTimes(2))
+    // Le premier flux n'est plus suivi ici (il reste visible dans le panneau des traitements).
+    expect(arret1).toHaveBeenCalled()
+    await waitFor(() => expect(streamJob).toHaveBeenLastCalledWith('job-2', expect.any(Object)))
+  })
+
+  it('pendant l\'envoi lui-même (avant l\'acceptation), le formulaire est verrouillé', async () => {
+    let accepter: (id: string) => void = () => {}
+    vi.mocked(submitTranscribe).mockReturnValue(new Promise<string>((r) => { accepter = r }))
+    vi.mocked(streamJob).mockImplementation(() => vi.fn())
+    const user = userEvent.setup()
+    const { container } = render(
+      <TranscribePanel config={config} projects={projets} destinationProjectId="p1" onCompleted={vi.fn()} />)
+    selectFile(container, new File(['a'], 'a.mp3', { type: 'audio/mpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+    expect(screen.getByRole('combobox', { name: /ranger dans/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Lancer la transcription' })).not.toBeInTheDocument()
+    act(() => accepter('job-3'))
+    await screen.findByRole('status', { name: /envoi accepté/i })
+    expect(screen.getByRole('combobox', { name: /ranger dans/i })).toBeEnabled()
+  })
+
+  it('dit « en attente » quand le créneau est occupé', async () => {
+    const traitements = { actifs: 0, en_attente: 1, traitements: [{
+      id: 'job-7', nature: 'transcription', statut: 'running' as const, en_attente: true, progression: 0,
+      titre: 'visio', projet_id: 'p1', projet_nom: 'Réunions AMI', etape: null, etapes: 3,
+      message_code: null, message_params: {}, debut: 1, meeting: null,
+      erreur: null, erreur_code: null, erreur_params: {} }] }
+    await lancer({ traitements })
+    expect(await screen.findByRole('status', { name: /envoi accepté/i }))
+      .toHaveTextContent(/un autre traitement est en cours/i)
+  })
+})
+
+
+it('l’échec d’un traitement se dit par son CODE traduit, jamais par le texte brut du serveur', async () => {
+  const user = userEvent.setup()
+  vi.mocked(submitTranscribe).mockResolvedValue('job-9')
+  let gestionnaires: { onError?: (err: string, etape?: { code: string | null; params: Record<string, string | number>; message: string }) => void } = {}
+  vi.mocked(streamJob).mockImplementation(((_id: string, h: typeof gestionnaires) => { gestionnaires = h; return vi.fn() }) as never)
+
+  const { container } = render(<TranscribePanel config={configMlxEteint} onCompleted={vi.fn()} />)
+  selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
+  await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+  await waitFor(() => expect(gestionnaires.onError).toBeDefined())
+
+  act(() => {
+    gestionnaires.onError?.('Extraction vide : aucune unité retenue sur 3 appel(s) au modèle, dont 3 refusé(s).',
+      { code: 'step.error.emptyExtraction', params: {}, message: 'brut' })
+  })
+
+  expect(await screen.findByText('Le modèle n’a rien retenu de cette réunion. Essayez avec un autre modèle.')).toBeInTheDocument()
+  expect(screen.queryByText(/Extraction vide/)).not.toBeInTheDocument()
+})
+
+it('sans code (serveur plus ancien), le texte du serveur reste affiché', async () => {
+  const user = userEvent.setup()
+  vi.mocked(submitTranscribe).mockResolvedValue('job-9')
+  let gestionnaires: { onError?: (err: string) => void } = {}
+  vi.mocked(streamJob).mockImplementation(((_id: string, h: typeof gestionnaires) => { gestionnaires = h; return vi.fn() }) as never)
+
+  const { container } = render(<TranscribePanel config={configMlxEteint} onCompleted={vi.fn()} />)
+  selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
+  await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+  await waitFor(() => expect(gestionnaires.onError).toBeDefined())
+  act(() => { gestionnaires.onError?.('Panne inconnue du serveur') })
+
+  expect(await screen.findByText('Panne inconnue du serveur')).toBeInTheDocument()
 })

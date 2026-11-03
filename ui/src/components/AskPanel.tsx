@@ -8,6 +8,7 @@ import { Icon } from './Icon'
 import { Badge } from '../design/primitives'
 import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
+import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
 import { pluralKey } from '../lib/i18n'
 import type { MessageKey } from '../lib/messages'
@@ -20,6 +21,8 @@ type Props = {
   /** Le même compte pour TOUT le corpus, quand le bouton élargit la portée. */
   scopeCountAll?: number
   scopeLabelAll?: string
+  /** Mène à la Bibliothèque, où se change le projet consulté. */
+  onChangerPortee?: () => void
   /** Un modèle local joignable, tel que la configuration l'a rapporté. */
   llmAvailable?: boolean
 }
@@ -40,7 +43,7 @@ const AMORCES: MessageKey[] = [
 ]
 
 export function AskPanel({
-  viewScope, scopeLabel, scopeCount, scopeCountAll, scopeLabelAll, llmAvailable,
+  viewScope, scopeLabel, scopeCount, scopeCountAll, scopeLabelAll, llmAvailable, onChangerPortee,
 }: Props) {
   const { t } = useLang()
   const [q, setQ] = useState('')
@@ -151,6 +154,7 @@ export function AskPanel({
     <section className="card query-card">
       <ScopeControl
         allProjects={allProjects}
+        viewScope={viewScope} onChangerPortee={onChangerPortee}
         canToggle={viewScope !== 'all'}
         scopeLabel={scopeLabel}
         onToggle={() => setSearchEverywhere((value) => !value)}
@@ -277,7 +281,7 @@ export function AskPanel({
                           <Icon name="clock" /> {source.ts}
                         </button>
                       )}
-                      {allProjects && source.project && <Badge tone="accent"><Icon name="folder" /> {source.project}</Badge>}
+                      {allProjects && source.project && <Badge tone="accent"><Icon name="folder" /> {libelleProjet(source.project, t)}</Badge>}
                     </div>
                   </li>
                 ))}

@@ -11,6 +11,8 @@ public enum Route: Equatable, Sendable {
     case projets
     case envoi
     case travail(String)
+    /// `GET /api/jobs` : avec un jeton d'appareil, les comptes du compte et ses seules captures.
+    case traitements
 
     public var methode: String { self == .envoi ? "POST" : "GET" }
 
@@ -20,6 +22,7 @@ public enum Route: Equatable, Sendable {
         case .projets: return "/api/projects"
         case .envoi: return "/api/transcribe"
         case .travail(let id): return "/api/jobs/\(id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")"
+        case .traitements: return "/api/jobs"
         }
     }
 }
@@ -28,17 +31,39 @@ public enum Route: Equatable, Sendable {
 public struct Projet: Equatable, Sendable {
     public let id: String
     public let nom: String
-    public init(id: String, nom: String) { self.id = id; self.nom = nom }
+    /// `inbox` pour le « Non classé » du compte : son nom stocké est une constante, affichée traduite.
+    public let kind: String
+    public init(id: String, nom: String, kind: String = "") { self.id = id; self.nom = nom; self.kind = kind }
 }
 
 /// Ce qu'une capture emporte vers Memoglyph.
+///
+/// `captureId` (un UUID en minuscules) est fixé à la création et reste le même à travers les renvois :
+/// c'est lui qui permet au serveur de reconnaître une capture déjà reçue (réponse perdue, renvoi).
 public struct Capture: Equatable, Codable, Sendable {
     public let fichier: String        // nom du fichier dans le dossier des captures
     public let visio: Bool
     public let application: String    // provenance : `capture_application`
-    public init(fichier: String, visio: Bool, application: String) {
+    public let captureId: String
+    public init(fichier: String, visio: Bool, application: String, captureId: String = Capture.nouvelIdentifiant()) {
         self.fichier = fichier; self.visio = visio; self.application = application
+        self.captureId = captureId.lowercased()
     }
+
+    public static func nouvelIdentifiant() -> String { UUID().uuidString.lowercased() }
+
+    /// Une file écrite avant ce chantier n'a pas de `captureId` : en lui en donnant un à la lecture,
+    /// la file se relit entière au lieu d'être jetée (ce qui perdrait des captures en attente).
+    public init(from decodeur: Decoder) throws {
+        let c = try decodeur.container(keyedBy: Cles.self)
+        self.init(fichier: try c.decode(String.self, forKey: .fichier),
+                  visio: try c.decode(Bool.self, forKey: .visio),
+                  application: try c.decode(String.self, forKey: .application),
+                  captureId: (try c.decodeIfPresent(String.self, forKey: .captureId))
+                      .flatMap { $0.isEmpty ? nil : $0 } ?? Capture.nouvelIdentifiant())
+    }
+
+    private enum Cles: String, CodingKey { case fichier, visio, application, captureId }
 }
 
 /// Issue d'un appel, sans jamais le jeton dans le texte.
@@ -48,10 +73,13 @@ public enum Issue: Equatable, Sendable {
     case introuvable
     case refuse(code: Int, raison: String)
     case injoignable(String)
+    /// Le serveur a déjà cette capture (réponse perdue, renvoi) : la réunion, ou le traitement en cours.
+    /// `meetingId` et `projet` : de quoi ouvrir la réunion elle-même.
+    case dejaRecue(reunion: String?, travail: String?, meetingId: String? = nil, projet: String? = nil)
 
     public var texte: String {
         switch self {
-        case .accepte: return "Capture reçue par Memoglyph."
+        case .accepte, .dejaRecue: return "Capture reçue par Memoglyph."
         case .jetonRefuse: return "Jeton refusé : créez-en un dans « Appareils », puis reliez à nouveau le compagnon."
         case .introuvable: return "Memoglyph ne connaît pas cette adresse ou ce projet."
         case .refuse(let code, let raison): return "Memoglyph a refusé l'envoi (\(code)) : \(raison)"
@@ -62,9 +90,12 @@ public enum Issue: Equatable, Sendable {
 
 /// État d'un travail suivi par `GET /api/jobs/{job_id}`.
 public enum EtatTravail: Equatable, Sendable {
-    case enCours(progression: Double, message: String)
+    /// `code` et `enAttente` : l'étape (code de message du serveur, que le compagnon traduit) et le
+    /// créneau pas encore obtenu. `message` reste le texte du serveur, jamais affiché tel quel.
+    /// `projetNom` : le projet où le traitement range la réunion, tel que le serveur le nomme.
+    case enCours(progression: Double, message: String, code: String? = nil, enAttente: Bool = false, projetNom: String? = nil)
     /// `meetingId` et `projet` : l'identité de la réunion, pour l'ouvrir (`lien`).
-    case fini(reunion: String, avertissements: [String], meetingId: String? = nil, projet: String? = nil)
+    case fini(reunion: String, avertissements: [String], meetingId: String? = nil, projet: String? = nil, projetNom: String? = nil)
     case echec(String)
     case perdu(Issue)
 }
@@ -102,6 +133,7 @@ public enum ClientMemoglyph {
         var champs: [(String, String)] = [
             ("capture_mode", capture.visio ? "visio" : "replay"),
             ("capture_application", String(capture.application.prefix(80))),
+            ("capture_id", capture.captureId),
         ]
         if let projet, !projet.isEmpty { champs.append(("destination_project_id", projet)) }
         var entete = ""
@@ -117,7 +149,17 @@ public enum ClientMemoglyph {
     /// Réponse de `POST /api/transcribe`. `statut` nil : pas de réponse (`erreur` dit pourquoi).
     public static func lireEnvoi(statut: Int?, corps: Data?, erreur: String?, jeton: String?) -> Issue {
         if let issue = commune(statut: statut, corps: corps, erreur: erreur, jeton: jeton) { return issue }
-        guard let id = objet(corps)?["job_id"] as? String, !id.isEmpty else {
+        let o = objet(corps)
+        if o?["deja_recue"] as? Bool == true {
+            let reunion = (o?["meeting"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            let travail = (o?["job_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            let meetingId = (o?["meeting_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            let projet = (o?["project_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            if reunion != nil || travail != nil {
+                return .dejaRecue(reunion: reunion, travail: travail, meetingId: meetingId, projet: projet)
+            }
+        }
+        guard let id = o?["job_id"] as? String, !id.isEmpty else {
             return .refuse(code: statut ?? 0, raison: "réponse sans travail")
         }
         return .accepte(travail: id)
@@ -129,7 +171,8 @@ public enum ClientMemoglyph {
         let liste = (try? JSONSerialization.jsonObject(with: corps ?? Data())) as? [[String: Any]] ?? []
         return .success(liste.compactMap { p in
             guard let id = p["id"] as? String, !id.isEmpty else { return nil }
-            return Projet(id: id, nom: (p["project"] as? String) ?? (p["name"] as? String) ?? id)
+            return Projet(id: id, nom: (p["project"] as? String) ?? (p["name"] as? String) ?? id,
+                          kind: p["kind"] as? String ?? "")
         })
     }
 
@@ -143,12 +186,16 @@ public enum ClientMemoglyph {
             return .fini(reunion: resultat["name"] as? String ?? "",
                          avertissements: (resultat["warnings"] as? [String] ?? []).map { masquer($0, jeton: jeton) },
                          meetingId: (resultat["meeting_id"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                         projet: (resultat["project_id"] as? String).flatMap { $0.isEmpty ? nil : $0 })
+                         projet: (resultat["project_id"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                         projetNom: (o["projet_nom"] as? String).flatMap { $0.isEmpty ? nil : masquer($0, jeton: jeton) })
         case "error":
             return .echec(masquer(o["error"] as? String ?? o["message"] as? String ?? "erreur inconnue", jeton: jeton))
         default:
             return .enCours(progression: (o["progress"] as? NSNumber)?.doubleValue ?? 0,
-                            message: masquer(o["message"] as? String ?? "", jeton: jeton))
+                            message: masquer(o["message"] as? String ?? "", jeton: jeton),
+                            code: (o["message_code"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                            enAttente: (o["en_attente"] as? Bool ?? false) || o["status"] as? String == "pending",
+                            projetNom: (o["projet_nom"] as? String).flatMap { $0.isEmpty ? nil : masquer($0, jeton: jeton) })
         }
     }
 
@@ -161,6 +208,29 @@ public enum ClientMemoglyph {
             + (projet.map { [URLQueryItem(name: "projet", value: $0)] } ?? [])
             + (reunion.map { [URLQueryItem(name: "reunion", value: $0)] } ?? [])
         return c.url!
+    }
+
+    /// Lien « Suivre » : la vue des traitements, depuis n'importe quel écran de l'interface.
+    public static func lienSuivre(adresse: URL) -> URL {
+        var c = URLComponents(url: adresse, resolvingAgainstBaseURL: false)!
+        c.path = "/"
+        c.queryItems = [URLQueryItem(name: "traitements", value: "1")]
+        return c.url!
+    }
+
+    /// Réponse de `GET /api/jobs` avec le jeton d'appareil : les comptes et SES captures seulement
+    /// (le serveur n'envoie ni titre ni état d'une autre réunion ; on ne lit rien d'autre ici).
+    public static func lireComptes(statut: Int?, corps: Data?, erreur: String?, jeton: String?) -> Result<Comptes, IssueErreur> {
+        if let issue = commune(statut: statut, corps: corps, erreur: erreur, jeton: jeton) { return .failure(IssueErreur(issue)) }
+        let o = objet(corps) ?? [:]
+        let captures = (o["traitements"] as? [[String: Any]] ?? []).compactMap { t -> TraitementSuivi? in
+            guard let id = t["id"] as? String, !id.isEmpty else { return nil }
+            return TraitementSuivi(id: id, titre: masquer(t["titre"] as? String ?? "", jeton: jeton),
+                                   projet: masquer(t["projet_nom"] as? String ?? "", jeton: jeton),
+                                   statut: t["statut"] as? String ?? "")
+        }
+        return .success(Comptes(actifs: (o["actifs"] as? NSNumber)?.intValue ?? 0,
+                                enAttente: (o["en_attente"] as? NSNumber)?.intValue ?? 0, captures: captures))
     }
 
     /// Retire d'un texte le jeton donné et tout ce qui a la forme d'un jeton d'appareil.
@@ -187,6 +257,28 @@ public enum ClientMemoglyph {
     }
 }
 
+/// Une capture née de ce jeton, telle que la liste des traitements la décrit.
+public struct TraitementSuivi: Equatable, Sendable {
+    public let id: String
+    public let titre: String
+    public let projet: String
+    public let statut: String
+    public init(id: String, titre: String, projet: String, statut: String) {
+        self.id = id; self.titre = titre; self.projet = projet; self.statut = statut
+    }
+}
+
+/// Ce que `GET /api/jobs` apprend au compagnon : combien de traitements tournent ou attendent,
+/// et l'état de ses propres captures.
+public struct Comptes: Equatable, Sendable {
+    public let actifs: Int
+    public let enAttente: Int
+    public let captures: [TraitementSuivi]
+    public init(actifs: Int, enAttente: Int, captures: [TraitementSuivi]) {
+        self.actifs = actifs; self.enAttente = enAttente; self.captures = captures
+    }
+}
+
 /// `Issue` comme erreur, pour `Result`.
 public struct IssueErreur: Error, Equatable {
     public let issue: Issue
@@ -205,7 +297,13 @@ public struct FileRenvoi: Equatable, Codable, Sendable {
     public mutating func retirer(_ fichier: String) { captures.removeAll { $0.fichier == fichier } }
 
     public static func lire(_ donnees: Data?) -> FileRenvoi {
-        donnees.flatMap { try? JSONDecoder().decode(FileRenvoi.self, from: $0) } ?? FileRenvoi()
+        lireOuNil(donnees) ?? FileRenvoi()
+    }
+
+    /// `nil` quand des données existent mais ne se lisent pas : l'appelant les met alors de côté au lieu
+    /// de les écraser par une file vide (ce qui perdrait des captures en attente).
+    public static func lireOuNil(_ donnees: Data?) -> FileRenvoi? {
+        donnees.flatMap { try? JSONDecoder().decode(FileRenvoi.self, from: $0) }
     }
 
     public func donnees() -> Data { (try? JSONEncoder().encode(self)) ?? Data() }

@@ -77,3 +77,8 @@ describe('garde sur l’instrument', () => {
     for (const vue of VUES_MEMORISABLES) expect(VUES).toContain(vue)
   })
 })
+
+it("« traitements » n'est pas une vue : elle n'entre jamais dans la vue d'ouverture mémorisée (chantier 003)", () => {
+  memoriserVue('traitements')
+  expect(lireVueMemorisee()).toBeNull()
+})

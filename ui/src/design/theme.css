@@ -53,6 +53,11 @@
   --backdrop: rgb(4 9 11 / 68%);
   --bar-bg: rgb(22 38 43 / 88%);
   --panel-glass: rgb(29 48 55 / 94%);
+  --dock-bg: #2a4a52;
+  --dock-fg: #eaf6f6;
+  --dock-muted: #c0d9db;
+  --dock-survol: rgb(255 255 255 / 12%);
+  --dock-bordure: rgb(255 255 255 / 16%);
   --accent-glow: rgb(20 184 192 / 30%);
   --llm-glow: rgb(176 148 214 / 22%);
   --shadow-tint: rgb(0 0 0 / 34%);

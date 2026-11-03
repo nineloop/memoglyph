@@ -541,7 +541,7 @@ def test_le_jeton_d_appareil_de_b_n_ouvre_rien_de_a(comptes) -> None:
                                             **arguments)
                 quoi = f"jeton de b : {methode} {chemin} view_scope={portee}"
                 if cle in api_main.ROUTES_DU_COMPAGNON:
-                    attendu = 200 if route.path == "/api/projects" else 404
+                    attendu = 200 if route.path in ("/api/projects", "/api/jobs") else 404
                     assert reponse.status_code == attendu, (quoi, reponse.status_code, reponse.text)
                     du_compagnon += 1
                 elif cle not in api_main.ROUTES_PUBLIQUES:

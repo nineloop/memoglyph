@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 
@@ -238,4 +238,116 @@ it('ne montre pas la galerie de projets dans un projet précis', async () => {
 
   await screen.findByRole('heading', { name: 'Bibliothèque' })
   expect(screen.queryByRole('region', { name: 'Projets' })).not.toBeInTheDocument()
+})
+
+
+// ---------- Chantier 003 : en-tête de projet, Rafraîchir, fil d'Ariane (T018) ----------
+
+it('Rafraîchir recharge la liste SANS recharger la page', async () => {
+  const user = userEvent.setup()
+  const onChanged = vi.fn()
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} onChanged={onChanged} />)
+  await screen.findByText('21/07/2026')
+
+  await user.click(screen.getByRole('button', { name: 'Rafraîchir' }))
+  // Le parent recharge les projets et les partages (reloadKey) ; la liste suit.
+  expect(onChanged).toHaveBeenCalledTimes(1)
+})
+
+it('l’en-tête du projet donne son nom, son nombre de réunions et avec qui il est partagé', async () => {
+  render(<LibraryPanel reloadKey={0} viewScope="climate-id" projects={projects}
+                       titre="Climat" partageAvec={['carole', 'bruno']} />)
+  expect(await screen.findByRole('heading', { name: 'Climat' })).toBeInTheDocument()
+  expect(screen.getByText(/partagé avec carole, bruno/i)).toBeInTheDocument()
+})
+
+it('dit « partagé avec personne » quand c’est le cas, et propose Partager au propriétaire', async () => {
+  const user = userEvent.setup()
+  const onPartager = vi.fn()
+  render(<LibraryPanel reloadKey={0} viewScope="climate-id" projects={projects}
+                       titre="Climat" partageAvec={[]} onPartager={onPartager} />)
+  expect(await screen.findByText(/partagé avec personne/i)).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Partager' }))
+  expect(onPartager).toHaveBeenCalledTimes(1)
+})
+
+it('sans droit de partager (réception, lecture seule), l’en-tête n’offre pas Partager', async () => {
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} titre="Non classé" />)
+  await screen.findByRole('heading', { name: 'Non classé' })
+  expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
+  expect(screen.queryByText(/partagé avec/i)).not.toBeInTheDocument()
+})
+
+it('le fil d’Ariane de la liste mène à « Tous mes projets » en un clic', async () => {
+  const user = userEvent.setup()
+  const onSelectProject = vi.fn()
+  render(<LibraryPanel reloadKey={0} viewScope="climate-id" projects={projects} titre="Climat"
+                       onSelectProject={onSelectProject} />)
+  const fil = await screen.findByRole('navigation', { name: /fil d.ariane/i })
+  await user.click(within(fil).getByRole('link', { name: 'Bibliothèque' }))
+  expect(onSelectProject).toHaveBeenCalledWith('all')
+})
+
+it('ouverte depuis « Tous mes projets », une réunion montre SON projet dans le fil d’Ariane', async () => {
+  const user = userEvent.setup()
+  const onSelectProject = vi.fn()
+  const onMeetingChanged = vi.fn()
+  render(<AudioProvider><LibraryPanel reloadKey={0} viewScope="all" projects={projects}
+                       openMeetingId="meeting-id" onMeetingChanged={onMeetingChanged}
+                       onSelectProject={onSelectProject} /></AudioProvider>)
+  // La liste charge d'abord ; le fil de la réunion n'arrive qu'avec elle.
+  const lien = await screen.findByRole('link', { name: 'Non classé' })
+  expect(within(screen.getByRole('navigation', { name: /fil d.ariane/i })).getByText('Réunion test')).toBeInTheDocument()
+  // Le projet du fil consulte CE projet, et referme la réunion.
+  await user.click(lien)
+  expect(onSelectProject).toHaveBeenCalledWith('project-id')
+  expect(onMeetingChanged).toHaveBeenCalledWith(null)
+})
+
+it('le fil d’Ariane garde le niveau « projet » pour une réunion d’un projet reçu', async () => {
+  const recue: Meeting = { ...meeting, project_id: 'recu-id', project: 'Équipe partenaire' }
+  recue.transcripts = [{ ...transcript, project_id: 'recu-id', project: 'Équipe partenaire' }]
+  recue.preferred_transcript = recue.transcripts[0]
+  vi.mocked(getMeetings).mockResolvedValue([recue])
+  render(<AudioProvider><LibraryPanel reloadKey={0} viewScope="shared" projects={projects}
+                       openMeetingId="meeting-id" onSelectProject={vi.fn()} /></AudioProvider>)
+  expect(await screen.findByRole('link', { name: 'Équipe partenaire' })).toBeInTheDocument()
+})
+
+it('les flèches vont à la réunion voisine du MÊME projet', async () => {
+  const user = userEvent.setup()
+  const autre: Meeting = { ...meeting, id: 'm2', title: 'Deuxième', date: '2026-07-25',
+    transcripts: [{ ...transcript, name: 'm2.md', id: 'd2', meeting_id: 'm2', title: 'Deuxième', date: '2026-07-25' }],
+    reports: [], preferred_transcript: { ...transcript, name: 'm2.md', id: 'd2', meeting_id: 'm2', title: 'Deuxième', date: '2026-07-25' } }
+  const ailleurs: Meeting = { ...meeting, id: 'm3', title: 'Ailleurs', project_id: 'climate-id', project: 'Climat', date: '2026-07-23',
+    transcripts: [{ ...transcript, name: 'm3.md', id: 'd3', meeting_id: 'm3', project_id: 'climate-id', title: 'Ailleurs', date: '2026-07-23' }],
+    reports: [], preferred_transcript: { ...transcript, name: 'm3.md', id: 'd3', meeting_id: 'm3', project_id: 'climate-id', title: 'Ailleurs', date: '2026-07-23' } }
+  vi.mocked(getMeetings).mockResolvedValue([meeting, ailleurs, autre])
+  const onMeetingChanged = vi.fn()
+  render(<AudioProvider><LibraryPanel reloadKey={0} viewScope="all" projects={projects}
+                       openMeetingId="meeting-id" onMeetingChanged={onMeetingChanged} /></AudioProvider>)
+  const suivante = await screen.findByRole('button', { name: 'Réunion suivante' })
+  expect(screen.getByRole('button', { name: 'Réunion précédente' })).toBeDisabled()
+  await user.click(suivante)
+  // « Ailleurs » (autre projet, entre les deux dates) est sautée.
+  expect(onMeetingChanged).toHaveBeenLastCalledWith('m2')
+})
+
+
+it('la colonne « projet » de la liste n’apparaît que quand plusieurs projets sont affichés', async () => {
+  const { unmount } = render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+  await screen.findByText('21/07/2026')
+  expect(document.querySelector('.meeting-project')).toBeNull()
+  unmount()
+  render(<LibraryPanel reloadKey={0} viewScope="all" projects={projects} />)
+  await screen.findByText('21/07/2026')
+  expect(document.querySelector('.meeting-project')).not.toBeNull()
+})
+
+it('dans une réunion ouverte par la Bibliothèque, le fil d’Ariane remplace le bouton « Bibliothèque »', async () => {
+  render(<AudioProvider><LibraryPanel reloadKey={0} viewScope="project-id" projects={projects}
+                       openMeetingId="meeting-id" onSelectProject={vi.fn()} /></AudioProvider>)
+  await screen.findByRole('navigation', { name: /fil d.ariane/i })
+  await screen.findByRole('link', { name: 'Non classé' })
+  expect(screen.queryByRole('button', { name: /^← ?Bibliothèque$|^Bibliothèque$/ })).not.toBeInTheDocument()
 })

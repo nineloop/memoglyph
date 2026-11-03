@@ -29,15 +29,17 @@ pytestmark = pytest.mark.unit
 pytest_plugins = ["pytester"]
 
 
-def _verdict(occupe_avant: bool, occupe_apres: bool) -> str:
+def _verdict(occupe_avant: bool, occupe_apres: bool, occupe_au_depart: bool = False) -> str:
     """La décision du témoin, telle qu'elle DOIT être.
 
-    Recopiée à dessein : ces quatre premiers tests décrivent la propriété. Ils
-    ne suffisent PAS — une mutation qui retire la mesure initiale de la vraie
+    Recopiée à dessein : ces premiers tests décrivent la propriété. Ils ne
+    suffisent PAS — une mutation qui retire la mesure initiale de la vraie
     fixture les laissait tous verts. C'est cette mutation qu'il faut tuer, et
-    `test_la_fixture_REELLE_...` plus bas s'en charge en exerçant le témoin de
+    les tests « REELLE » plus bas s'en chargent en exerçant le témoin de
     `conftest.py` dans une vraie session pytest.
     """
+    if occupe_au_depart and occupe_avant:
+        return "instance_de_l_utilisateur"
     if occupe_avant:
         return "precondition"
     if occupe_apres:
@@ -56,6 +58,12 @@ def test_un_port_libre_avant_et_pris_apres_est_bien_une_FUITE():
 
 def test_un_port_libre_des_deux_cotes_ne_dit_rien():
     assert _verdict(occupe_avant=False, occupe_apres=False) == "ok"
+
+
+def test_un_port_pris_des_le_depart_est_l_instance_de_l_utilisateur_pas_un_test():
+    assert _verdict(True, True, occupe_au_depart=True) == "instance_de_l_utilisateur"
+    # Mais une fuite reste une fuite si le port avait été libéré entre-temps.
+    assert _verdict(False, True, occupe_au_depart=True) == "fuite"
 
 
 def test_les_deux_verdicts_sont_DISTINCTS():
@@ -102,30 +110,9 @@ def test_la_sonde_ne_se_detecte_PAS_elle_meme():
     assert _listener_sur(port_libre) is False
 
 
-def test_la_fixture_REELLE_distingue_precondition_et_fuite(pytester, monkeypatch):
-    """Le contrôle qui TUE la mutation — les quatre premiers ne le faisaient pas.
-
-    Retirer la mesure initiale de `conftest.py` laissait les tests de logique
-    verts : ils recopient la décision au lieu de l'exercer. Ici on lance une
-    VRAIE session pytest, avec un listener ouvert avant le test, et l'on exige
-    le verdict « PRÉCONDITION » — celui que seule la mesure initiale peut
-    produire.
-
-    Le port est ÉPHÉMÈRE : éprouver le témoin sur le port de production
-    reviendrait à provoquer la panne qu'il interdit.
-    """
-    with closing(socket.socket()) as serveur:
-        serveur.bind(("127.0.0.1", 0))
-        serveur.listen(1)
-        port = serveur.getsockname()[1]
-
-        pytester.makeconftest(f"""
+_CONFTEST = """
 import pytest
 from tests.conftest import _listener_sur
-
-
-class _Config:
-    MLX_PORT = {port}
 
 
 @pytest.fixture(autouse=True)
@@ -140,12 +127,80 @@ def temoin(request, monkeypatch):
         next(gen)
     except StopIteration:
         pass
-""")
-        pytester.makepyfile("def test_innocent(): pass")
-        resultat = pytester.runpytest("-p", "no:cacheprovider")
+"""
 
+
+def _port_libre() -> int:
+    with closing(socket.socket()) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _session(pytester, monkeypatch, port: int, etat_au_depart: dict, corps_du_test: str = "pass"):
+    """Une VRAIE session pytest qui exerce la fixture réelle sur un port éphémère.
+
+    Éprouver le témoin sur le port de production reviendrait à provoquer la
+    panne qu'il interdit. L'état « au départ » est celui du processus appelant :
+    on le remplace pour la durée de l'essai.
+    """
+    import tests.conftest as conf
+
+    monkeypatch.setattr(conf, "_ETAT_AU_DEPART", etat_au_depart)
+    monkeypatch.setattr(conf, "_SIGNALES", set())
+    pytester.makeconftest(_CONFTEST.format(port=port))
+    pytester.makepyfile(f"def test_innocent():\n    {corps_du_test}\n")
+    return pytester.runpytest("-p", "no:cacheprovider")
+
+
+def test_la_fixture_REELLE_ignore_un_listener_present_des_le_depart(pytester, monkeypatch):
+    """L'instance de l'utilisateur écoute avant la session : aucun test n'échoue.
+
+    C'est le cas qui faisait échouer le crochet de poussée (2 336 erreurs) dès que
+    l'application de l'utilisateur tournait pendant qu'il développait.
+    """
+    with closing(socket.socket()) as serveur:
+        serveur.bind(("127.0.0.1", 0))
+        serveur.listen(1)
+        port = serveur.getsockname()[1]
+        resultat = _session(pytester, monkeypatch, port, {})   # vide : la première mesure sera « occupé »
+    sortie = resultat.stdout.str()
+    assert resultat.ret == 0, sortie[-2000:]
+    assert "PRÉCONDITION" not in sortie and "a laissé un listener" not in sortie
+    import tests.conftest as conf
+
+    assert port in conf._SIGNALES, "la note à l'utilisateur n'a pas été émise"
+
+
+def test_la_fixture_REELLE_garde_la_precondition_d_un_listener_apparu_en_cours_de_session(pytester, monkeypatch):
+    """Libre au début, pris avant ce test : l'environnement a changé, on le dit sans accuser le test.
+
+    Retirer la mesure initiale de `conftest.py` ne changerait pas ce verdict ;
+    retirer l'état « au départ » le ferait disparaître (ou le confondrait avec
+    l'instance de l'utilisateur) : ce test fige la distinction.
+    """
+    with closing(socket.socket()) as serveur:
+        serveur.bind(("127.0.0.1", 0))
+        serveur.listen(1)
+        port = serveur.getsockname()[1]
+        resultat = _session(pytester, monkeypatch, port, {port: False})   # « libre au début », mais pris maintenant
     sortie = resultat.stdout.str()
     assert "PRÉCONDITION" in sortie, sortie[-2000:]
-    assert "a laissé un listener" not in sortie, (
-        "le témoin accuse un test innocent d'une fuite antérieure"
-    )
+    assert "a laissé un listener" not in sortie, "le témoin accuse un test innocent"
+
+
+def test_la_fixture_REELLE_nomme_toujours_une_fuite(pytester, monkeypatch):
+    """Libre avant, pris après par le test : il est nommé, même si l'instance de l'utilisateur avait écouté au début."""
+    port = _port_libre()
+    corps = (f"import socket, builtins\n"
+             f"    s = socket.socket(); s.bind(('127.0.0.1', {port})); s.listen(1)\n"
+             f"    builtins._fuite_de_test = s")
+    try:
+        # « occupé au départ » (l'instance), libéré depuis : une fuite reste une fuite.
+        resultat = _session(pytester, monkeypatch, port, {port: True}, corps)
+    finally:
+        import builtins
+        fuite = getattr(builtins, "_fuite_de_test", None)
+        if fuite is not None:
+            fuite.close()
+    sortie = resultat.stdout.str()
+    assert "a laissé un listener" in sortie, sortie[-2000:]

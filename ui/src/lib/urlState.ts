@@ -55,10 +55,12 @@ export type EtatUrl = {
   reunion?: string
   onglet?: OngletReunion
   q?: string
+  /** Le panneau des traitements est ouvert (`traitements=1`) ; jamais une vue d'ouverture mémorisée. */
+  traitements?: boolean
 }
 
 /** Ordre FIXE, pour que deux états égaux produisent la même chaîne. */
-const ORDRE: (keyof EtatUrl)[] = ['vue', 'projet', 'reunion', 'onglet', 'q']
+const ORDRE: (keyof EtatUrl)[] = ['vue', 'projet', 'reunion', 'onglet', 'q', 'traitements']
 
 // La sentinelle du sélecteur : elle déclenche la création d'un projet et ne
 // désigne aucune portée. Elle ne doit JAMAIS atteindre l'URL — un rechargement
@@ -84,6 +86,7 @@ export function lireUrl(search: string = location.search): EtatUrl {
   }
   const q = params.get('q')
   if (q) etat.q = q
+  if (params.get('traitements') === '1') etat.traitements = true
   return etat
 }
 
@@ -95,7 +98,7 @@ export function ecrireUrl(etat: EtatUrl): string {
     if (cle === 'projet' && valeur === SENTINELLE_NOUVEAU) continue
     // Un onglet de réunion n'a de sens qu'avec une réunion.
     if (cle === 'onglet' && !etat.reunion) continue
-    params.set(cle, String(valeur))
+    params.set(cle, cle === 'traitements' ? '1' : String(valeur))
   }
   const chaine = params.toString()
   return chaine ? `?${chaine}` : location.pathname

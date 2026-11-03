@@ -86,6 +86,32 @@ describe('EclFaits', () => {
     confirmer.mockRestore()
   })
 
+  it('l\'échec d\'une relance se dit par son CODE traduit, jamais par le texte brut du serveur', async () => {
+    vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
+    vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx'], local_providers: ['mlx'], default_llm_provider: 'mlx',
+      llm_ready: { mlx: true } } as never)
+    vi.mocked(relancerFaitsReunion).mockResolvedValue({ job_id: 'J2' })
+    vi.mocked(getJobStatus).mockResolvedValue({ id: 'J2', status: 'error', progress: 0.5, message: '', result: null,
+      error: 'Extraction vide : aucune unité retenue sur 3 appel(s)', error_code: 'step.error.emptyExtraction', error_params: {} })
+    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    await screen.findByRole('combobox')
+    await userEvent.click(screen.getByRole('button', { name: /Re-extract/ }))
+    expect(await screen.findByText('Extraction failed: The model kept nothing from this meeting. Try another model.')).toBeTruthy()
+    expect(screen.queryByText(/Extraction vide/)).toBeNull()
+  })
+
+  it('sans code (serveur plus ancien), le texte du serveur reste affiché', async () => {
+    vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
+    vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx'], local_providers: ['mlx'], default_llm_provider: 'mlx',
+      llm_ready: { mlx: true } } as never)
+    vi.mocked(relancerFaitsReunion).mockResolvedValue({ job_id: 'J3' })
+    vi.mocked(getJobStatus).mockResolvedValue({ id: 'J3', status: 'error', progress: 0, message: '', result: null, error: 'Panne ancienne' })
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    await screen.findByRole('combobox')
+    await userEvent.click(screen.getByRole('button', { name: 'Relancer l’extraction des faits' }))
+    expect(await screen.findByText(/Panne ancienne/)).toBeTruthy()
+  })
+
   it('la confirmation cloud nomme le fournisseur par son libellé, et le sélecteur a le style commun', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
     vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx', 'anthropic'], local_providers: ['mlx'],

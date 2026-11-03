@@ -96,6 +96,10 @@ companion:
 	mkdir -p "$(COMPAGNON_PAQUET)/Contents/MacOS"
 	cp compagnon/.build/release/memoglyph-compagnon "$(COMPAGNON_PAQUET)/Contents/MacOS/memoglyph-compagnon"
 	cp compagnon/Sources/memoglyph-compagnon/Info.plist "$(COMPAGNON_PAQUET)/Contents/Info.plist"
+	mkdir -p "$(COMPAGNON_PAQUET)/Contents/Resources" compagnon/.build/icone
+	swift compagnon/Outils/generer-icone.swift ui/public/brand/memoglyph-symbole-sombre.svg compagnon/.build/icone/Memoglyph.iconset
+	iconutil --convert icns compagnon/.build/icone/Memoglyph.iconset --output "$(COMPAGNON_PAQUET)/Contents/Resources/Memoglyph.icns"
+	test -s "$(COMPAGNON_PAQUET)/Contents/Resources/Memoglyph.icns"
 	codesign --sign "$(SIGN_IDENTITY)" --identifier org.memoglyph.compagnon "$(COMPAGNON_PAQUET)"
 	codesign --verify --strict "$(COMPAGNON_PAQUET)"
 	@dest="$(DEST)"; \

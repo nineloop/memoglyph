@@ -1,3 +1,4 @@
+import { LienChangerPortee } from './PorteeEnLecture'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getUsageRollup, getUsageExecutions, getUsageExecutionDetail,
@@ -13,6 +14,8 @@ import { formatCost, formatTokens, formatTime, formatAudio } from '../lib/finops
 interface Props {
   viewScope: string        // un projet, ou 'all' pour la vue globale (opt-in explicite)
   scopeLabel: string
+  /** Mène à la Bibliothèque, où se change le projet consulté. */
+  onChangerPortee?: () => void
 }
 
 type Load = 'loading' | 'error' | 'ready'
@@ -120,7 +123,7 @@ function DayBars({ rows, onPick, t }: {
 
 interface Drill { dim: 'provider' | 'model' | 'stage' | 'day'; value: string; label: string }
 
-export function UsagePanel({ viewScope, scopeLabel }: Props) {
+export function UsagePanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
   const { t } = useLang()
   const [state, setState] = useState<Load>('loading')
   const [byBasis, setByBasis] = useState<UsageRollup | null>(null)
@@ -158,14 +161,17 @@ export function UsagePanel({ viewScope, scopeLabel }: Props) {
   const wall = sum(allRows, (r) => r.wall_clock_s)
   const isEmpty = state === 'ready' && allRows.length === 0
 
-  if (state === 'loading') return <div className="usage-panel"><p className="muted">{t('usage.loading')}</p></div>
-  if (state === 'error') return <div className="usage-panel"><p className="muted">{t('usage.unavailable')}</p></div>
+  // Même chargement ou panne, on peut changer de projet : le lien reste là.
+  const changer = onChangerPortee && <LienChangerPortee viewScope={viewScope} surChanger={onChangerPortee} />
+  if (state === 'loading') return <div className="usage-panel"><p className="muted">{t('usage.loading')}</p>{changer}</div>
+  if (state === 'error') return <div className="usage-panel"><p className="muted">{t('usage.unavailable')}</p>{changer}</div>
 
   return (
     <div className="usage-panel">
       <header className="usage-head">
         <h2>{t('usage.title')}</h2>
         <span className="usage-scope">{viewScope === 'all' ? t('usage.scope.global') : scopeLabel}</span>
+        {changer}
       </header>
 
       {isEmpty && <p className="muted usage-empty">{t('usage.empty')}</p>}

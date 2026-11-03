@@ -210,6 +210,40 @@ describe('client API', () => {
     expect(source.close).toHaveBeenCalledOnce()
   })
 
+  it('transmet le CODE de l\'échec (flux, puis statut) avec le texte brut du serveur', async () => {
+    class FakeEventSource {
+      static instance: FakeEventSource
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: (() => void) | null = null
+      onopen: (() => void) | null = null
+      close = vi.fn()
+      constructor(_url: string) { FakeEventSource.instance = this }
+    }
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const onError = vi.fn()
+    streamJob('abc', { onError })
+    FakeEventSource.instance.onmessage?.({
+      data: JSON.stringify({ type: 'error', error: 'Extraction vide', code: 'step.error.emptyExtraction', params: {} }),
+    } as MessageEvent)
+    expect(onError).toHaveBeenCalledWith('Extraction vide', {
+      code: 'step.error.emptyExtraction', params: {}, message: 'Extraction vide' })
+
+    // Après une coupure du flux, le statut porte le même code.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      id: 'abc', status: 'error', progress: 0.5, message: '', result: null, error: 'Panne',
+      error_code: 'step.error.modelUnavailable', error_params: {} }), { status: 200 })))
+    const onError2 = vi.fn()
+    streamJob('abc', { onError: onError2 })
+    FakeEventSource.instance.onerror?.()
+    await vi.waitFor(() => expect(onError2).toHaveBeenCalledWith('Panne', {
+      code: 'step.error.modelUnavailable', params: {}, message: 'Panne' }))
+    // Un serveur plus ancien n'envoie pas de code : le texte seul.
+    const onError3 = vi.fn()
+    streamJob('abc', { onError: onError3 })
+    FakeEventSource.instance.onmessage?.({ data: JSON.stringify({ type: 'error', error: 'Ancien' }) } as MessageEvent)
+    expect(onError3).toHaveBeenCalledWith('Ancien', undefined)
+  })
+
   it('récupère le résultat par le statut après une coupure SSE', async () => {
     class FakeEventSource {
       static instance: FakeEventSource

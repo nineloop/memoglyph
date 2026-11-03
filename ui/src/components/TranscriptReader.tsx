@@ -66,6 +66,8 @@ export function TranscriptReader({
   const [report, setReport] = useState<ReportResult | null>(null)
   const [reportTimestamp, setReportTimestamp] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  // Le rail des locuteurs et des repères est replié par défaut sur petit écran (voir `.rail-contenu` dans App.css).
+  const [railOuvert, setRailOuvert] = useState(false)
   const [error, setError] = useState('')
   // L'audio est GLOBAL (mini-lecteur persistant) : le lecteur ne possède plus
   // son propre <audio>. Le passage courant se déduit de la position du lecteur
@@ -389,6 +391,12 @@ export function TranscriptReader({
       {detail && enTours ? (
         <div className="transcript-lecture">
           <aside className="transcript-rail" aria-label={t('reader.rail.aria')}>
+            {/* Petit écran : le rail est replié, le texte vient d'abord ; ce bouton le déplie. Au bureau il est caché. */}
+            <button type="button" className="rail-bascule" aria-expanded={railOuvert} aria-controls="rail-contenu"
+                    onClick={() => setRailOuvert((o) => !o)}>
+              {t('reader.rail.toggle')}
+            </button>
+            <div id="rail-contenu" className={`rail-contenu ${railOuvert ? 'ouvert' : ''}`}>
             {locuteurs.length > 0 && (
               <div className="rail-bloc">
                 <h3>{t('reader.rail.speakers')}</h3>
@@ -435,6 +443,7 @@ export function TranscriptReader({
                 </ul>
               </div>
             )}
+            </div>
           </aside>
 
           <div className="transcript-texte">

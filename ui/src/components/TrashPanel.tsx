@@ -7,6 +7,7 @@ import {
 import { useLatestRequest } from '../lib/latestRequest'
 import { displayDocumentTitle } from '../lib/meetings'
 import { Icon } from './Icon'
+import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
 import { pluralKey } from '../lib/i18n'
 import type { Lang, Traduire } from '../lib/i18n'
@@ -177,7 +178,7 @@ export function TrashPanel({
                   </div>
                   <div className="trash-item-meta">
                     <span>{item.type === 'report' ? t('common.docKind.report') : t('common.docKind.transcript')}</span>
-                    <span>{item.project || t('common.unclassified')}</span>
+                    <span>{libelleProjet(item.project || t('common.unclassified'), t)}</span>
                     <span>{formatArchivedAt(item.archived_at, t)}</span>
                     <span>{formatSize(item.size, t, lang)}</span>
                   </div>

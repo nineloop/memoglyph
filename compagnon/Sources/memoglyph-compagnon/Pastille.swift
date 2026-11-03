@@ -56,7 +56,7 @@ final class Pastille: NSObject {
         panneau = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 280, height: 130),
                           styleMask: [.titled, .nonactivatingPanel, .utilityWindow, .hudWindow],
                           backing: .buffered, defer: true)
-        ligneMicro = Pastille.ligne("Micro", niveauMicro)
+        ligneMicro = Pastille.ligne(Texte.phrase(.panneauMicro), niveauMicro)
         super.init()
         panneau.title = "Memoglyph"
         panneau.level = .floating
@@ -70,11 +70,13 @@ final class Pastille: NSObject {
         stop.bezelColor = .systemRed
         stop.keyEquivalent = "."
         stop.keyEquivalentModifierMask = .command
+        stop.setAccessibilityLabel(Texte.phrase(.panneauArreter))
+        stop.toolTip = Texte.phrase(.panneauArreter)
         let entete = NSStackView(views: [Pastille.point(), temps, NSView(), stop])
         alerte.textColor = .systemOrange
         alerte.font = .systemFont(ofSize: 11)
         alerte.isHidden = true
-        let pile = NSStackView(views: [entete, ligneMicro, Pastille.ligne("Visio", niveauSysteme), alerte])
+        let pile = NSStackView(views: [entete, ligneMicro, Pastille.ligne(Texte.phrase(.panneauVisio), niveauSysteme), alerte])
         pile.orientation = .vertical
         pile.alignment = .leading
         pile.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 10, right: 12)
@@ -104,7 +106,7 @@ final class Pastille: NSObject {
 
     /// La dernière alerte reste affichée jusqu'à la suivante ou jusqu'au Stop.
     func signaler(_ nouvelle: Alerte) {
-        alerte.stringValue = "⚠︎ " + nouvelle.texte
+        alerte.stringValue = "⚠︎ " + nouvelle.texte(Langue.systeme)
         alerte.isHidden = false
     }
 
@@ -124,13 +126,13 @@ final class Pastille: NSObject {
     private static func ligne(_ nom: String, _ vumetre: NSLevelIndicator) -> NSStackView {
         let etiquette = NSTextField(labelWithString: nom)
         etiquette.font = .systemFont(ofSize: 11)
-        etiquette.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        etiquette.widthAnchor.constraint(equalToConstant: 44).isActive = true
         return NSStackView(views: [etiquette, vumetre])
     }
 
     private static func point() -> NSImageView {
         let image = NSImageView(image: NSImage(systemSymbolName: "record.circle.fill",
-                                               accessibilityDescription: "Enregistrement") ?? NSImage())
+                                               accessibilityDescription: Texte.phrase(.menuEnregistrement)) ?? NSImage())
         image.contentTintColor = .systemRed
         return image
     }

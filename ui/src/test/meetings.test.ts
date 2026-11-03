@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LibraryItem } from '../api'
-import { displayDocumentTitle, grouperParReunion } from '../lib/meetings'
+import { displayDocumentTitle, grouperParReunion, voisines } from '../lib/meetings'
 
 /**
  * Le regroupement est la nouvelle porte d'entrée du corpus : s'il perd un
@@ -158,5 +158,46 @@ describe('displayDocumentTitle', () => {
   it('garde un titre saisi, et un slug sans source connue', () => {
     expect(displayDocumentTitle('Comité de pilotage — compte-rendu', source)).toBe('Comité de pilotage — compte-rendu')
     expect(displayDocumentTitle('ami-is1009a', null)).toBe('ami-is1009a')
+  })
+})
+
+describe('voisines (retour 15 : réunion précédente et suivante)', () => {
+  const reunion = (cle: string, date: string, projet: string | null) =>
+    grouperParReunion([doc({ name: `${cle}.md`, meeting_id: cle, date, project_id: projet })])[0]
+
+  const a = reunion('a', '2026-10-01', 'P1')
+  const b = reunion('b', '2026-10-03', 'P1')
+  const c = reunion('c', '2026-10-05', 'P1')
+  const autre = reunion('z', '2026-10-04', 'P2')
+
+  it('donne la plus ancienne qui précède et la plus récente qui suit, dans le projet de la réunion', () => {
+    const v = voisines([c, a, autre, b], 'b')
+    expect(v.precedente?.cle).toBe('a')
+    expect(v.suivante?.cle).toBe('c')
+  })
+
+  it('ne tient pas compte du tri de la liste affichée', () => {
+    expect(voisines([c, b, a], 'a').suivante?.cle).toBe('b')
+    expect(voisines([a, b, c], 'c').precedente?.cle).toBe('b')
+  })
+
+  it('ignore les réunions des autres projets, même quand la liste est « Tous mes projets »', () => {
+    const v = voisines([a, autre, b, c], 'c')
+    expect(v.suivante).toBeUndefined()
+    expect(v.precedente?.cle).toBe('b')
+  })
+
+  it('absentes aux extrémités ; un seul élément ; réunion inconnue', () => {
+    expect(voisines([a, b, c], 'a').precedente).toBeUndefined()
+    expect(voisines([a, b, c], 'c').suivante).toBeUndefined()
+    expect(voisines([a], 'a')).toEqual({ precedente: undefined, suivante: undefined })
+    expect(voisines([a], 'inconnue')).toEqual({})
+  })
+
+  it('départage deux réunions de même date par leur clé (ordre stable)', () => {
+    const x = reunion('x', '2026-10-02', 'P1')
+    const y = reunion('y', '2026-10-02', 'P1')
+    expect(voisines([y, x], 'x').suivante?.cle).toBe('y')
+    expect(voisines([x, y], 'y').precedente?.cle).toBe('x')
   })
 })

@@ -1283,3 +1283,74 @@ def test_le_statut_json_publie_aussi_le_code(client) -> None:
     assert corps["message_code"] == "step.diarization"
     assert corps["message_params"] == {}
     assert corps["message"] == "Identifying speakers…"
+
+
+# ---------- Chantier 003, tranche B : un traitement se voit, y compris quand il attend ----------
+
+def test_transcribe_renseigne_le_suivi_et_rend_visible_l_attente_du_creneau(
+    client, isolated_stores, monkeypatch,
+) -> None:
+    output = isolated_stores["output_dir"]
+    inbox = projects.personal_inbox(output, COMPTE_DE_TEST)[1]
+
+    def run(path, **options):
+        # Le pipeline émet ses codes d'étape ; le suivi en déduit « étape n sur N ».
+        options["progress"](0.2, messages.transcription("whisper"))
+        out = options["output_dir"] / "suivi.md"
+        out.write_text(f"---\nid: {docid.nouveau()}\nmeeting_id: M-SUIVI\n"
+                       f"project_id: {inbox.id}\ntitle: t\n---\n\nTexte", encoding="utf-8")
+        return out, "contenu"
+
+    monkeypatch.setattr(api_main.pipeline, "run", run)
+    monkeypatch.setattr(api_main.semantic, "index_name", lambda name: 0)
+    monkeypatch.setattr(api_main.voiceprint, "index_name", lambda name: {})
+    # L'attente de fond d'un traitement lancé par l'API est de TROIS HEURES (le pipeline en CLI garde 900 s).
+    attentes: list[float] = []
+    heavy_reel = resources.heavy
+
+    def heavy_espion(**kw):
+        if kw.get("label") == "traitement":      # l'enveloppe de /api/transcribe, pas l'occupant du test
+            attentes.append(kw.get("wait"))
+        return heavy_reel(**kw)
+
+    monkeypatch.setattr(api_main.resources, "heavy", heavy_espion)
+
+    pris, liberer = threading.Event(), threading.Event()
+
+    def occupant() -> None:
+        with resources.heavy(label="occupant"):
+            pris.set()
+            liberer.wait(timeout=10)
+
+    t = threading.Thread(target=occupant)
+    t.start()
+    assert pris.wait(timeout=2)
+    try:
+        reponse = client.post("/api/transcribe", files={"file": ("visio du 2 novembre.mp3", b"a")},
+                              data={"diarize": "true", "report_on": "false"})
+        job_id = reponse.json()["job_id"]
+        # Le créneau est pris : le traitement le DIT (il n'a pas commencé).
+        limite = time.monotonic() + 5
+        entree = {}
+        while time.monotonic() < limite:
+            liste = client.get("/api/jobs").json()
+            entree = next(e for e in liste["traitements"] if e["id"] == job_id)
+            if entree["en_attente"]:
+                break
+            time.sleep(0.01)
+        assert entree["en_attente"] is True
+        assert entree["titre"] == "visio du 2 novembre"
+        assert (entree["projet_id"], entree["projet_nom"]) == (inbox.id, inbox.name)
+        assert (entree["etape"], entree["etapes"]) == (None, 3)     # transcription, locuteurs, écriture
+        assert liste["en_attente"] == 1 and liste["actifs"] == 0
+    finally:
+        liberer.set()
+        t.join(timeout=10)
+
+    fini = _wait_job(client, job_id)
+    assert fini["status"] == "done"
+    entree = next(e for e in client.get("/api/jobs").json()["traitements"] if e["id"] == job_id)
+    assert entree["en_attente"] is False and entree["statut"] == "done"
+    assert entree["meeting"] == {"name": "suivi.md", "meeting_id": "M-SUIVI", "project_id": inbox.id}
+    assert entree["etape"] == 1        # le pipeline simulé n'a émis que le code de transcription
+    assert attentes == [10_800]        # jamais les 900 s d'avant sur le chemin de l'API

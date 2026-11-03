@@ -211,6 +211,31 @@ message si `/Applications` n'est pas accessible en écriture, puis le montre dan
 (`open -R`). `DEST=<dossier>` choisit un autre dossier, sans repli ; `OPEN_R=` vide
 n'ouvre rien. La capture d'un appel est en **bêta**, pour macOS seulement.
 
+### 4.8 Renvoi automatique et messages
+
+Une capture refusée parce qu'un traitement est en cours (réponse 429), ou que Memoglyph ne
+répond pas, **repart seule**. Chaque capture porte un identifiant (`capture_id`, un UUID) fixé
+à sa création et le même à chaque renvoi ; le serveur le range dans la provenance de
+capture du transcript. Si la réponse s'est perdue alors que la capture était reçue, le
+renvoi rend « déjà reçue » avec la réunion (ou son traitement en cours) : **jamais de seconde
+réunion**, même après un redémarrage de Memoglyph, et jamais pour un autre compte.
+
+Le calendrier est 15 s, 30 s, 1 min, 2 min, puis 5 min quatre fois : huit renvois au plus.
+Il s'arrête tout de suite quand le jeton est refusé ou que l'adresse ou le projet est
+inconnu, et sur un refus définitif. Après le dernier essai, le menu dit en une phrase que la
+capture n'est pas partie ; **elle reste sur le Mac**. La logique du calendrier et des décisions
+est pure (`CaptureCore/Renvoi.swift`), testée sans réseau.
+
+Les phrases du menu sont en français ou en anglais selon la langue du système
+(`CaptureCore/Texte.swift`) : courtes et entières, sans identifiant ni terme technique ; la
+progression vient des codes d'étape du serveur. La liaison se lit par un libellé et une forme,
+pas par la couleur seule. Le jeton d'appareil n'ouvre, pour la liste des traitements, que le
+nombre de traitements en cours et ses propres captures.
+
+Pour un essai sur une instance de démonstration, la variable d'environnement
+`MEMOGLYPH_COMPAGNON_SERVICE` donne un autre nom de service du trousseau ; le dossier des
+captures et le réglage du projet d'envoi suivent ce nom (`CaptureCore/Espace.swift`).
+
 ## 5. Choix à arbitrer
 
 Chaque ligne est un choix ouvert, avec une recommandation.

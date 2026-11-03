@@ -14,18 +14,24 @@ function bloc(media: string): string {
   return ''
 }
 
-describe('barre de contexte au bureau étroit', () => {
+describe('barre haute allégée au bureau étroit', () => {
   const regle = bloc('@media (min-width: 821px) and (max-width: 1599px)')
 
   it("resserre la barre sur une ligne entre 821 et 1599 px, au lieu d'en couper la fin", () => {
-    expect(regle).toMatch(/\.contextbar\s*\{[^}]*gap:\s*8px/)
+    expect(regle).toMatch(/\.barre-haute\s*\{[^}]*gap:\s*8px/)
     expect(regle).toMatch(/\.global-search\s*\{[^}]*min-width:\s*110px/)
-    expect(regle).toMatch(/\.contextbar \.scope-picker\s*\{[^}]*min-width:\s*140px/)
-    expect(regle).toMatch(/\.contextbar \.chip\s*\{[^}]*padding-inline:\s*10px/)
+    expect(regle).toMatch(/\.barre-haute \.chip\s*\{[^}]*padding-inline:\s*10px/)
   })
 
   it('ne fait pas passer la barre sur deux lignes : les éléments collants se placent à 76 px', () => {
     expect(regle).not.toMatch(/flex-wrap:\s*wrap/)
     expect(css).toMatch(/position:\s*sticky;\s*top:\s*76px/)
+  })
+
+  it('ne garde aucune règle des contrôles retirés de la barre (SC-002, SC-004)', () => {
+    // Le conteneur du menu natif de portée, son libellé de rôle et l'en-tête de contexte n'existent
+    // plus (`.project-select` reste : la fusion de voix s'en sert).
+    expect(css).not.toMatch(/\.scope-picker\s*\{/)
+    expect(css).not.toMatch(/\.context-heading\s*\{/)
   })
 })

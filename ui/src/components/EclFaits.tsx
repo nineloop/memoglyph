@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { getConfig, getFaitsReunion, getJobStatus, relancerFaitsReunion, type FaitEcl } from '../api'
 import { Badge } from '../design/primitives'
 import { useCloudUltra } from '../lib/cloudUltra'
+import { traduireEtape } from '../lib/i18n'
 import { useLang } from '../lib/langContext'
 import type { MessageKey } from '../lib/messages'
 
@@ -25,6 +26,17 @@ const TYPES: Record<string, MessageKey> = {
 }
 
 const ATTENTE_MS = 1500
+
+/** L'échec d'un traitement de fond : son texte brut, et le CODE que l'interface traduit. */
+class EchecTraitement extends Error {
+  code: string | null
+  params: Record<string, string | number>
+  constructor(message: string, code: string | null, params: Record<string, string | number>) {
+    super(message)
+    this.code = code
+    this.params = params
+  }
+}
 
 /** Motif du contrôle échoué d'un fait périmé (`ecl.MOTIFS`), lisible. */
 const MOTIFS: Record<string, MessageKey> = {
@@ -63,7 +75,7 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
   // Le compte peut autoriser le cloud pour son ultra-confidentiel (panneau Confidentialité).
   const cloudUltra = useCloudUltra()
   const ultra = Boolean(ultraDocument) && !cloudUltra
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [faits, setFaits] = useState<FaitEcl[] | null>(null)
   const [perimes, setPerimes] = useState<FaitEcl[]>([])
   const [erreur, setErreur] = useState('')
@@ -120,14 +132,18 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
       const { job_id: jobId } = await relancerFaitsReunion(meetingId, viewScope, choix)
       for (;;) {
         const statut = await getJobStatus(jobId)
-        if (statut.status === 'error') throw new Error(statut.error || statut.message)
+        if (statut.status === 'error') throw new EchecTraitement(statut.error || statut.message, statut.error_code ?? null, statut.error_params ?? {})
         if (statut.status === 'done') break
         await new Promise((fin) => setTimeout(fin, ATTENTE_MS))
       }
       setEtat(t('meeting.facts.rerun.kept'))
       charger()
     } catch (raison) {
-      setEtat(t('meeting.facts.rerun.error', { reason: String(raison) }))
+      // Un échec de traitement se dit par son code traduit ; le texte brut du serveur n'est montré que sans code.
+      const dit = raison instanceof EchecTraitement && raison.code
+        ? traduireEtape(lang, { code: raison.code, params: raison.params, message: raison.message })
+        : String(raison)
+      setEtat(t('meeting.facts.rerun.error', { reason: dit }))
     } finally {
       setEnCours(false)
     }

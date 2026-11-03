@@ -31,7 +31,7 @@ from core import voiceprint
 from core import maintenance
 from core import projects as project_store
 from . import auth, partages, portee
-from .jobs import JobManager, JobsBusy
+from .jobs import GROUPES_COMPTE_RENDU, JobManager, JobsBusy, plan_etapes
 
 config.load_env()  # charge .env (HF_TOKEN) au démarrage de l'API
 
@@ -84,6 +84,9 @@ ROUTES_DU_COMPAGNON = frozenset({
     ("GET", "/api/jobs/{job_id}"),
     ("GET", "/api/jobs/{job_id}/events"),
     ("GET", "/api/projects"),
+    # Chantier 003 : « en attente : N traitements ». Avec un jeton, la route ne rend que les
+    # comptes du compte et SES propres captures (`traitements_du_compte`).
+    ("GET", "/api/jobs"),
 })
 _MOTIFS_DU_COMPAGNON = tuple(
     (methode, re.compile(re.sub(r"\{[^}]+\}", "[^/]+", chemin)))
@@ -119,6 +122,8 @@ async def _session_obligatoire(request: Request, call_next):
             utilisateur = auth.utilisateur_de_jeton(_jeton_porteur(request))
             # Le compagnon suit son travail sans en lire le texte (`_vue_du_compagnon`).
             request.state.par_jeton = utilisateur is not None
+            if utilisateur is not None:
+                request.state.jeton_id = auth.id_du_jeton(_jeton_porteur(request))
         if utilisateur is None:
             return JSONResponse({"detail": "Connexion requise."}, status_code=401)
         request.state.utilisateur = utilisateur
@@ -560,12 +565,17 @@ def _proprietaire_du_dossier(directory: Path) -> Optional[str]:
         return None
 
 
+def _destination_projet(request: Request, destination_project_id: str = ""):
+    """Le dossier ET le projet d'une destination d'écriture (identité et nom, pour le suivi)."""
+    if (destination_project_id or "").strip() == ALL_PROJECTS_SCOPE:
+        raise HTTPException(400, "« Tous les projets » est une portée, pas une destination")
+    return portee.projet(portee.utilisateur(request), destination_project_id, ecriture=True)
+
+
 def _destination_project_dir(request: Request, destination_project_id: str = "") -> Path:
     """Résout une destination d'écriture parmi les projets du compte ; vide =
     son « Non classé », créé s'il manque ; `all` n'est jamais accepté."""
-    if (destination_project_id or "").strip() == ALL_PROJECTS_SCOPE:
-        raise HTTPException(400, "« Tous les projets » est une portée, pas une destination")
-    return portee.projet(portee.utilisateur(request), destination_project_id, ecriture=True)[0]
+    return _destination_projet(request, destination_project_id)[0]
 
 
 # Résultat de la réindexation de démarrage. Sans cet état, un échec ne laissait
@@ -845,22 +855,80 @@ MODES_DE_CAPTURE = ("visio", "replay")
 LONGUEUR_MAX_APPLICATION = 80
 
 
-def _provenance_capture(application: str, mode: str) -> Optional[dict]:
+def _provenance_capture(application: str, mode: str, capture_id: str = "") -> Optional[dict]:
     """Provenance d'un enregistrement du compagnon de capture, ou `None` sans elle.
 
     Refusée en 400 plutôt que corrigée : elle est écrite dans le `.md`, qui fait
-    foi, et une valeur inventée y resterait.
+    foi, et une valeur inventée y resterait. `capture_id` (un UUID) y est rangé aussi :
+    c'est ce qui rend le renvoi d'une capture idempotent, même après un redémarrage.
     """
     application = " ".join((application or "").split())
     mode = (mode or "").strip().lower()
+    capture_id = (capture_id or "").strip().lower()
+    if capture_id and not _UUID.fullmatch(capture_id):
+        raise HTTPException(400, "Identifiant de capture invalide : un UUID est attendu")
     if mode and mode not in MODES_DE_CAPTURE:
         raise HTTPException(400, f"Mode de capture inconnu : {mode!r} "
                                  f"(attendu : {', '.join(MODES_DE_CAPTURE)})")
     if len(application) > LONGUEUR_MAX_APPLICATION or not application.isprintable():
         raise HTTPException(400, "Application de capture invalide : "
                                  f"{LONGUEUR_MAX_APPLICATION} caractères imprimables au plus")
-    provenance = {"application": application or None, "mode": mode or None}
+    provenance = {"application": application or None, "mode": mode or None,
+                  "capture_id": capture_id or None}
     return {k: v for k, v in provenance.items() if v} or None
+
+
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+# Où chercher `capture_id` dans un .md : le front matter est en tête, jamais au-delà.
+_TETE_DU_FRONT_MATTER = 16 * 1024
+
+
+def _reunion_de_la_capture(compte: auth.Utilisateur, capture_id: str) -> Optional[dict]:
+    """Le transcript DU COMPTE déjà écrit pour cette capture (`{"meeting", "meeting_id", "project_id"}`), ou `None`.
+
+    La recherche porte sur tous les projets du compte (la destination a pu changer entre deux
+    essais) et jamais sur ceux des autres. Un document encore marqué `interrupted` (écriture
+    précoce d'un traitement qui tourne ou qui a échoué) ne compte pas : renvoyer la capture après
+    un échec doit la retraiter.
+    """
+    for dossier, _projet in portee.projets_visibles(compte):
+        try:
+            fichiers = sorted(p for p in dossier.glob("*.md") if p.is_file())
+        except OSError:
+            continue
+        for fichier in fichiers:
+            try:
+                with fichier.open("r", encoding="utf-8", errors="replace") as f:
+                    tete = f.read(_TETE_DU_FRONT_MATTER)
+                if capture_id not in tete:
+                    continue
+                meta, _ = library._split_frontmatter(fichier.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            capture = meta.get("capture")
+            if (isinstance(capture, dict) and capture.get("capture_id") == capture_id
+                    and not meta.get("interrupted")):
+                return _reponse_deja_recue(fichier.name, meta)
+    return None
+
+
+def _reponse_deja_recue(nom: str, identite: dict) -> dict:
+    """`{"deja_recue": true, "meeting": nom}` + l'identité de la réunion quand on la connaît, pour que
+    le compagnon l'ouvre elle-même (comme pour un traitement fini)."""
+    reponse = {"deja_recue": True, "meeting": nom}
+    for cle in ("meeting_id", "project_id"):
+        if isinstance(identite.get(cle), str) and identite[cle]:
+            reponse[cle] = identite[cle]
+    return reponse
+
+
+def _deja_recue_par_travail(job) -> dict:
+    """Réponse « déjà reçue » pour un traitement du compte qui porte la même capture."""
+    with job.lock:
+        resultat = job.result if job.status == "done" and isinstance(job.result, dict) else {}
+    nom = resultat.get("name")
+    return _reponse_deja_recue(nom, resultat) if nom else {"deja_recue": True, "job_id": job.id}
+
 
 @app.post("/api/transcribe")
 async def transcribe(
@@ -881,12 +949,22 @@ async def transcribe(
     destination_project_id: str = Form(""),
     capture_application: str = Form(""),
     capture_mode: str = Form(""),
+    capture_id: str = Form(""),
 ) -> dict:
+    # La provenance d'abord : invalide, elle est refusée avant tout travail. Puis la capture déjà
+    # reçue (réponse perdue, renvoi) : elle ne dépend ni de la destination ni de la place.
+    capture = _provenance_capture(capture_application, capture_mode, capture_id)
+    capture_id = (capture or {}).get("capture_id", "")
+    compte = portee.utilisateur(request)
+    if capture_id:
+        deja = _reunion_de_la_capture(compte, capture_id)
+        if deja:
+            return deja
     # Refuse une portée, un projet ou un fournisseur inconnu AVANT de réserver
     # un job et d'uploader le fichier. Valider dans le job de fond serait trop
     # tard : la réponse HTTP est déjà partie en 200, et l'utilisateur ne saurait
     # qu'à la fin que son choix de moteur était invalide.
-    target_dir = _destination_project_dir(request, destination_project_id)
+    target_dir, projet_destination = _destination_projet(request, destination_project_id)
     llm_provider = _fournisseur_valide(llm_provider)
     # Avant la réservation et l'envoi : la transcription, puis le profil et le CR
     # quand ils sont demandés, restent locaux pour un document ultra-confidentiel,
@@ -896,21 +974,33 @@ async def transcribe(
     if report_on or profile:
         _refuser_le_cloud(sensitivity_level, local=llm.est_local(llm_provider),
                           proprietaire=proprietaire)
-    capture = _provenance_capture(capture_application, capture_mode)
     if report_on and not timestamps:
         # Chaque phrase d'un CR cite `[source HH:MM:SS]` : sans horodatage, il
         # finirait sur zéro unité, après la transcription entière.
         raise HTTPException(400, "Un compte-rendu exige les horodatages : activez-les "
                                  "ou retirez le compte-rendu.")
 
-    try:
-        job = jobs.create(owner=portee.utilisateur(request).id, nature="transcription")
-    except JobsBusy as exc:
-        raise HTTPException(429, str(exc))
-
     safe_name = Path(file.filename or "upload").name
     if safe_name in {"", ".", ".."}:
         safe_name = "upload"
+    suivi = dict(
+        # Le suivi : de quoi montrer ce traitement depuis n'importe quel écran (tranche B).
+        titre=Path(safe_name).stem, projet_id=projet_destination.id,
+        projet_nom=projet_destination.name,
+        jeton=getattr(request.state, "jeton_id", None),
+        plan=plan_etapes(diarize=diarize, profile=profile, report_on=report_on))
+    try:
+        if capture_id:
+            # Recherche et création sous le même verrou : deux envois rapprochés de la même capture
+            # ne donnent qu'un traitement. Un traitement en échec ne compte pas.
+            job, cree = jobs.create_or_find_capture(compte.id, capture_id, **suivi)
+            if not cree:
+                return _deja_recue_par_travail(job)
+        else:
+            job = jobs.create(owner=compte.id, nature="transcription", **suivi)
+    except JobsBusy as exc:
+        raise HTTPException(429, str(exc))
+
     job_upload_dir = UPLOAD_DIR / job.id
     job_upload_dir.mkdir(parents=True, exist_ok=True)
     dest = job_upload_dir / safe_name
@@ -996,7 +1086,17 @@ async def transcribe(
     def target(cb):
         # Un seul jeton couvre STT, puis les deux indexations dérivées. Sans
         # cette enveloppe, pipeline.run rendait le jeton avant semantic/voix.
-        with resources.heavy(wait=900, label="traitement"):
+        # L'attente du créneau se VOIT : `en_attente` tant qu'un autre calcul lourd occupe la machine.
+        def _en_attente() -> None:
+            with job.lock:
+                job.en_attente = True
+
+        def _obtenu() -> None:
+            with job.lock:
+                job.en_attente = False
+
+        with resources.heavy(wait=config.ATTENTE_DE_FOND_API_S, label="traitement",
+                             on_wait=_en_attente, on_acquired=_obtenu):
             return target_locked(cb)
 
     jobs.run(job, target)
@@ -1004,11 +1104,47 @@ async def transcribe(
 
 
 def _job_du_compte(request: Request, job_id: str):
-    """Un job n'est lisible que par le compte qui l'a lancé."""
+    """Un job n'est lisible que par le compte qui l'a lancé.
+
+    Avec un JETON d'appareil (le compagnon), seulement par le jeton qui l'a lancé : il suit ses propres
+    captures, jamais un traitement lancé par la session ni par un autre jeton du même compte (strict
+    nécessaire). Même réponse 404 que pour un job inconnu : rien ne distingue les deux.
+    """
     job = jobs.get(job_id)
     if not job or job.owner != portee.utilisateur(request).id:
         raise HTTPException(404, "Job inconnu")
+    if getattr(request.state, "par_jeton", False):
+        jeton = getattr(request.state, "jeton_id", None)
+        if jeton is None or job.jeton != jeton:
+            raise HTTPException(404, "Job inconnu")
     return job
+
+
+@app.get("/api/jobs")
+def traitements_du_compte(request: Request) -> dict:
+    """Les traitements du compte connecté : les actifs d'abord, puis l'historique récent.
+
+    Même contrôle de propriétaire que `_job_du_compte`. Avec un JETON d'appareil, la liste se limite
+    aux traitements nés de ce jeton : aucun titre, projet ni état d'une autre réunion. Les comptes
+    (`actifs`, `en_attente`) ne comptent jamais que les traitements du compte.
+    """
+    du_compte = jobs.list_for(portee.utilisateur(request).id)
+    attente = [j for j in du_compte if j.status == "pending"
+               or (j.status == "running" and j.en_attente)]
+    en_cours = [j for j in du_compte if j.status == "running" and not j.en_attente]
+    if getattr(request.state, "par_jeton", False):
+        jeton = getattr(request.state, "jeton_id", None)
+        visibles = [j for j in du_compte if jeton is not None and j.jeton == jeton]
+    else:
+        visibles = du_compte
+    # Les actifs d'abord (stable : l'ordre récent → ancien est conservé dans chaque groupe).
+    visibles.sort(key=lambda j: j.status not in ("pending", "running"))
+    return {
+        "traitements": [JobManager.entree_liste(j) for j in visibles],
+        # « N en cours · M en attente » : un traitement qui attend le créneau n'est PAS en cours.
+        "actifs": len(en_cours),
+        "en_attente": len(attente),
+    }
 
 
 def _vue_du_compagnon(request: Request, donnees: dict) -> Optional[dict]:
@@ -1817,31 +1953,21 @@ class ReportBody(BaseModel):
     mistral_api_key: Optional[str] = None
 
 
-@app.post("/api/transcript/{name}/report")
-def make_report(request: Request, name: str, view_scope: str, body: Optional[ReportBody] = None) -> dict:
-    """Génère un compte-rendu structuré du transcript et le sauvegarde (biblio).
+def _controles_compte_rendu(request: Request, name: str, view_scope: str,
+                            opts: ReportBody) -> tuple[str, dict]:
+    """Les contrôles COMMUNS aux deux routes de génération, dans l'ordre : `(fournisseur, transcript)`.
 
-    Le garde de portée passe AVANT tout le reste : cette route lit le transcript
-    ENTIER et peut l'expédier à un LLM **cloud**. Vérifier après coup laisserait
-    le texte sortir avant le refus.
+    Tout passe AVANT la réservation du créneau lourd et avant tout appel au modèle : un refus est une
+    erreur HTTP et ne crée rien. Le garde de portée précède la lecture : cette route lit le transcript
+    ENTIER et peut l'expédier à un LLM **cloud** ; vérifier après coup laisserait le texte sortir.
     """
-    from core import report
-    opts = body or ReportBody()
-    # AVANT le `try` : `FournisseurInconnu` hérite de `ValueError`, et le
-    # `except ValueError` plus bas le transformait en **404** — « transcript
-    # introuvable » pour un fournisseur mal orthographié. Un code de statut
-    # faux envoie chercher le problème au mauvais endroit.
-    #
-    # Et avant le garde de portée : cette validation est PURE (aucune lecture,
-    # aucun appel réseau), elle ne divulgue donc rien sur l'existence du
-    # document. L'ordre inverse ferait réapparaître le 404 trompeur.
+    # AVANT le `try` : `FournisseurInconnu` hérite de `ValueError`, et un `except ValueError` plus bas le
+    # transformerait en **404** — « transcript introuvable » pour un fournisseur mal orthographié. Et avant
+    # le garde de portée : cette validation est PURE (aucune lecture, aucun appel réseau), elle ne
+    # divulgue donc rien sur l'existence du document.
     fournisseur = _fournisseur_valide(opts.llm_provider)
-    # Puis la portée — avant la réservation du créneau lourd comme avant toute
-    # lecture : réserver la machine pour un travail qu'on va refuser serait
-    # absurde, et lire avant de refuser laisserait le texte sortir.
     _require_document_scope(name, _portee(request, view_scope))
     from core.experimental import chunking
-    from core.experimental.pipeline import ExtractionVide
     item = library.get_transcript(name)
     # Sensibilité EFFECTIVE, celle de la réunion (`library.sensibilite_effective`), comme le cœur.
     envoi = library.envoi_du_document(name, (item or {}).get("meta") or {})
@@ -1851,11 +1977,25 @@ def make_report(request: Request, name: str, view_scope: str, body: Optional[Rep
         chunking.verifier_citable((item or {}).get("body") or "")
     except chunking.TranscriptNonCitable as exc:
         raise HTTPException(400, str(exc)) from exc
+    return fournisseur, item or {}
+
+
+@app.post("/api/transcript/{name}/report")
+def make_report(request: Request, name: str, view_scope: str, body: Optional[ReportBody] = None) -> dict:
+    """Génère un compte-rendu structuré du transcript et le sauvegarde (biblio).
+
+    Synchrone : la réponse porte le compte rendu. Pour le suivre dans la vue des traitements, voir
+    `POST …/report/jobs`.
+    """
+    from core import report
+    from core.experimental import chunking
+    from core.experimental.pipeline import ExtractionVide
+    opts = body or ReportBody()
+    fournisseur, _item = _controles_compte_rendu(request, name, view_scope, opts)
     try:
         # Le Map-Reduce d'un CR est un travail LOURD : sans réservation il
         # tournait en concurrence d'une transcription, les deux se disputant la
-        # RAM unifiée. Ce `except ResourcesBusy` plus bas trahissait l'intention
-        # — la réservation, elle, n'était jamais prise.
+        # RAM unifiée.
         # `wait=0` : chemin INTERACTIF, on refuse tout de suite plutôt que de
         # faire patienter sans signal (la transcription, elle, attend son tour).
         with resources.heavy(wait=0, label="compte-rendu"):
@@ -1880,6 +2020,58 @@ def make_report(request: Request, name: str, view_scope: str, body: Optional[Rep
         raise HTTPException(429, str(exc))
     except llm.LLMError as exc:
         raise HTTPException(503, f"Génération indisponible : {exc}")
+
+
+@app.post("/api/transcript/{name}/report/jobs")
+def lancer_compte_rendu(request: Request, name: str, view_scope: str,
+                        body: Optional[ReportBody] = None) -> dict:
+    """Régénère un compte rendu comme un TRAITEMENT : suivi dans la vue des traitements et l'indicateur.
+
+    Mêmes contrôles que `POST …/report`, tous avant la création du traitement (un refus ne crée rien).
+    Le résultat s'AJOUTE aux versions existantes (`unique_path`) : aucune n'est écrasée. L'attente du
+    créneau lourd est celle d'un travail de fond, et se voit (`en_attente`).
+    """
+    from core import report
+    opts = body or ReportBody()
+    fournisseur, item = _controles_compte_rendu(request, name, view_scope, opts)
+    meta = item.get("meta") or {}
+    src = library.transcript_path(name)
+    projet = project_store.load(src.parent) if src is not None else None
+    cle = (opts.mistral_api_key or None)   # dans la fermeture seulement : ni traitement, ni événement, ni message
+    try:
+        job = jobs.create(
+            owner=portee.utilisateur(request).id, nature="compte-rendu",
+            titre=library.titre_lisible(meta.get("title"), meta.get("source"), nom=name),
+            projet_id=projet.id if projet else None, projet_nom=projet.name if projet else "",
+            jeton=getattr(request.state, "jeton_id", None), plan=list(GROUPES_COMPTE_RENDU))
+    except JobsBusy as exc:
+        raise HTTPException(429, str(exc))
+
+    def target(cb):
+        def _en_attente() -> None:
+            with job.lock:
+                job.en_attente = True
+
+        def _obtenu() -> None:
+            with job.lock:
+                job.en_attente = False
+
+        with resources.heavy(wait=config.ATTENTE_DE_FOND_API_S, label="compte-rendu",
+                             on_wait=_en_attente, on_acquired=_obtenu):
+            sortie = report.generate_report(name, provider=fournisseur, mistral_api_key=cle, progress=cb)
+        resultat = {"name": sortie["name"], "genre": sortie.get("genre")}
+        if sortie.get("warnings"):
+            resultat["warnings"] = sortie["warnings"]
+        # L'identité de la réunion, pour que « Ouvrir » mène à elle (comme pour une transcription).
+        ecrit = library.transcript_path(sortie["name"])
+        nouveau, _ = library._split_frontmatter(ecrit.read_text(encoding="utf-8")) if ecrit else ({}, "")
+        for cle_meta in ("meeting_id", "project_id"):
+            if isinstance(nouveau.get(cle_meta), str) and nouveau[cle_meta]:
+                resultat[cle_meta] = nouveau[cle_meta]
+        return resultat
+
+    jobs.run(job, target)
+    return {"job_id": job.id}
 
 
 @app.get("/api/transcript/{name}/archive-plan")

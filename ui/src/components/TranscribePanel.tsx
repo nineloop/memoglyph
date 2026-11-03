@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AppConfig } from '../api'
+import type { AppConfig, ListeTraitements, Project } from '../api'
 import { downloadUrl, streamJob, submitTranscribe } from '../api'
+import { libelleProjet } from '../lib/libelleProjet'
 import { documentBody, isAtBottom, validateMediaFile } from '../lib/transcription'
 import type { MediaProblem } from '../lib/transcription'
 import { Icon } from './Icon'
+import { RangerDans } from './RangerDans'
 import { Button } from '../design/primitives'
 import { getLlmProvider, setLlmProvider as setLlmProvider_store } from '../lib/llmProvider'
 import { MarkdownView } from './MarkdownView'
@@ -17,9 +19,20 @@ import { cleSelonFaits, sensitivityLabelKey } from '../lib/messages'
 type Props = {
   config: AppConfig
   onCompleted: () => void
+  /** Les projets du compte : « Ranger dans » n'y propose jamais un projet reçu en lecture seule. */
+  projects?: Project[]
   destinationProjectId?: string
-  destinationProjectName?: string
+  onChooseDestination?: (id: string) => void
+  onCreateDestination?: (nom: string) => Promise<Project>
+  /** Vrai quand la destination vient de la mémoire (« dernier projet utilisé »). */
+  destinationSuggested?: boolean
   onViewMeeting?: (documentName: string, projectId: string) => void
+  /** Après un envoi accepté : le parent relève la liste des traitements tout de suite. */
+  onSubmitted?: (jobId: string) => void
+  /** « Suivre » : ouvre le panneau des traitements. */
+  onSuivre?: () => void
+  /** Les traitements du compte, pour dire « en attente » quand le créneau est occupé. */
+  traitements?: ListeTraitements | null
 }
 
 type JobResult = { name: string; content: string; destinationProjectId: string }
@@ -126,8 +139,14 @@ function timelineStatus(
 export function TranscribePanel({
   config,
   onCompleted,
+  projects = [],
   destinationProjectId = config.default_project_id,
-  destinationProjectName = config.default_project,
+  onChooseDestination = () => {},
+  onCreateDestination,
+  destinationSuggested = false,
+  onSubmitted,
+  onSuivre,
+  traitements = null,
   onViewMeeting,
 }: Props) {
   const { t, lang } = useLang()
@@ -172,7 +191,10 @@ export function TranscribePanel({
   const ultraCloudAutorise = sensitivity === 'ultra_confidential' && cloudUltra
   const ultra = sensitivity === 'ultra_confidential' && !cloudUltra
 
+  // `running` : un traitement se déroule dans ce panneau (frise, progression). `envoi` : un envoi est en cours,
+  // le formulaire est verrouillé le temps qu'il soit ACCEPTÉ ; ensuite il reste prêt pour un autre envoi.
   const [running, setRunning] = useState(false)
+  const [envoi, setEnvoi] = useState(false)
   const [progress, setProgress] = useState(0)
   const [ligne, setLigne] = useState<LigneEtat | null>(null)
   const [error, setError] = useState('')
@@ -355,6 +377,10 @@ export function TranscribePanel({
   }
 
   function clearFile() {
+    stopStream.current?.()
+    stopStream.current = null
+    setRunning(false)
+    setConfirmation(null)
     setFile(null)
     setFileProblem(null)
     setResult(null)
@@ -365,16 +391,24 @@ export function TranscribePanel({
     if (inputRef.current) inputRef.current.value = ''
   }
 
+  const [confirmation, setConfirmation] = useState<{ jobId: string; projet: string } | null>(null)
+
   async function run() {
     if (!file) return
     const runDestination = destinationProjectId
+    // Un envoi précédent encore suivi ici est détaché : il continue côté serveur et reste visible
+    // dans le panneau des traitements ; la frise de ce panneau suit le nouvel envoi.
+    stopStream.current?.()
+    stopStream.current = null
     setRunning(true)
+    setEnvoi(true)
     setError('')
     setResult(null)
     setPartial('')
     setWarnings([])
     stick.current = true
     setProgress(0)
+    setConfirmation(null)
     setLigne({ source: 'ui', cle: 'transcribe.upload' })
     try {
       const jobId = await submitTranscribe(file, {
@@ -388,6 +422,15 @@ export function TranscribePanel({
         llm_provider: llmProvider,
         sensitivity,
       })
+      // L'envoi est ACCEPTÉ : on le dit tout de suite (où la réunion est rangée) et on offre de la suivre.
+      // Le formulaire reste prêt : l'écran n'attend pas la fin du traitement.
+      setEnvoi(false)
+      const rangeDans = projects.find((p) => p.id === runDestination)
+      setConfirmation({
+        jobId,
+        projet: libelleProjet(rangeDans?.name ?? config.default_project, t, rangeDans?.kind),
+      })
+      onSubmitted?.(jobId)
       stopStream.current = streamJob(jobId, {
         onProgress: (p, _m, etape) => { setProgress(p); setLigne({ source: 'job', etape }) },
         onPartial: (text) => setPartial((previous) => (previous ? `${previous} ${text}` : text)),
@@ -403,8 +446,9 @@ export function TranscribePanel({
           stopStream.current = null
           onCompleted()
         },
-        onError: (streamError) => {
-          setError(streamError)
+        onError: (streamError, etape) => {
+          // Le code de l'échec se traduit ; le texte brut du serveur n'est montré que sans code.
+          setError(etape?.code ? traduireEtape(lang, etape) : streamError)
           setRunning(false)
           stopStream.current = null
         },
@@ -412,6 +456,7 @@ export function TranscribePanel({
     } catch (caught) {
       setError(String(caught))
       setRunning(false)
+      setEnvoi(false)
     }
   }
 
@@ -448,20 +493,20 @@ export function TranscribePanel({
             <div
               className={`dropzone studio-dropzone ${dragOver ? 'over' : ''} ${file ? 'has-file' : ''}`}
               role="button"
-              tabIndex={running ? -1 : 0}
-              aria-disabled={running}
+              tabIndex={envoi ? -1 : 0}
+              aria-disabled={envoi}
               aria-label={file ? t('transcribe.file.change', { nom: file.name }) : t('transcribe.file.choose')}
-              onClick={() => { if (!running) inputRef.current?.click() }}
+              onClick={() => { if (!envoi) inputRef.current?.click() }}
               onKeyDown={(event) => {
-                if (!running && (event.key === 'Enter' || event.key === ' ')) {
+                if (!envoi && (event.key === 'Enter' || event.key === ' ')) {
                   event.preventDefault(); inputRef.current?.click()
                 }
               }}
-              onDragOver={(event) => { if (!running) { event.preventDefault(); setDragOver(true) } }}
+              onDragOver={(event) => { if (!envoi) { event.preventDefault(); setDragOver(true) } }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(event) => {
                 event.preventDefault(); setDragOver(false)
-                if (!running) chooseFile(event.dataTransfer.files[0] ?? null)
+                if (!envoi) chooseFile(event.dataTransfer.files[0] ?? null)
               }}
             >
               <input
@@ -469,7 +514,7 @@ export function TranscribePanel({
                 type="file"
                 accept={config.supported_extensions.join(',')}
                 hidden
-                disabled={running}
+                disabled={envoi}
                 onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
               />
               <div className="drop-icon"><Icon name={file ? 'check' : 'upload'} /></div>
@@ -487,7 +532,7 @@ export function TranscribePanel({
                 </>
               )}
             </div>
-            {file && !running && (
+            {file && !envoi && (
               <button type="button" className="text-action file-remove" onClick={clearFile}>
                 <Icon name="close" /> {t('transcribe.file.remove')}
               </button>
@@ -497,6 +542,11 @@ export function TranscribePanel({
                 <Icon name="error" /> {messageMedia(t, fileProblem)} {t('media.acceptedFormats', { formats: acceptedFormats })}
               </p>
             )}
+            {/* La destination se choisit ICI, avant d'envoyer : elle ne change pas ce que la Bibliothèque consulte. */}
+            <RangerDans projets={projects} destination={destinationProjectId}
+                        surChoisir={onChooseDestination} desactive={envoi}
+                        surCreer={onCreateDestination ?? (() => Promise.reject(new Error('no-create')))}
+                        proposee={destinationSuggested} nomParDefaut={libelleProjet(config.default_project, t)} />
           </section>
 
           {file && (
@@ -506,19 +556,13 @@ export function TranscribePanel({
                 <div><h2 id="options-step-title">{t('transcribe.options.title')}</h2><p>{t('transcribe.options.subtitle')}</p></div>
               </div>
 
-              <div className="destination-callout">
-                <span className="destination-icon"><Icon name="folder" /></span>
-                <span><small>{t('transcribe.destination.label')}</small><strong>{destinationProjectName}</strong></span>
-                <span className="destination-note">{t('transcribe.destination.note')}</span>
-              </div>
-
               <div className="stt-engine-section">
                 <label className="field-label"><strong>{t('transcribe.mode.label')}</strong></label>
                 <div className="enhancement-grid engine-toggle-grid">
                   <button
                     type="button"
                     className={`option-tile ${mode === 'local' ? 'on' : ''}`}
-                    disabled={running}
+                    disabled={envoi}
                     onClick={() => setMode('local')}
                   >
                     <span className="option-icon"><Icon name="cpu" /></span>
@@ -536,7 +580,7 @@ export function TranscribePanel({
                   <button
                     type="button"
                     className={`option-tile ${mode === 'cloud' ? 'on llm' : ''}`}
-                    disabled={running || !cloudPret || ultra}
+                    disabled={envoi || !cloudPret || ultra}
                     onClick={() => setMode('cloud')}
                   >
                     <span className="option-icon"><Icon name="sparkles" /></span>
@@ -562,7 +606,7 @@ export function TranscribePanel({
                     <div className="enhancement-grid" style={{ gridTemplateColumns: `repeat(${readyLocal.length}, 1fr)` }}>
                       {readyLocal.map((p) => (
                         <button key={p} type="button" className={`option-tile ${fournisseurCle === p ? 'on llm' : ''}`}
-                          disabled={running} onClick={() => { setLlmProvider(p); setEngine('whisper') }}>
+                          disabled={envoi} onClick={() => { setLlmProvider(p); setEngine('whisper') }}>
                           <span>
                             <strong>{p === 'compatible' ? t('app.provider.compatible') : (config.llm_models?.[p] || p)}</strong>
                             <small>{config.llm_models?.[p] || p}</small>
@@ -584,7 +628,7 @@ export function TranscribePanel({
                           key={p}
                           type="button"
                           className={`option-tile ${fournisseurCle === p ? 'on llm' : ''}`}
-                          disabled={running}
+                          disabled={envoi}
                           onClick={() => setCloudProvider(p)}
                         >
                           <span>
@@ -604,7 +648,7 @@ export function TranscribePanel({
                           const value = event.target.value
                           setLanguageChoice(value)
                           setLanguage(value === '__other__' ? '' : value)
-                        }} disabled={running}>
+                        }} disabled={envoi}>
                   {LANGUAGE_OPTIONS.map((candidate) => (
                     <option key={candidate.value} value={candidate.value}>{t(candidate.key)}</option>
                   ))}
@@ -613,7 +657,7 @@ export function TranscribePanel({
               {languageChoice === '__other__' && (
                 <label className="field custom-language">{t('spoken.codeLabel')}
                   <input type="text" value={language} placeholder={t('spoken.codePlaceholder')} maxLength={12}
-                         autoCapitalize="none" spellCheck={false} disabled={running}
+                         autoCapitalize="none" spellCheck={false} disabled={envoi}
                          onChange={(event) => setLanguage(event.target.value.trim().toLowerCase())} />
                 </label>
               )}
@@ -623,7 +667,7 @@ export function TranscribePanel({
                   ultra-confidentiel, il garde tout en local. */}
               <label className="field">{t('sensitivity.label')}
                 <select className="option-select" aria-label={t('sensitivity.label')}
-                        value={sensitivity} disabled={running}
+                        value={sensitivity} disabled={envoi}
                         onChange={(event) => setSensitivity(event.target.value)}>
                   {sensitivityLevels.map((niveau) => (
                     <option key={niveau} value={niveau}>{t(sensitivityLabelKey(niveau))}</option>
@@ -636,7 +680,7 @@ export function TranscribePanel({
               <div className="enhancement-grid">
                 <label className={`option-tile ${diarize && diarisationPossible ? 'on' : ''} ${diarisationPossible ? '' : 'disabled'}`}>
                   <input type="checkbox" checked={diarize && diarisationPossible}
-                         disabled={running || !diarisationPossible}
+                         disabled={envoi || !diarisationPossible}
                          onChange={(event) => setDiarize(event.target.checked)} />
                   <span className="option-icon"><Icon name="users" /></span>
                   <span>
@@ -651,13 +695,13 @@ export function TranscribePanel({
                   </span>
                 </label>
                 <label className={`option-tile ${profile ? 'on llm' : ''} ${llmPret ? '' : 'disabled'}`}>
-                  <input type="checkbox" checked={profile} disabled={running || !llmPret}
+                  <input type="checkbox" checked={profile} disabled={envoi || !llmPret}
                          onChange={(event) => setProfile(event.target.checked)} />
                   <span className="option-icon"><Icon name="sparkles" /></span>
                   <span><strong>{t('transcribe.profile.label')}</strong><small>{llmPret ? t('transcribe.profile.detail', { llm: llmNom }) : llmManquant}</small></span>
                 </label>
                 <label className={`option-tile ${reportOn ? 'on llm' : ''} ${llmPret && timestamps ? '' : 'disabled'}`}>
-                  <input type="checkbox" checked={reportOn} disabled={running || !llmPret || !timestamps}
+                  <input type="checkbox" checked={reportOn} disabled={envoi || !llmPret || !timestamps}
                          onChange={(event) => setReportOn(event.target.checked)} />
                   <span className="option-icon"><Icon name="report" /></span>
                   <span><strong>{t('transcribe.report.label')}</strong><small>{!llmPret ? llmManquant
@@ -669,11 +713,11 @@ export function TranscribePanel({
               <details className="expert-options">
                 <summary><Icon name="settings" /> {t('transcribe.expert.title')}</summary>
                 <div className="expert-content">
-                  <label><input type="checkbox" checked={timestamps} disabled={running}
+                  <label><input type="checkbox" checked={timestamps} disabled={envoi}
                                 onChange={(event) => setTimestamps(event.target.checked)} /> {t('transcribe.expert.timestamps')}</label>
                   {config.engines.length > 1 && (
                     <label className="field">{t('transcribe.expert.engine')}
-                      <select className="option-select" value={engine} disabled={running}
+                      <select className="option-select" value={engine} disabled={envoi}
                               onChange={(event) => setEngine(event.target.value)}>
                         {config.engines.map((candidate) => (
                           <option key={candidate} value={candidate}
@@ -689,9 +733,22 @@ export function TranscribePanel({
                 </div>
               </details>
 
-              <button className="primary transcribe-submit" onClick={run} disabled={running}>
-                <Icon name={running ? 'clock' : 'upload'} />
-                {running ? t('transcribe.submitting') : t('transcribe.submit')}
+              {confirmation && (
+                <div className="traitements-confirmation" role="status" aria-label={t('traitements.confirm.aria')}>
+                  <Icon name="check" />
+                  <span>
+                    {t('traitements.confirm.saved', { projet: confirmation.projet })}
+                    {traitements?.traitements.some((x) => x.id === confirmation.jobId && (x.statut === 'pending' || x.en_attente))
+                      && <> {t('traitements.waiting.hint')}</>}
+                  </span>
+                  {onSuivre && <button type="button" className="btn sm" onClick={onSuivre}>{t('traitements.confirm.follow')}</button>}
+                </div>
+              )}
+              <button className="primary transcribe-submit" onClick={run} disabled={envoi}>
+                <Icon name={envoi ? 'clock' : 'upload'} />
+                {/* Pendant l'envoi : « Traitement en cours… » ; ensuite le formulaire est PRÊT et le bouton le dit
+                    (un traitement tourne déjà, on peut en lancer un autre). */}
+                {envoi ? t('transcribe.submitting') : running ? t('transcribe.submitAnother') : t('transcribe.submit')}
               </button>
               {warnings.length > 0 && (
                 <div className="error job-error" role="status" style={{ background: 'transparent' }}>

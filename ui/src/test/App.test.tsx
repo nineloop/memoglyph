@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
 import type { AppConfig } from '../api'
-import { createProject, getConfig, getEtatAuth, getProjects, getTrash, search } from '../api'
+import { createProject, getConfig, getDuplicates, getEtatAuth, getProjects, getTraitements, getTrash, search, streamJob, submitTranscribe } from '../api'
+import type { ListeTraitements, Traitement } from '../api'
 
 
 vi.mock('../api', async (importOriginal) => {
@@ -17,6 +18,10 @@ vi.mock('../api', async (importOriginal) => {
     getTrash: vi.fn(),
     createProject: vi.fn(),
     getEtatAuth: vi.fn(),
+    getDuplicates: vi.fn(),
+    getTraitements: vi.fn(),
+    submitTranscribe: vi.fn(),
+    streamJob: vi.fn(),
   }
 })
 
@@ -46,10 +51,36 @@ beforeEach(() => {
   ])
   vi.mocked(search).mockResolvedValue([])
   vi.mocked(getTrash).mockResolvedValue([])
+  vi.mocked(getDuplicates).mockResolvedValue([])
+  vi.mocked(getTraitements).mockResolvedValue({ traitements: [], actifs: 0, en_attente: 0 })
   // Par défaut, l'état d'authentification est injoignable : l'application
   // s'affiche sans session connue, comme avant la barrière de connexion.
   vi.mocked(getEtatAuth).mockRejectedValue(new Error('réseau'))
 })
+
+/**
+ * « L'application est prête » : la configuration est reçue. Ce signal était le sélecteur de
+ * portée de la barre haute, retiré au chantier 003 ; l'état des services n'apparaît qu'une fois la
+ * configuration là, et le panneau des projets, lui, n'existe que dans la Bibliothèque.
+ */
+const prete = () => screen.findByLabelText('État des services')
+
+/** Consulter un projet : on passe par la Bibliothèque et son panneau, comme l'utilisateur. */
+async function consulterProjet(user: ReturnType<typeof userEvent.setup>, nom: RegExp | string) {
+  const nav = screen.queryByRole('navigation', { name: 'Projets de la bibliothèque' })
+  if (!nav) await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' }))
+    .getByRole('button', { name: 'Bibliothèque' }))
+  const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+  await user.click(within(panneau).getByRole('link', { name: nom }))
+}
+
+/** Ouvre la modale « Nouveau projet » depuis le bouton du panneau de la Bibliothèque. */
+async function ouvrirModaleNouveauProjet(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' }))
+    .getByRole('button', { name: 'Bibliothèque' }))
+  const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+  await user.click(within(panneau).getByRole('button', { name: 'Nouveau projet' }))
+}
 
 /** Rendu d'App avec les bouchons du bloc ci-dessus. */
 function renderApp() {
@@ -58,14 +89,17 @@ function renderApp() {
 
 
 it('borne la portée initiale au projet système plutôt qu’à tout le corpus', async () => {
+  history.replaceState(null, '', '/?vue=library')
   render(<App />)
 
-  const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-  await waitFor(() => expect(select).toHaveValue('01KY243SVP5GA31F6KSBYXEAHR'))
-  // « Tous » se lit « tous mes projets ».
-  expect(screen.getByRole('option', { name: 'Tous mes projets' })).toBeInTheDocument()
-  expect(screen.getByRole('option', { name: 'Tous mes projets' })).toHaveValue('all')
-  expect(screen.getByRole('option', { name: /Non classé — réception/ })).toBeInTheDocument()
+  const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+  // Le consulté vient de la configuration : « Non classé », pas « Tous mes projets ».
+  await waitFor(() => expect(within(panneau).getByRole('link', { name: /Non classé/ }))
+    .toHaveAttribute('aria-current', 'page'))
+  expect(within(panneau).getByRole('link', { name: /Tous mes projets/ })).not.toHaveAttribute('aria-current')
+  expect(new URLSearchParams(location.search).get('projet')).toBe('01KY243SVP5GA31F6KSBYXEAHR')
+  // Le menu natif « Portée consultée » n'existe plus (SC-002).
+  expect(screen.queryByRole('combobox', { name: /Projet courant/ })).toBeNull()
 })
 
 
@@ -82,16 +116,16 @@ it('sans « Non classé », ouvre sur « Tous mes projets », sans erreur', asyn
   vi.mocked(getProjects).mockResolvedValue([
     { id: '01KY243SVQMK79ZY6TVJW2Q3Y0', project: 'Climat', name: 'Climat', kind: 'regular', count: 1 },
   ])
+  history.replaceState(null, '', '/?vue=library')
   const { container } = render(<App />)
 
-  const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-  await waitFor(() => expect(select).toHaveValue('all'))
-  // La portée est bien « tous mes projets », et non une portée vide que le sélecteur
-  // afficherait sur sa première option.
+  const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+  await waitFor(() => expect(within(panneau).getByRole('link', { name: /Tous mes projets/ }))
+    .toHaveAttribute('aria-current', 'page'))
+  // La portée est bien « tous mes projets », et non une portée vide.
   await waitFor(() => expect(new URLSearchParams(location.search).get('projet')).toBe('all'))
-  expect(container.querySelector('.scope-kind.global')).not.toBeNull()
-  expect(screen.getByRole('option', { name: /Climat/ })).toBeInTheDocument()
-  expect(screen.queryByRole('option', { name: /réception/ })).toBeNull()
+  expect(within(panneau).getByRole('link', { name: /Climat/ })).toBeInTheDocument()
+  expect(within(panneau).queryByRole('link', { name: /Non classé/ })).toBeNull()
   expect(container.querySelector('.error.banner')).toBeNull()
 })
 
@@ -139,7 +173,7 @@ it('expose les espaces de navigation dans le dock et navigue au clic', async () 
   const user = userEvent.setup()
   render(<App />)
 
-  await screen.findByRole('combobox', { name: /Projet courant/ })
+  await prete()
   const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
   for (const label of ['Transcrire', 'Bibliothèque', 'Recherche', 'Assistant', 'Voix', 'Maintenance']) {
     expect(within(navigation).getByRole('button', { name: label })).toBeInTheDocument()
@@ -151,7 +185,9 @@ it('expose les espaces de navigation dans le dock et navigue au clic', async () 
 })
 
 
-it('transmet la recherche globale à la vue Recherche dans la portée courante', async () => {
+it('transmet la recherche de la barre haute à la vue Recherche, sur TOUTES les réunions', async () => {
+  // Avant le chantier 003 elle gardait le projet consulté ; la barre est désormais globale
+  // (« toutes les réunions », comme la maquette) et le projet reste un bouton de l'écran.
   const user = userEvent.setup()
   render(<App />)
 
@@ -162,7 +198,7 @@ it('transmet la recherche globale à la vue Recherche dans la portée courante',
   await waitFor(() => expect(search).toHaveBeenCalledWith(
     'climat',
     'semantic',
-    '01KY243SVP5GA31F6KSBYXEAHR',
+    'all',
   ))
   expect(screen.getByRole('searchbox', { name: 'Recherche détaillée' })).toHaveValue('climat')
 })
@@ -176,39 +212,33 @@ it('transmet la recherche globale à la vue Recherche dans la portée courante',
  * verrouillent les décisions elles-mêmes.
  */
 describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
-  it('énonce un rôle DIFFÉRENT selon la vue', async () => {
+  it('plus aucun contrôle ne change de sens selon l’écran (SC-002)', async () => {
+    // Le menu natif « Portée consultée » changeait de SENS sans changer de nom : destination dans
+    // Transcrire, consultation dans la Bibliothèque, périmètre d'action dans la Corbeille. Il a
+    // disparu : la destination se choisit dans Transcrire, la consultation dans le panneau.
     const { container } = renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
 
-    // Transcrire : le sélecteur choisit où la réunion ATTERRIT.
-    expect(container.querySelector('.scope-kind')?.textContent)
-      .toBe('Destination des réunions')
-
-    // Corbeille : il délimite ce que les actions VONT TOUCHER. C'est le cas
-    // qui motivait la correction — il affichait « Projet de réception »
-    // pendant qu'il gouvernait des suppressions.
-    fireEvent.click(screen.getByRole('button', { name: 'Corbeille' }))
-    expect(container.querySelector('.scope-kind')?.textContent)
-      .toBe('Portée des actions')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Recherche' }))
-    expect(container.querySelector('.scope-kind')?.textContent)
-      .toBe('Portée interrogée')
+    for (const ecran of [null, 'Corbeille', 'Recherche', 'Voix']) {
+      if (ecran) fireEvent.click(screen.getByRole('button', { name: ecran }))
+      expect(container.querySelector('.scope-kind')).toBeNull()
+      expect(container.querySelector('.project-select')).toBeNull()
+      expect(screen.queryByRole('combobox', { name: /Projet courant/ })).toBeNull()
+    }
   })
 
-  it('ne dit plus « destination » là où ce n’est pas vrai', async () => {
+  it('« Ranger dans » est dans Transcrire, et nulle part ailleurs', async () => {
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
+    fireEvent.click(screen.getByRole('button', { name: 'Transcrire' }))
+    expect(await screen.findByRole('combobox', { name: 'Ranger dans' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Corbeille' }))
-
-    const options = Array.from(document.querySelectorAll('option'))
-      .map((o) => o.textContent ?? '')
-    expect(options.some((o) => /destination/i.test(o))).toBe(false)
+    expect(screen.queryByRole('combobox', { name: 'Ranger dans' })).toBeNull()
   })
 
   it('donne à Corbeille et Doublons leur propre entrée de navigation', async () => {
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
 
     // Deux clics en desktop et trois en mobile avant : ils étaient enfouis
     // dans « Maintenance », dont le nom n'annonçait rien.
@@ -220,7 +250,7 @@ describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
 
   it('arrive sur la BONNE section, pas sur le diagnostic', async () => {
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
 
     fireEvent.click(screen.getByRole('button', { name: 'Corbeille' }))
     await waitFor(() => {
@@ -247,14 +277,15 @@ describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
     // chiffre que personne n'a demandé.
     vi.mocked(getTrash).mockResolvedValue([{ name: 'a.md' }] as never)
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
     const doublons = screen.getByRole('button', { name: /Doublons/ })
     expect(doublons.querySelector('.nav-badge')).toBeNull()
   })
 
   it('ne montre PAS deux champs de recherche dans la vue Recherche', async () => {
+    history.replaceState(null, '', '/?vue=transcribe')
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
 
     // La barre haute reste l'entrée universelle depuis les autres vues…
     expect(screen.getAllByRole('searchbox')).toHaveLength(1)
@@ -281,7 +312,7 @@ describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
 describe('P1 — état URL', () => {
   it('écrit la vue courante dans l’URL', async () => {
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
 
     fireEvent.click(screen.getByRole('button', { name: 'Recherche' }))
     await waitFor(() => expect(location.search).toContain('vue=search'))
@@ -293,17 +324,15 @@ describe('P1 — état URL', () => {
   it('relit la vue au DÉMARRAGE', async () => {
     // Sans ça, un rechargement ou un lien partagé ramènent à Transcrire.
     history.replaceState(null, '', '/?vue=voices')
-    const { container } = renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
-    expect(container.querySelector('.scope-kind')?.textContent)
-      .toBe('Portée consultée')
+    renderApp()
+    await prete()
     expect(screen.getByRole('button', { name: 'Voix' }))
       .toHaveAttribute('aria-current', 'page')
   })
 
   it('réagit au bouton RETOUR', async () => {
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
 
     fireEvent.click(screen.getByRole('button', { name: 'Recherche' }))
     await waitFor(() => expect(location.search).toContain('vue=search'))
@@ -338,8 +367,8 @@ describe('P1 — état URL', () => {
     // `__new__` ouvre la modale de création. Dans l'URL, un rechargement la
     // rouvrirait à chaque fois.
     renderApp()
-    const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-    fireEvent.change(select, { target: { value: '__new__' } })
+    await prete()
+    await ouvrirModaleNouveauProjet(userEvent.setup())
     await screen.findByRole('dialog', { name: 'Créer un projet' })
     expect(location.search).not.toContain('__new__')
   })
@@ -351,7 +380,7 @@ describe('P1 — état URL', () => {
     // l'adresse sans changer l'écran.
     history.replaceState(null, '', '/?vue=search&q=climat')
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
     await waitFor(() =>
       expect(vi.mocked(search)).toHaveBeenCalledWith('climat', expect.anything(), expect.anything()))
 
@@ -379,8 +408,9 @@ describe('P1 — état URL', () => {
       history.replaceState(null, '', `/?vue=library&projet=${CLIMAT}`)
       renderApp()
 
-      const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-      await waitFor(() => expect(select).toHaveValue(CLIMAT))
+      const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+      await waitFor(() => expect(within(panneau).getByRole('link', { name: /Climat/ }))
+        .toHaveAttribute('aria-current', 'page'))
     })
 
     it('ÉLARGIT à tous les projets et le DIT, plutôt que de replier en silence', async () => {
@@ -395,8 +425,9 @@ describe('P1 — état URL', () => {
       const h = pisterHistorique()
       try {
         renderApp()
-        const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-        await waitFor(() => expect(select).toHaveValue('all'))
+        const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+        await waitFor(() => expect(within(panneau).getByRole('link', { name: /Tous mes projets/ }))
+          .toHaveAttribute('aria-current', 'page'))
 
         // La réunion du lien SURVIT, sous une portée où on peut la trouver.
         await waitFor(() =>
@@ -423,10 +454,10 @@ describe('P1 — état URL', () => {
       // reste affiché au-dessus d'un écran redevenu correct.
       history.replaceState(null, '', '/?vue=library&projet=01ZZZZZZZZZZZZZZZZZZZZZZZZ')
       renderApp()
-      const select = await screen.findByRole('combobox', { name: /Projet courant/ })
+      await prete()
       expect(await screen.findByRole('status')).toBeInTheDocument()
 
-      fireEvent.change(select, { target: { value: DEFAUT } })
+      await consulterProjet(userEvent.setup(), /Non classé/)
       await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
     })
 
@@ -436,7 +467,7 @@ describe('P1 — état URL', () => {
       // l'avis y serait donc toujours périmé.
       history.replaceState(null, '', '/?vue=library&projet=01ZZZZZZZZZZZZZZZZZZZZZZZZ')
       renderApp()
-      await screen.findByRole('combobox', { name: /Projet courant/ })
+      await prete()
       expect(await screen.findByRole('status')).toBeInTheDocument()
 
       fireEvent.click(screen.getByRole('button', { name: 'Recherche' }))
@@ -513,7 +544,7 @@ describe('P1 — état URL', () => {
       const h = pisterHistorique()
       try {
         renderApp()
-        await screen.findByRole('combobox', { name: /Projet courant/ })
+        await prete()
         // `/` se normalise vers la vue REPRISE (voir `lib/vuePreferee.ts`) — ici
         // Bibliothèque, le corpus bouchonné n'étant pas vide. Ce qui est
         // testé reste la pile d'historique, pas le choix de la vue.
@@ -536,7 +567,7 @@ describe('P1 — état URL', () => {
       const h = pisterHistorique()
       try {
         renderApp()
-        await screen.findByRole('combobox', { name: /Projet courant/ })
+        await prete()
         await waitFor(() => expect(location.search).toContain('vue=search'))
         // Rien n'a été écrit : l'URL d'arrivée était déjà la bonne.
         expect(h.pile).toHaveLength(1)
@@ -555,7 +586,7 @@ describe('P1 — état URL', () => {
       const h = pisterHistorique()
       try {
         renderApp()
-        await screen.findByRole('combobox', { name: /Projet courant/ })
+        await prete()
         // Vue d'arrivée reprise, cf. le test précédent.
         await waitFor(() => expect(location.search).toContain('vue=library'))
 
@@ -576,7 +607,7 @@ describe('P1 — état URL', () => {
     async function ouvrirRecherche() {
       history.replaceState(null, '', '/?vue=search')
       renderApp()
-      await screen.findByRole('combobox', { name: /Projet courant/ })
+      await prete()
       // La portée arrive après la configuration : on attend que l'écriture
       // initiale soit retombée, sinon on compterait son entrée comme si la
       // frappe l'avait produite.
@@ -644,7 +675,7 @@ describe('reprendre où l’on s’était arrêté', () => {
   /** Monte l'application et attend que la vue d'ouverture soit tranchée. */
   async function ouvrir() {
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
     await waitFor(() => expect(location.search).toContain('vue='))
   }
 
@@ -723,7 +754,7 @@ describe('reprendre où l’on s’était arrêté', () => {
     vi.mocked(getProjects).mockRejectedValue(new Error('backend injoignable'))
     history.replaceState(null, '', '/')
     renderApp()
-    await screen.findByRole('combobox', { name: /Projet courant/ })
+    await prete()
     await waitFor(() => expect(getProjects).toHaveBeenCalled())
 
     expect(vueAffichee()).toBe('Transcrire')
@@ -781,14 +812,21 @@ describe('création de projet en modale', () => {
     return { urls, restaurer() { push.mockRestore(); replace.mockRestore() } }
   }
 
-  /** Ouvre la modale par le sélecteur et rend le dialogue. */
+  /** Ouvre la modale par le bouton « Nouveau projet » du panneau, et rend le dialogue. */
   async function ouvrirModale() {
-    const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-    await waitFor(() => expect(select).toHaveValue(DEFAUT))
-    fireEvent.change(select, { target: { value: '__new__' } })
+    const user = userEvent.setup()
+    await prete()
+    await ouvrirModaleNouveauProjet(user)
+    const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+    await waitFor(() => expect(within(panneau).getByRole('link', { name: /Non classé/ }))
+      .toHaveAttribute('aria-current', 'page'))
     const dialogue = await screen.findByRole('dialog', { name: 'Créer un projet' })
-    return { select: select as HTMLSelectElement, dialogue }
+    return { panneau, dialogue }
   }
+
+  /** Le projet consulté, tel que le panneau l'indique. */
+  const consulte = (panneau: HTMLElement) =>
+    within(panneau).getAllByRole('link').find((l) => l.getAttribute('aria-current') === 'page')?.textContent ?? ''
 
   it('ouvre une modale, et n’appelle PLUS prompt()', async () => {
     const prompt = vi.spyOn(window, 'prompt')
@@ -808,26 +846,25 @@ describe('création de projet en modale', () => {
     } finally { prompt.mockRestore() }
   })
 
-  it('ANNULER laisse le sélecteur sur la portée précédente, et l’URL propre', async () => {
+  it('ANNULER laisse le projet consulté inchangé, et l’URL propre', async () => {
     const user = userEvent.setup()
+    history.replaceState(null, '', '/?vue=library')
     renderApp()
-    // On part d'une portée NON défaut : si le sélecteur retombait sur sa
-    // première option — ce que fait jsdom quand la valeur n'existe pas — le
-    // test le verrait, alors qu'avec le projet par défaut il passerait par
-    // accident.
-    const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-    await waitFor(() => expect(select).toHaveValue(DEFAUT))
-    await user.selectOptions(select, CLIMAT)
+    // On part d'un projet NON défaut : un repli sur la première entrée passerait inaperçu
+    // avec le projet par défaut.
+    await prete()
+    await consulterProjet(user, /Climat/)
     await waitFor(() => expect(location.search).toContain(`projet=${CLIMAT}`))
+    const panneau = screen.getByRole('navigation', { name: 'Projets de la bibliothèque' })
 
     const e = pisterEcritures()
     try {
-      await user.selectOptions(select, '__new__')
+      await user.click(within(panneau).getByRole('button', { name: 'Nouveau projet' }))
       const dialogue = await screen.findByRole('dialog', { name: 'Créer un projet' })
       await user.click(within(dialogue).getByRole('button', { name: 'Annuler' }))
 
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-      expect(select).toHaveValue(CLIMAT)
+      expect(consulte(panneau)).toMatch(/Climat/)
       expect(new URLSearchParams(location.search).get('projet')).toBe(CLIMAT)
       // Ni à la fin, ni entre-temps.
       expect(e.urls.filter((url) => url.includes('__new__'))).toEqual([])
@@ -836,11 +873,11 @@ describe('création de projet en modale', () => {
 
   it('ÉCHAP ferme la modale', async () => {
     renderApp()
-    const { dialogue, select } = await ouvrirModale()
+    const { dialogue, panneau } = await ouvrirModale()
     fireEvent.keyDown(within(dialogue).getByLabelText('Nom du projet'), { key: 'Escape' })
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(select).toHaveValue(DEFAUT)
+    expect(consulte(panneau)).toMatch(/Non classé/)
   })
 
   it('refuse un nom BLANC — le bouton reste inactif et rien n’est envoyé', async () => {
@@ -871,7 +908,7 @@ describe('création de projet en modale', () => {
     vi.mocked(createProject).mockRejectedValue(new Error('409 nom déjà pris'))
     try {
       renderApp()
-      const { dialogue, select } = await ouvrirModale()
+      const { dialogue, panneau } = await ouvrirModale()
       await user.type(within(dialogue).getByLabelText('Nom du projet'), 'Climat')
       await user.click(within(dialogue).getByRole('button', { name: 'Créer le projet' }))
 
@@ -881,7 +918,7 @@ describe('création de projet en modale', () => {
       expect(within(dialogue).getByLabelText('Nom du projet')).toHaveValue('Climat')
       expect(alerte).not.toHaveBeenCalled()
       // La portée n'a pas bougé, l'URL non plus.
-      expect(select).toHaveValue(DEFAUT)
+      expect(consulte(panneau)).toMatch(/Non classé/)
       expect(location.search).not.toContain('__new__')
     } finally { alerte.mockRestore() }
   })
@@ -890,9 +927,7 @@ describe('création de projet en modale', () => {
     const user = userEvent.setup()
     vi.mocked(createProject).mockResolvedValue(
       { id: CREE, project: 'Budget', name: 'Budget', kind: 'regular', count: 0 })
-    // Le rechargement de la liste suit la création : sans l'option
-    // correspondante, jsdom rabattrait le `<select>` sur sa première option et
-    // l'assertion de bascule mesurerait ce repli, pas la bascule.
+    // Le rechargement de la liste suit la création : le panneau doit y trouver le nouveau projet.
     vi.mocked(getProjects).mockResolvedValue([
       { id: DEFAUT, project: 'Non classé', name: 'Non classé', kind: 'inbox', count: 30 },
       { id: CLIMAT, project: 'Climat', name: 'Climat', kind: 'regular', count: 1 },
@@ -900,14 +935,14 @@ describe('création de projet en modale', () => {
     ])
 
     renderApp()
-    const { dialogue, select } = await ouvrirModale()
+    const { dialogue, panneau } = await ouvrirModale()
     await user.type(within(dialogue).getByLabelText('Nom du projet'), '  Budget  ')
     await user.click(within(dialogue).getByRole('button', { name: 'Créer le projet' }))
 
     // Le nom part TRIMÉ : l'API reçoit ce que l'utilisateur voulait écrire.
     await waitFor(() => expect(createProject).toHaveBeenCalledWith('Budget'))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await waitFor(() => expect(select).toHaveValue(CREE))
+    await waitFor(() => expect(consulte(panneau)).toMatch(/Budget/))
     await waitFor(() =>
       expect(new URLSearchParams(location.search).get('projet')).toBe(CREE))
   })
@@ -920,7 +955,7 @@ it('un membre ne voit pas la maintenance de toute la bibliothèque', async () =>
   })
   render(<App />)
 
-  await screen.findByRole('combobox', { name: /Projet courant/ })
+  await prete()
   const dock = screen.getByRole('navigation', { name: /principale|main/i })
   expect(within(dock).getByRole('button', { name: /Corbeille/ })).toBeInTheDocument()
   expect(within(dock).getByRole('button', { name: /Doublons/ })).toBeInTheDocument()
@@ -940,9 +975,337 @@ it('un administrateur voit la maintenance et les projets sans propriétaire sign
   ])
   render(<App />)
 
-  expect(await screen.findByRole('option', { name: 'Ancien · sans propriétaire — projet (7)' }))
-    .toBeInTheDocument()
-  expect(screen.getByRole('option', { name: 'Non classé — réception (3)' })).toBeInTheDocument()
+  await prete()
+  await consulterProjet(userEvent.setup(), /Non classé/)
+  const panneau = screen.getByRole('navigation', { name: 'Projets de la bibliothèque' })
+  expect(await within(panneau).findByRole('link', { name: /Ancien · sans propriétaire/ })).toBeInTheDocument()
+  expect(within(panneau).getByRole('link', { name: /Non classé/ })).toBeInTheDocument()
   const dock = screen.getByRole('navigation', { name: /principale|main/i })
   expect(within(dock).getByRole('button', { name: /Maintenance/ })).toBeInTheDocument()
+})
+
+
+/**
+ * SC-002 — « plus aucun contrôle ne change de sens selon l'écran ».
+ *
+ * `RangerDans.test` ne prouve que la structure du champ. La preuve est ici, au niveau de
+ * l'application : la destination (Transcrire) et la consultation (panneau) sont deux états, et
+ * changer l'un ne touche JAMAIS l'autre.
+ */
+describe('destination et consultation sont indépendantes (SC-002)', () => {
+  const DEFAUT = '01KY243SVP5GA31F6KSBYXEAHR'
+  const CLIMAT = '01KY243SVQMK79ZY6TVJW2Q3Y0'
+
+  async function choisirDestination(user: ReturnType<typeof userEvent.setup>, nom: string) {
+    await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' }))
+      .getByRole('button', { name: 'Transcrire' }))
+    const champ = await screen.findByRole('combobox', { name: 'Ranger dans' })
+    await user.click(champ)
+    await user.click(await screen.findByRole('option', { name: nom }))
+    return champ
+  }
+
+  it('changer « Ranger dans » ne change pas le projet consulté, ni l’URL', async () => {
+    const user = userEvent.setup()
+    history.replaceState(null, '', '/?vue=transcribe')
+    renderApp()
+    await prete()
+    await waitFor(() => expect(new URLSearchParams(location.search).get('projet')).toBe(DEFAUT))
+
+    const champ = await choisirDestination(user, 'Climat')
+    expect(champ).toHaveValue('Climat')
+    expect(new URLSearchParams(location.search).get('projet')).toBe(DEFAUT)
+
+    await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' }))
+      .getByRole('button', { name: 'Bibliothèque' }))
+    const panneau = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+    expect(within(panneau).getByRole('link', { name: /Non classé/ })).toHaveAttribute('aria-current', 'page')
+    expect(within(panneau).getByRole('link', { name: /Climat/ })).not.toHaveAttribute('aria-current')
+  })
+
+  it('consulter un projet dans le panneau ne change pas la destination', async () => {
+    const user = userEvent.setup()
+    history.replaceState(null, '', '/?vue=library')
+    renderApp()
+    await prete()
+    await consulterProjet(user, /Climat/)
+    await waitFor(() => expect(new URLSearchParams(location.search).get('projet')).toBe(CLIMAT))
+
+    await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' }))
+      .getByRole('button', { name: 'Transcrire' }))
+    // Avant le chantier, la destination SUIVAIT le projet consulté.
+    expect(await screen.findByRole('combobox', { name: 'Ranger dans' })).toHaveValue('Non classé')
+  })
+
+  it('mémorise le dernier projet de destination, par compte, et le propose au retour', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getEtatAuth).mockResolvedValue({
+      installation_requise: false, connecte: true, utilisateur: { identifiant: 'alice', admin: false } })
+    history.replaceState(null, '', '/?vue=transcribe')
+    const premier = renderApp()
+    await prete()
+    await choisirDestination(user, 'Climat')
+    // Par compte : un autre compte du même navigateur ne reçoit pas cette destination.
+    expect(localStorage.getItem('memoglyph.destination.alice')).toBe(CLIMAT)
+    expect(localStorage.getItem('memoglyph.destination.bruno')).toBeNull()
+    premier.unmount()
+
+    renderApp()
+    await prete()
+    const champ = await screen.findByRole('combobox', { name: 'Ranger dans' })
+    await waitFor(() => expect(champ).toHaveValue('Climat'))
+    expect(screen.getByText(/proposé : le dernier projet utilisé/i)).toBeInTheDocument()
+  })
+
+  it('crée un projet depuis « Ranger dans » : il devient la destination, pas le projet consulté', async () => {
+    const user = userEvent.setup()
+    const CREE = '01KY243SVR0000000000000000'
+    vi.mocked(createProject).mockResolvedValue(
+      { id: CREE, project: 'Budget', name: 'Budget', kind: 'regular', count: 0 })
+    history.replaceState(null, '', '/?vue=transcribe')
+    renderApp()
+    await prete()
+    await user.click(await screen.findByRole('combobox', { name: 'Ranger dans' }))
+    await user.clear(screen.getByRole('combobox', { name: 'Ranger dans' }))
+    await user.type(screen.getByRole('combobox', { name: 'Ranger dans' }), 'Budget')
+    vi.mocked(getProjects).mockResolvedValue([
+      { id: DEFAUT, project: 'Non classé', name: 'Non classé', kind: 'inbox', count: 30 },
+      { id: CLIMAT, project: 'Climat', name: 'Climat', kind: 'regular', count: 1 },
+      { id: CREE, project: 'Budget', name: 'Budget', kind: 'regular', count: 0 },
+    ])
+    await user.click(await screen.findByRole('option', { name: /Nouveau projet.*Budget/ }))
+
+    await waitFor(() => expect(createProject).toHaveBeenCalledWith('Budget'))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Ranger dans' })).toHaveValue('Budget'))
+    expect(new URLSearchParams(location.search).get('projet')).toBe(DEFAUT)
+  })
+})
+
+
+describe('les six autres écrans affichent la portée en lecture (retour 15)', () => {
+  it.each(['Recherche', 'Assistant', 'Voix', 'Usage', 'Corbeille', 'Doublons'])(
+    '%s : la portée se lit, sans sélecteur, avec « Changer dans la Bibliothèque »', async (ecran) => {
+      const user = userEvent.setup()
+      history.replaceState(null, '', '/?vue=transcribe')
+      renderApp()
+      await prete()
+      const dock = screen.getByRole('navigation', { name: 'Navigation principale' })
+      await user.click(within(dock).getByRole('button', { name: ecran }))
+
+      const lien = await screen.findByRole('link', { name: 'Changer dans la Bibliothèque' })
+      expect(lien).toHaveAttribute('href', expect.stringContaining('vue=library'))
+      // Aucun sélecteur de projet : la consultation se choisit à UN seul endroit.
+      expect(screen.queryByRole('combobox', { name: /projet/i })).toBeNull()
+
+      await user.click(lien)
+      await waitFor(() => expect(within(dock).getByRole('button', { name: 'Bibliothèque' }))
+        .toHaveAttribute('aria-current', 'page'))
+    })
+
+  it('la recherche de la barre haute est globale : « tous mes projets »', async () => {
+    const user = userEvent.setup()
+    history.replaceState(null, '', '/?vue=library')
+    renderApp()
+    await prete()
+    await consulterProjet(user, /Climat/)
+    await user.type(await screen.findByRole('searchbox', { name: 'Rechercher dans les transcripts' }), 'budget')
+    await user.click(screen.getByRole('button', { name: 'Lancer la recherche' }))
+    // La DERNIÈRE requête est globale : un appel global suivi d'un appel limité au projet
+    // (portée remise à zéro après le montage) ne doit pas passer pour un succès.
+    await waitFor(() => expect(search).toHaveBeenCalled())
+    await waitFor(() => expect(search).toHaveBeenLastCalledWith('budget', 'semantic', 'all'))
+    expect(await screen.findByText(/Portée : Tous mes projets/)).toBeInTheDocument()
+  })
+})
+
+
+describe('mobile : tiroir des projets et dock (US4)', () => {
+  it('le bouton menu ouvre le tiroir ; choisir un projet le ferme et rend le focus au bouton', async () => {
+    const user = userEvent.setup()
+    history.replaceState(null, '', '/?vue=library')
+    renderApp()
+    await prete()
+    const menu = await screen.findByRole('button', { name: 'Ouvrir les projets' })
+    await user.click(menu)
+
+    const tiroir = await screen.findByRole('dialog', { name: 'Projets de la bibliothèque' })
+    await user.click(within(tiroir).getByRole('link', { name: /Climat/ }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Projets de la bibliothèque' })).toBeNull())
+    expect(new URLSearchParams(location.search).get('projet')).toBe('01KY243SVQMK79ZY6TVJW2Q3Y0')
+    await waitFor(() => expect(menu).toHaveFocus())
+  })
+
+  it('« Plus » ouvre les écrans secondaires : chacun est à deux touches', async () => {
+    const user = userEvent.setup()
+    history.replaceState(null, '', '/?vue=library')
+    renderApp()
+    await prete()
+    const dock = screen.getByRole('navigation', { name: 'Navigation principale' })
+    await user.click(within(dock).getByRole('button', { name: 'Plus' }))
+    await user.click(within(screen.getByRole('group', { name: /plus d.écrans/i })).getByRole('button', { name: 'Voix' }))
+    await waitFor(() => expect(location.search).toContain('vue=voices'))
+  })
+})
+
+
+describe('le panneau des projets se souvient de son état (par compte)', () => {
+  it('replié, il le reste après un rechargement ; déplié, de même', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getEtatAuth).mockResolvedValue({
+      installation_requise: false, connecte: true, utilisateur: { identifiant: 'alice', admin: false } })
+    history.replaceState(null, '', '/?vue=library')
+    const premier = renderApp()
+    await prete()
+    await user.click(await screen.findByRole('button', { name: 'Replier le panneau' }))
+    expect(localStorage.getItem('memoglyph.panneau.replie.alice')).toBe('1')
+    expect(localStorage.getItem('memoglyph.panneau.replie.bruno')).toBeNull()
+    premier.unmount()
+
+    history.replaceState(null, '', '/?vue=library')
+    const second = renderApp()
+    await prete()
+    // Replié au retour : le bouton propose de le déplier.
+    await user.click(await screen.findByRole('button', { name: 'Déplier le panneau' }))
+    expect(localStorage.getItem('memoglyph.panneau.replie.alice')).toBe('0')
+    second.unmount()
+
+    history.replaceState(null, '', '/?vue=library')
+    renderApp()
+    await prete()
+    expect(await screen.findByRole('button', { name: 'Replier le panneau' })).toBeInTheDocument()
+  })
+})
+
+
+
+/**
+ * Les traitements visibles depuis n'importe quel écran (chantier 003, tranche B, US5).
+ */
+describe('les traitements, depuis n\'importe quel écran', () => {
+  const T = (extra: Partial<Traitement> = {}): Traitement => ({
+    id: 'j1', nature: 'transcription', statut: 'running', en_attente: false, progression: 0.4,
+    titre: 'visio du 2 novembre', projet_id: '01KY243SVQMK79ZY6TVJW2Q3Y0', projet_nom: 'Climat',
+    etape: 2, etapes: 5, message_code: null, message_params: {}, debut: Date.now() / 1000 - 250,
+    meeting: null, erreur: null, erreur_code: null, erreur_params: {}, ...extra,
+  })
+  const liste = (traitements: Traitement[], actifs: number, attente = 0): ListeTraitements =>
+    ({ traitements, actifs, en_attente: attente })
+
+  it('l\'indicateur reste visible en changeant d\'écran, jusqu\'à la fin du traitement', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTraitements).mockResolvedValue(liste([T()], 1))
+    history.replaceState(null, '', '/?vue=library')
+    renderApp()
+    await prete()
+    const indicateur = await screen.findByRole('button', { name: /traitements : 1 en cours, 0 en attente/i })
+    const dock = screen.getByRole('navigation', { name: 'Navigation principale' })
+    for (const ecran of ['Recherche', 'Assistant', 'Transcrire', 'Voix']) {
+      await user.click(within(dock).getByRole('button', { name: ecran }))
+      expect(screen.getByRole('button', { name: /traitements : 1 en cours/i })).toBeInTheDocument()
+    }
+    expect(indicateur).toBeInTheDocument()
+  })
+
+  it('n\'affiche rien quand rien ne tourne', async () => {
+    renderApp()
+    await prete()
+    expect(screen.queryByRole('button', { name: /traitements :/i })).not.toBeInTheDocument()
+  })
+
+  it('ouvrir le panneau écrit ?traitements=1 en REMPLAÇANT l\'entrée d\'historique, jamais en empilant', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTraitements).mockResolvedValue(liste([T()], 1))
+    history.replaceState(null, '', '/?vue=library')
+    renderApp()
+    await prete()
+    const indicateur = await screen.findByRole('button', { name: /traitements :/i })
+    await waitFor(() => expect(location.search).toContain('projet='))
+    const pousse = vi.spyOn(history, 'pushState')
+    try {
+      await user.click(indicateur)
+      expect(await screen.findByRole('dialog', { name: 'Traitements' })).toBeInTheDocument()
+      await waitFor(() => expect(location.search).toContain('traitements=1'))
+      expect(pousse).not.toHaveBeenCalled()
+      await user.click(screen.getByRole('button', { name: 'Fermer les traitements' }))
+      await waitFor(() => expect(location.search).not.toContain('traitements'))
+      expect(pousse).not.toHaveBeenCalled()
+    } finally { pousse.mockRestore() }
+  })
+
+  it('continuité : rouvrir l\'application sur ?traitements=1 retrouve le traitement listé', async () => {
+    vi.mocked(getTraitements).mockResolvedValue(liste([T()], 1))
+    history.replaceState(null, '', '/?vue=library&traitements=1')
+    renderApp()
+    await prete()
+    const panneau = await screen.findByRole('dialog', { name: 'Traitements' })
+    expect(await within(panneau).findByText('visio du 2 novembre')).toBeInTheDocument()
+    expect(panneau).toHaveTextContent(/Climat · étape 2 sur 5 · depuis 4 min/)
+  })
+
+  it('« Ouvrir la réunion » d\'un traitement terminé ouvre cette réunion dans son projet et ferme le panneau', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTraitements).mockResolvedValue(liste([T({
+      statut: 'done', progression: 1,
+      meeting: { name: 'visio.md', meeting_id: '01M', project_id: '01KY243SVQMK79ZY6TVJW2Q3Y0' } })], 0))
+    history.replaceState(null, '', '/?vue=transcribe&traitements=1')
+    renderApp()
+    await prete()
+    await waitFor(() => expect(location.search).toContain('projet='))
+    const pousse = vi.spyOn(history, 'pushState')
+    await user.click(await screen.findByRole('link', { name: /ouvrir la réunion/i }))
+    await waitFor(() => expect(location.search).toContain('vue=library'))
+    // Une vraie navigation EMPILE une entrée : Retour ramène à Transcrire (jamais un remplacement).
+    expect(pousse).toHaveBeenCalled()
+    pousse.mockRestore()
+    expect(location.search).toContain('projet=01KY243SVQMK79ZY6TVJW2Q3Y0')
+    expect(location.search).not.toContain('traitements')
+    expect(screen.queryByRole('dialog', { name: 'Traitements' })).not.toBeInTheDocument()
+  })
+
+  it('l\'URL du panneau n\'est jamais mémorisée comme vue d\'ouverture', async () => {
+    history.replaceState(null, '', '/?vue=transcribe&traitements=1')
+    renderApp()
+    await prete()
+    expect(localStorage.getItem('memoglyph.vue')).not.toMatch(/traitements/)
+  })
+
+  it('« Suivre » dans la confirmation d\'un envoi ouvre le panneau', async () => {
+    const user = userEvent.setup()
+    vi.mocked(submitTranscribe).mockResolvedValue('job-9')
+    vi.mocked(streamJob).mockImplementation(() => vi.fn())
+    history.replaceState(null, '', '/?vue=transcribe')
+    const { container } = renderApp()
+    await prete()
+    const entree = await waitFor(() => {
+      const el = container.querySelector<HTMLInputElement>('input[type="file"]')
+      expect(el).not.toBeNull()
+      return el!
+    })
+    await user.upload(entree, new File(['a'], 'visio.mp3', { type: 'audio/mpeg' }))
+    await user.click(await screen.findByRole('button', { name: 'Lancer la transcription' }))
+    const confirmation = await screen.findByRole('status', { name: /envoi accepté/i })
+    expect(confirmation).toHaveTextContent(/Rangé dans/)
+    // L'envoi relève la liste tout de suite, sans attendre les 3 ou 15 secondes.
+    await waitFor(() => expect(vi.mocked(getTraitements).mock.calls.length).toBeGreaterThanOrEqual(2))
+    await user.click(within(confirmation).getByRole('button', { name: 'Suivre' }))
+    expect(await screen.findByRole('dialog', { name: 'Traitements' })).toBeInTheDocument()
+  })
+})
+
+
+describe('la largeur de la page (tranche C)', () => {
+  it('seules la Bibliothèque et ses réunions sortent de la largeur de 1240 px', async () => {
+    const user = userEvent.setup()
+    history.replaceState(null, '', '/?vue=library')
+    const { container } = renderApp()
+    await prete()
+    const main = () => container.querySelector('main.app-main')!
+    expect(main()).toHaveClass('app-main--bibliotheque')
+    for (const ecran of ['Transcrire', 'Recherche', 'Assistant']) {
+      await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' })).getByRole('button', { name: ecran }))
+      expect(main()).not.toHaveClass('app-main--bibliotheque')
+    }
+    await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' })).getByRole('button', { name: 'Bibliothèque' }))
+    expect(main()).toHaveClass('app-main--bibliotheque')
+  })
 })

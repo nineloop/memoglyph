@@ -95,7 +95,7 @@ final class EnvoiTests: XCTestCase {
         var textes = issues.map(\.texte)
         if case .echec(let t) = ClientMemoglyph.lireTravail(statut: 200, corps: json(["status": "error", "error": piege]),
                                                             erreur: nil, jeton: jeton) { textes.append(t) }
-        if case .fini(_, let a, _, _) = ClientMemoglyph.lireTravail(
+        if case .fini(_, let a, _, _, _) = ClientMemoglyph.lireTravail(
             statut: 200, corps: json(["status": "done", "result": ["name": "r.md", "warnings": [piege]]]),
             erreur: nil, jeton: jeton) { textes += a }
         XCTAssertEqual(textes.count, 6)

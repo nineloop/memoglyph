@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleIdentifier</key>
 	<string>org.memoglyph.compagnon</string>
+	<key>CFBundleIconFile</key>
+	<string>Memoglyph</string>
 	<key>CFBundleName</key>
 	<string>Memoglyph compagnon</string>
 	<key>CFBundleExecutable</key>

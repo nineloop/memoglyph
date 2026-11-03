@@ -142,9 +142,32 @@ lance, le Terminal par exemple.
   rend au jeton l'identité de la réunion (`meeting_id`, projet), jamais son texte.
 - **Projet** : « Projet d'envoi » propose ceux du compte ; sans choix, le projet par défaut
   du compte. Le compagnon ne crée jamais de projet.
-- **Memoglyph arrêté ou jeton refusé** : la capture reste dans le dossier, listée dans
-  `.envoi-en-attente.json`, et le menu propose « Renvoyer ». Le compagnon ne démarre pas
-  Memoglyph.
+- **Renvoi automatique** : chaque capture porte un identifiant (`capture_id`, un UUID) fixé à
+  sa création et qui ne change pas d'un renvoi à l'autre. Memoglyph occupé (un traitement est
+  déjà en cours, réponse 429), arrêté ou injoignable : la capture reste dans le dossier,
+  listée dans `.envoi-en-attente.json`, et **repart seule** après 15 s, 30 s, 1 min, 2 min,
+  puis 5 min (quatre fois) : huit renvois au plus. **Arrêt immédiat** si le jeton est refusé
+  (401, 403) ou si l'adresse ou le projet est inconnu (404), et sur un refus définitif
+  (la demande elle-même est fautive). Après le dernier essai, le menu dit en une phrase
+  « Capture non envoyée : … » ; la capture **n'est jamais supprimée**, et « Renvoyer les
+  captures en attente » repart de zéro. Si Memoglyph avait déjà reçu la capture (réponse
+  perdue), il le dit : aucune seconde réunion n'est créée. Au démarrage, les captures restées
+  dans la file repartent seules. Le compagnon ne démarre pas Memoglyph.
+- **Messages** : en français ou en anglais selon la langue du système. Phrases courtes et
+  entières (« en attente : 2 traitements en cours », le détail au survol), progression
+  tirée des codes d'étape du serveur (« Compte-rendu en cours… »), jamais son texte libre.
+  Chaque capture « prête » ouvre sa réunion ; après l'acceptation, « Rangé dans <projet> »
+  et « Suivre » ouvrent la vue des traitements dans l'interface (`adresse/?traitements=1`).
+  La liaison s'affiche par un libellé et une forme : ● liée, ○ hors ligne, ◌ vérification.
+  Avec le jeton d'appareil, la liste des traitements ne contient que le nombre de
+  traitements en cours et **ses propres captures** : jamais le titre d'une autre réunion.
+- **Essai sur une autre instance** : la variable d'environnement
+  `MEMOGLYPH_COMPAGNON_SERVICE` donne un autre nom de service du trousseau (par défaut
+  `org.memoglyph.compagnon`, inchangé). Le dossier des captures (donc la file de renvoi) et
+  le réglage du projet d'envoi suivent ce nom : l'essai ne touche ni au jeton ni aux captures
+  en attente du compagnon habituel. Une application ouverte depuis le Finder ne reçoit pas
+  les variables du shell : lancez-la par `open --env MEMOGLYPH_COMPAGNON_SERVICE=<nom>
+  "<chemin>/Memoglyph compagnon.app"`, ou son binaire depuis le Terminal.
 - La destination est affichée en tête du menu et dans chaque confirmation.
 
 ### Casque Bluetooth

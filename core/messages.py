@@ -332,3 +332,15 @@ def tranches_resumees() -> Message:
 
 def classification_genre() -> Message:
     return Message("step.report.classify", "Report: classifying the document kind…")
+
+
+def trop_d_attente(label: str) -> Message:
+    """Le créneau lourd n'a pas été obtenu dans le délai : un code, que l'interface traduit.
+
+    Le texte anglais reste celui d'avant (`job.error` le garde pour les clients existants).
+    """
+    return Message(
+        "step.error.waitTooLong",
+        f"Ressources occupées : un autre {label} est en cours. Réessaie dans un moment — "
+        "cette machine ne traite qu'une tâche lourde à la fois.",
+        label=label)

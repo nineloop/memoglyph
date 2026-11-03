@@ -67,6 +67,7 @@ def test_evenement_message_deplie_un_message_code():
 
 
 CONSTRUCTEURS = [
+    (messages.trop_d_attente, ("traitement",)),
     (messages.preparation_audio, ()),
     (messages.audio_pret, ()),
     (messages.diarisation, ()),
@@ -125,6 +126,9 @@ def test_chaque_message_a_un_code_non_vide_et_un_texte(fabrique, args):
 # Une table nominative ne peut pas se tromper de cible : tout écart échoue, et
 # le test de complétude ci-dessous oblige à l'étendre à chaque nouveau message.
 TEXTES_ATTENDUS = {
+    # Texte historique de `ResourcesBusy`, conservé tel quel pour les clients existants ; le CODE est ce qui se traduit.
+    "step.error.waitTooLong": ("Ressources occupées : un autre traitement est en cours. Réessaie dans un moment — "
+                               "cette machine ne traite qu'une tâche lourde à la fois."),
     "step.audio.prepare": "Preparing audio…",
     "step.audio.ready": "Audio ready.",
     "step.diarization": "Identifying speakers…",

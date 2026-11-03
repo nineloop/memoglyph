@@ -156,3 +156,23 @@ export function grouperParReunion(items: LibraryItem[]): Reunion[] {
   }
   return reunions
 }
+
+/**
+ * Les réunions voisines d'une réunion, dans SON projet (retour 15).
+ *
+ * « Précédente » est la plus ancienne qui la précède, « suivante » la plus récente qui la suit :
+ * l'ordre est chronologique (date, puis clé pour départager), quel que soit le tri de la liste
+ * affichée. Le projet est celui de la réunion, jamais le projet consulté : ouverte depuis « Tous
+ * mes projets », une réunion garde pour voisines celles de son projet. Aux extrémités, la
+ * voisine manquante est `undefined`.
+ */
+export function voisines(toutes: Reunion[], cle: string): { precedente?: Reunion; suivante?: Reunion } {
+  const courante = toutes.find((r) => r.cle === cle)
+  if (!courante) return {}
+  const projet = courante.retenu.project_id
+  const meme = toutes
+    .filter((r) => r.retenu.project_id === projet)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.cle.localeCompare(b.cle))
+  const i = meme.findIndex((r) => r.cle === cle)
+  return { precedente: meme[i - 1], suivante: meme[i + 1] }
+}

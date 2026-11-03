@@ -204,9 +204,12 @@ make companion
 
 Il s'installe dans `/Applications` ; si `/Applications` n'est pas accessible en écriture,
 il le dit et s'installe dans `~/Applications`. `DEST=<dossier>` l'installe ailleurs. Le
-Finder montre ensuite l'application. Son menu « Démarrer en Visio » liste d'abord les
-appels en cours, puis une ligne par application ouverte, et propose aussi « Tout le son du
-Mac ». Détail : [compagnon/README.md](compagnon/README.md) et
+Finder montre ensuite l'application. Son menu suit la langue du système. Son entrée
+« Démarrer en Visio » liste d'abord les appels en cours, puis une ligne par application
+ouverte, et propose aussi « Tout le son du Mac ». Une capture qui ne peut pas partir tout de
+suite (Memoglyph occupé par un autre traitement, ou injoignable) est renvoyée seule, un nombre
+limité de fois, et n'est jamais supprimée du Mac ; le menu dit en une phrase courte où en est
+chaque capture. Détail : [compagnon/README.md](compagnon/README.md) et
 [docs/compagnon-capture.md](docs/compagnon-capture.md).
 
 ## Exemples d'usage (Use Cases)

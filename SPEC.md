@@ -843,6 +843,7 @@ Détail, livré et envisagé : [docs/ecl.md](docs/ecl.md).
 | `MEMOGLYPH_VOICE_THRESHOLD` | `0.5` | cosinus de rattachement d'une voix |
 | `MEMOGLYPH_MAX_UPLOAD_MB` | `2048` | plafond d'upload |
 | `MEMOGLYPH_MAX_ACTIVE_JOBS` / `_MAX_HEAVY_TASKS` | `2` / `1` | jobs en file / travaux LOURDS simultanés |
+| `MEMOGLYPH_MAX_JOB_HISTORY` / `_MAX_JOB_HISTORY_TOTAL` | `50` / `200` | traitements terminés gardés en mémoire, **par compte** / au total (un compte très actif n'efface pas l'historique d'un autre) |
 | `MEMOGLYPH_PORT_BASE` | `8770` | UI `8770` / API `8771` |
 | `MEMOGLYPH_ATTENTE_S` | `900` | attente maximale du démarrage par `start.sh`, réindexation comprise |
 | `MEMOGLYPH_UI_HOST` | `127.0.0.1` | écoute Vite ; `--lan` utilise `0.0.0.0` |

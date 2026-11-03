@@ -56,7 +56,9 @@ Légende : **✅** attendu · **❌** signal d'échec · *Auto* = aussi couvert 
 
 ### 1. Créer un projet
 - [ ] Trouver et utiliser l'affordance de création de projet.
-- **✅** Le projet apparaît et devient la portée active.
+- **✅** Le projet apparaît dans le panneau des projets de la Bibliothèque (« Nouveau projet »)
+  et peut être consulté d'un clic ; il n'est choisi comme destination d'une transcription
+  que dans **Transcrire** (champ « Ranger dans »).
 - **❌** Aucune affordance visible de création.
 
 ### 2. Importer un média
@@ -68,7 +70,9 @@ Légende : **✅** attendu · **❌** signal d'échec · *Auto* = aussi couvert 
 
 ### 3. Attendre la transcription
 - [ ] Suivre la timeline à 6 étapes.
-- **✅** Les étapes avancent jusqu'à « done » ; « Voir la réunion » apparaît.
+- **✅** Les étapes avancent jusqu'à « done » ; « Voir la réunion » apparaît. Le traitement
+  reste visible depuis n'importe quel écran (indicateur de la barre haute, panneau
+  « Traitements », lien « Suivre » de la confirmation « Rangé dans … »).
 - **❌** Blocage apparent sans retour d'étape ; **le transcript survit** même si
   une étape d'enrichissement échoue. *Auto (API).*
 
@@ -77,6 +81,15 @@ Légende : **✅** attendu · **❌** signal d'échec · *Auto* = aussi couvert 
 - **✅** Le CR s'affiche avec citations et réserves visibles.
 - **❌** HTTP 503 / erreur brute ; « modèle introuvable » sur un simple
   téléchargement lent. *Auto (API).*
+
+### 4 bis. Régénérer un compte-rendu avec un autre modèle
+- [ ] Dans l'onglet Compte-rendu d'une réunion, « Régénérer », choisir un modèle prêt.
+- **✅** La liste ne montre que les modèles prêts (le local d'abord) ; une réunion
+  ultra-confidentielle montre les fournisseurs en ligne désactivés avec leur raison ; le
+  traitement se suit dans l'indicateur ; la nouvelle version s'ajoute sans écraser
+  l'ancienne et indique son modèle.
+- **❌** Le choix change le fournisseur par défaut des envois suivants ; une version
+  écrasée. *Auto (API et interface).*
 
 ### 5. Rechercher une citation
 - [ ] Chercher un terme connu du transcript (mode intelligent, puis exact).

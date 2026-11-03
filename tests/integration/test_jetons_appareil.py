@@ -183,7 +183,9 @@ def test_les_routes_du_compagnon_existent_et_restent_peu_nombreuses() -> None:
     assert api_main.ROUTES_DU_COMPAGNON <= _routes_api()
     assert api_main.ROUTES_DU_COMPAGNON == {
         ("POST", "/api/transcribe"), ("GET", "/api/jobs/{job_id}"),
-        ("GET", "/api/jobs/{job_id}/events"), ("GET", "/api/projects")}
+        ("GET", "/api/jobs/{job_id}/events"), ("GET", "/api/projects"),
+        # Chantier 003 : les comptes (« en attente : N traitements ») et SES captures seulement.
+        ("GET", "/api/jobs")}
     assert ("GET", "/api/health") in api_main.ROUTES_PUBLIQUES
 
 
@@ -295,9 +297,10 @@ def test_une_provenance_invalide_est_refusee_avant_tout_travail(comptes, monkeyp
 
 def test_avec_un_jeton_le_travail_ne_rend_aucun_texte(comptes) -> None:
     alice = connecte("alice")
-    _jeton, secret = creer_jeton(alice)
+    description, secret = creer_jeton(alice)
     compte = auth.verifier_identifiants("alice", MOT_DE_PASSE)
-    job = api_main.jobs.create(owner=compte.id)
+    # Un traitement né de CE jeton (strict nécessaire : le jeton ne suit que ses propres captures).
+    job = api_main.jobs.create(owner=compte.id, jeton=description["id"])
 
     def travail(progres):
         api_main.jobs.push(job, {"type": "partial", "text": "TEXTE PARTIEL SECRET"})

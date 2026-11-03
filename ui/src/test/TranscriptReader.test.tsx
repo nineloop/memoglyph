@@ -241,3 +241,23 @@ it('ignore le chargement tardif du document précédent', async () => {
     expect(screen.getByText('Document nouveau')).toBeInTheDocument()
   })
 })
+
+it('le rail des locuteurs et des repères se déplie au bouton (replié par défaut, la CSS le montre au bureau)', async () => {
+  const user = userEvent.setup()
+  vi.mocked(getTranscript).mockResolvedValue({
+    name: 'note.md', meta: {}, content: '',
+    body: '**Alice** [00:00:05] Bonjour à tous.\n\n**Bruno** [00:00:20] On fixe le prix.',
+  })
+  render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} />)
+
+  const bascule = await screen.findByRole('button', { name: 'Locuteurs et repères' })
+  const contenu = document.getElementById('rail-contenu') as HTMLElement
+  expect(bascule).toHaveAttribute('aria-expanded', 'false')
+  expect(bascule).toHaveAttribute('aria-controls', 'rail-contenu')
+  expect(contenu).not.toHaveClass('ouvert')
+  await user.click(bascule)
+  expect(bascule).toHaveAttribute('aria-expanded', 'true')
+  expect(contenu).toHaveClass('ouvert')
+  await user.click(bascule)
+  expect(contenu).not.toHaveClass('ouvert')
+})

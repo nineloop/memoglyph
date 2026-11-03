@@ -5,7 +5,10 @@ import Security
 /// Le jeton d'appareil et l'adresse de Memoglyph, dans le trousseau macOS seulement : un
 /// élément « mot de passe générique » dont le compte est l'adresse et le secret le jeton.
 enum Trousseau {
-    private static let service = "org.memoglyph.compagnon"
+    /// `org.memoglyph.compagnon` par défaut ; `MEMOGLYPH_COMPAGNON_SERVICE` le remplace pour un essai
+    /// sur une instance de démonstration (voir `Espace`). Le nom seul change : aucune entrée n'est lue
+    /// ni écrite ici avant que le compagnon ne soit lancé par son utilisateur.
+    static let service = Espace.service(environnement: ProcessInfo.processInfo.environment)
 
     static func lire() -> (adresse: URL, jeton: String)? {
         let requete: [String: Any] = [
@@ -79,6 +82,12 @@ enum Liaison {
     static func projets(_ adresse: URL, jeton: String, fin: @escaping @Sendable (Result<[Projet], IssueErreur>) -> Void) {
         appeler(ClientMemoglyph.requete(.projets, adresse: adresse, jeton: jeton)) { statut, corps, erreur in
             fin(ClientMemoglyph.lireProjets(statut: statut, corps: corps, erreur: erreur, jeton: jeton))
+        }
+    }
+
+    static func comptes(_ adresse: URL, jeton: String, fin: @escaping @Sendable (Result<Comptes, IssueErreur>) -> Void) {
+        appeler(ClientMemoglyph.requete(.traitements, adresse: adresse, jeton: jeton)) { statut, corps, erreur in
+            fin(ClientMemoglyph.lireComptes(statut: statut, corps: corps, erreur: erreur, jeton: jeton))
         }
     }
 

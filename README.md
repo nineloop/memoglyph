@@ -165,8 +165,12 @@ make companion
 
 It installs into `/Applications`; if `/Applications` is not writable, it says so and
 installs into `~/Applications` instead. `DEST=<folder>` installs it elsewhere. The Finder
-then shows the app. Its « Démarrer en Visio » menu lists calls in progress first, then one
-line per open application, and also offers « Tout le son du Mac ». Details (French):
+then shows the app. The menu follows the system language. Its « Start in Visio mode »
+entry lists calls in progress first, then one line per open application, and also offers
+« All Mac audio ». A capture that cannot be sent right away (Memoglyph busy with another
+job, or not reachable) is sent again on its own, a limited number of times, and is never
+deleted from the Mac; the menu says in one short sentence where each capture stands.
+Details (French):
 [compagnon/README.md](compagnon/README.md) and
 [docs/compagnon-capture.md](docs/compagnon-capture.md).
 

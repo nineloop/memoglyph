@@ -273,3 +273,12 @@ it('marque « généré » un passage de compte-rendu, et lui seul (audit extern
   expect(passages[0]).not.toHaveTextContent('généré')
   expect(passages[1]).toHaveTextContent('généré')
 })
+
+
+it('sans libellé de portée du parent, la réception se dit dans la langue de l\'interface (jamais « Non classé » en dur)', () => {
+  localStorage.setItem('memoglyph.lang', 'en')
+  render(<LangProvider initiale="en"><SearchPanel viewScope="" /></LangProvider>)
+  expect(screen.getByText(/Unclassified/)).toBeInTheDocument()
+  expect(screen.queryByText(/Non classé/)).not.toBeInTheDocument()
+  localStorage.setItem('memoglyph.lang', 'fr')
+})

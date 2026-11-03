@@ -142,9 +142,10 @@ it('aucun message ne reste identique par oubli de traduction', () => {
     'app.nav.usage', 'usage.kpi.audio',
     'app.lang.fr', 'app.lang.en', 'app.status.llmUnknown',
     'app.nav.ask', 'app.nav.maintenance',
+    // Tranche B : « Transcription » et « Archives » s'écrivent à l'identique.
+    'traitements.nature.transcription', 'traitements.nature.archives',
     'app.provider.ollamaLocal', 'app.provider.mlxLocal', 'app.provider.mistralCloud',
     'app.provider.openaiCloud', 'app.provider.anthropicCloud',
-    'app.scope.groupActions',
     'spoken.codePlaceholder',
     'diar.engine.cloud', 'diar.engine.local',
     'transcribe.flow.options', 'transcribe.options.title',
@@ -178,4 +179,17 @@ it('aucun message ne reste identique par oubli de traduction', () => {
   const identiques = CLES.filter((cle) => CATALOGUES.fr[cle] === CATALOGUES.en[cle])
 
   expect(identiques.sort()).toEqual(identiquesAssumes.sort())
+})
+
+
+// ---------- Chantier 003 : les nouvelles surfaces existent dans les DEUX langues ----------
+
+it('chaque nouvelle surface du chantier 003 a des libellés en français ET en anglais', () => {
+  const PREFIXES = ['nav.', 'reglages.', 'destination.', 'barre.', 'projets.', 'traitements.']
+  for (const prefixe of PREFIXES) {
+    const fr = Object.keys(CATALOGUES.fr).filter((k) => k.startsWith(prefixe))
+    const en = Object.keys(CATALOGUES.en).filter((k) => k.startsWith(prefixe))
+    expect(fr.length, `aucune clé « ${prefixe} » en français`).toBeGreaterThan(0)
+    expect(en.sort()).toEqual(fr.sort())
+  }
 })

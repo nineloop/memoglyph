@@ -32,8 +32,9 @@ from __future__ import annotations
 
 import threading
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Callable, Iterator, Optional
 
+from . import messages
 from .config import MAX_HEAVY_TASKS
 
 
@@ -50,7 +51,9 @@ def _depth() -> int:
 
 
 @contextmanager
-def heavy(*, wait: float = 0.0, label: str = "traitement") -> Iterator[None]:
+def heavy(*, wait: float = 0.0, label: str = "traitement",
+          on_wait: Optional[Callable[[], None]] = None,
+          on_acquired: Optional[Callable[[], None]] = None) -> Iterator[None]:
     """Réserve un créneau de calcul lourd (STT, diarisation, LLM).
 
     `wait` : secondes d'attente avant d'abandonner. `0` = échoue immédiatement si
@@ -59,6 +62,11 @@ def heavy(*, wait: float = 0.0, label: str = "traitement") -> Iterator[None]:
 
     Lève `ResourcesBusy` plutôt que de laisser la machine partir en swap : mieux
     vaut un refus explicite qu'une latence de plusieurs minutes inexpliquée.
+
+    `on_wait` : appelé UNE fois, seulement si le créneau est occupé et qu'on accepte d'attendre
+    (`wait > 0`), AVANT de bloquer : c'est ce qui rend l'attente visible (« en attente »).
+    `on_acquired` : appelé après l'obtention du créneau. Aucun des deux ne l'est en cas de
+    réentrance (déjà détenu par ce thread). Sans rappels, le comportement est celui d'avant.
     """
     if _depth() > 0:  # déjà détenu par ce thread : imbrication sans effet
         _local.depth += 1
@@ -68,13 +76,22 @@ def heavy(*, wait: float = 0.0, label: str = "traitement") -> Iterator[None]:
             _local.depth -= 1
         return
 
-    acquired = _SEM.acquire(timeout=wait) if wait > 0 else _SEM.acquire(blocking=False)
+    acquired = _SEM.acquire(blocking=False)
+    if not acquired and wait > 0:
+        if on_wait is not None:
+            on_wait()
+        acquired = _SEM.acquire(timeout=wait)
     if not acquired:
-        raise ResourcesBusy(
-            f"Ressources occupées : un autre {label} est en cours. Réessaie dans "
-            "un moment — cette machine ne traite qu'une tâche lourde à la fois."
-        )
+        # Le code porte la cause jusqu'à l'interface (`job.error_code`) ; le texte reste celui d'avant.
+        raise ResourcesBusy(messages.trop_d_attente(label))
     _local.depth = 1
+    if on_acquired is not None:
+        try:
+            on_acquired()
+        except BaseException:
+            _local.depth = 0
+            _SEM.release()
+            raise
     try:
         yield
     finally:

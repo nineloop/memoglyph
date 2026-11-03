@@ -7,11 +7,12 @@ import { Icon } from './Icon'
 import { Badge } from '../design/primitives'
 import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
+import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
 import { pluralKey } from '../lib/i18n'
 import type { Traduire } from '../lib/i18n'
 
-type Props = { viewScope: string; scopeLabel: string }
+type Props = { viewScope: string; scopeLabel: string; onChangerPortee?: () => void }
 
 function voiceName(voice: Voice, t: Traduire): string {
   return voice.label_source === 'manual' && voice.label ? voice.label : t('voices.name', { id: voice.id })
@@ -30,7 +31,7 @@ function VoiceSummary({ voice, compact = false }: { voice: Voice; compact?: bool
   )
 }
 
-export function VoicesPanel({ viewScope, scopeLabel }: Props) {
+export function VoicesPanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
   const { t } = useLang()
   const [voices, setVoices] = useState<Voice[]>([])
   const [loading, setLoading] = useState(true)
@@ -136,6 +137,7 @@ export function VoicesPanel({ viewScope, scopeLabel }: Props) {
 
       <ScopeControl
         allProjects={allProjects}
+        viewScope={viewScope} onChangerPortee={onChangerPortee}
         canToggle={false}
         scopeLabel={scopeLabel}
         onToggle={() => {}}
@@ -255,7 +257,7 @@ export function VoicesPanel({ viewScope, scopeLabel }: Props) {
                           <strong>{displayMeetingTitle(occurrence.title || occurrence.name, occurrence.source)}</strong>
                           <span>{occurrence.speaker_local} · {occurrence.name}</span>
                         </div>
-                        <Badge tone="accent"><Icon name="folder" /> {occurrence.project ?? t('voices.occurrence.unknownProject')}</Badge>
+                        <Badge tone="accent"><Icon name="folder" /> {occurrence.project ? libelleProjet(occurrence.project, t) : t('voices.occurrence.unknownProject')}</Badge>
                       </li>
                     ))}
                   </ul>

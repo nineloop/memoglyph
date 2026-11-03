@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { LibraryItem } from '../api'
 import { archiveTranscript, getArchivePlan, getConfig, getTranscript, porteeDocument, updateSensitivity } from '../api'
+import { libelleProjet } from '../lib/libelleProjet'
 import { displayMeetingTitle, type Reunion } from '../lib/meetings'
 import { reservesDe, type Reserve } from '../lib/reserves'
 import { Icon } from './Icon'
@@ -16,6 +18,7 @@ import { sensitivityLabelKey } from '../lib/messages'
 import { usePartage } from '../lib/partage'
 import { PartageDialog } from './PartageDialog'
 import { EclFaits } from './EclFaits'
+import { RegenererCompteRendu } from './RegenererCompteRendu'
 import { ONGLETS_REUNION, type OngletReunion } from '../lib/urlState'
 
 type Props = {
@@ -26,6 +29,9 @@ type Props = {
   onTabChange?: (onglet: string) => void
   onVoirDoublons?: () => void
   onChanged?: () => void
+  /** Fil d'Ariane et flèches précédente/suivante, fournis par la Bibliothèque (retour 15). */
+  ariane?: ReactNode
+  navigation?: ReactNode
 }
 const ONGLETS = ONGLETS_REUNION
 type MeetingTab = OngletReunion
@@ -104,7 +110,7 @@ function faitsDe(reunion: Reunion, t: Traduire): FaitReunion[] {
         ? t('meeting.fact.unknownSpeakers')
         : t(pluralKey('meeting.speakers.count', n), { n }),
     },
-    { valeur: reunion.projet || nonClasse, libelle: t('meeting.fact.project'), seul: reunion.projet || nonClasse },
+    { valeur: libelleProjet(reunion.projet || nonClasse, t), libelle: t('meeting.fact.project'), seul: libelleProjet(reunion.projet || nonClasse, t) },
   ]
 }
 
@@ -123,7 +129,7 @@ function transcriptTraits(item: LibraryItem, t: Traduire): string[] {
 }
 
 export function MeetingView({
-  reunion, onBack, onVoirDoublons, onChanged, initialTab, onTabChange,
+  reunion, onBack, onVoirDoublons, onChanged, initialTab, onTabChange, ariane, navigation,
 }: Props) {
   const { t } = useLang()
   // Lecture seule (partage reçu) : aucune action d'écriture ; seul le
@@ -172,6 +178,8 @@ export function MeetingView({
   const [activeTranscript, setActiveTranscript] = useState(reunion.retenu.name)
   const [activeTimestamp, setActiveTimestamp] = useState<string | null>(null)
   const [reportText, setReportText] = useState<string | null>(null)
+  // La version qu'une régénération vient de produire : sélectionnée dès que la réunion la liste.
+  const [aSelectionner, setASelectionner] = useState('')
   const [reservesOpen, setReservesOpen] = useState(false)
   const [metas, setMetas] = useState<Record<string, Record<string, unknown>>>({})
   const [error, setError] = useState('')
@@ -324,6 +332,13 @@ export function MeetingView({
     setTab('transcript')
   }
 
+  useEffect(() => {
+    if (aSelectionner && reunion.comptesRendus.some((item) => item.name === aSelectionner)) {
+      setActiveReport(aSelectionner)
+      setASelectionner('')
+    }
+  }, [aSelectionner, reunion.comptesRendus])
+
   function showReport(name: string) {
     setActiveReport(name)
     setTab('cr')
@@ -384,8 +399,12 @@ export function MeetingView({
     <section className="meeting-workspace">
       <header className={lecture ? 'meeting-hero compact' : 'meeting-hero'}>
         <div className="meeting-hero-top">
-          <button type="button" className="btn" onClick={onBack}><Icon name="arrow-left" /> {t('meeting.back')}</button>
+          {/* Le fil d'Ariane est sur la même ligne que les flèches et « Partager » (comme la maquette). */}
+          {ariane}
+          {/* Avec le fil d'Ariane, « Bibliothèque » y est déjà : le bouton ferait doublon. */}
+          {!ariane && <button type="button" className="btn" onClick={onBack}><Icon name="arrow-left" /> {t('meeting.back')}</button>}
           <div className="meeting-scope-actions" aria-label={t('meeting.actions.aria')}>
+            {navigation}
             {peutPartager(reunion.retenu.project_id) && (
               <button type="button" className="btn" onClick={() => setPartageOuvert(true)}>
                 {t('share.button')}
@@ -491,6 +510,14 @@ export function MeetingView({
                       ))}
                     </div>
                   )}
+                  {!lectureSeule && (
+                    <RegenererCompteRendu
+                      name={activeTranscript}
+                      documentScope={porteeDe(activeTranscript)}
+                      ultra={sensibilite === 'ultra_confidential'}
+                      surTermine={(nouveau) => { setASelectionner(nouveau); onChanged?.() }}
+                    />
+                  )}
                   {activeReport && !lectureSeule && (
                     <button type="button" className="btn danger-subtle" onClick={() => handleArchiveDocument(activeReport)}>
                       <Icon name="archive" /> {t('meeting.report.archive')}
@@ -592,7 +619,7 @@ export function MeetingView({
         <section role="tabpanel" aria-label={t('meeting.tab.info')} hidden={ongletVisible !== 'info'} className="meeting-panel info-panel">
           <dl className="meeting-info-grid">
             <div><dt>{t('meeting.info.id')}</dt><dd><code>{reunion.cle}</code></dd></div>
-            <div><dt>{t('meeting.fact.project')}</dt><dd>{reunion.projet || t('common.unclassified')}</dd></div>
+            <div><dt>{t('meeting.fact.project')}</dt><dd>{libelleProjet(reunion.projet || t('common.unclassified'), t)}</dd></div>
             <div><dt>{t('meeting.info.source')}</dt><dd>{reunion.source || t('common.notProvided')}</dd></div>
             <div><dt>{t('meeting.fact.date')}</dt><dd>{formatDay(reunion.date, t)}</dd></div>
             <div><dt>{t('meeting.fact.duration')}</dt><dd>{reunion.duree || t('common.notProvided')}</dd></div>

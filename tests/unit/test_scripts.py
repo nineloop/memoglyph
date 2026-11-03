@@ -533,3 +533,23 @@ def test_le_balayage_arrete_un_orphelin_de_sa_racine(tmp_path: Path, api_factice
 
     assert api_factice.wait(timeout=15) is not None
     assert "orpheline nettoyée sur le port 9980" in result.stdout
+
+
+def test_le_releve_de_stop_garde_son_format_malgre_les_champs_ajoutes_au_job(tmp_path: Path) -> None:
+    """`stop.sh` lit `pid` et `traitements[id, nature, statut, progression, depuis]` : le chantier 003
+    ajoute des champs au `Job` (titre, projet, jeton…) qui ne doivent JAMAIS entrer dans ce fichier."""
+    import json
+
+    from api.jobs import JobManager
+
+    fichier = tmp_path / ".memoglyph-traitements.json"
+    manager = JobManager(releve=fichier)
+    job = manager.create(owner="alice", nature="transcription", titre="TITRE PRIVÉ", projet_nom="PROJET",
+                         jeton="JETON")
+    contenu = json.loads(fichier.read_text(encoding="utf-8"))
+    assert set(contenu) == {"pid", "traitements"}
+    assert contenu["traitements"] == [{
+        "id": job.id, "nature": "transcription", "statut": "pending", "progression": 0.0,
+        "depuis": job.depuis}]
+    assert "TITRE" not in fichier.read_text(encoding="utf-8") and "JETON" not in fichier.read_text(encoding="utf-8")
+    assert len(job.depuis) == 5 and job.depuis[2] == ":"          # « HH:MM », comme avant

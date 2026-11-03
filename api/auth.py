@@ -463,6 +463,20 @@ def utilisateur_de_jeton(jeton: Optional[str]) -> Optional[Utilisateur]:
     return Utilisateur(ligne["id"], ligne["identifiant"], bool(ligne["admin"]))
 
 
+def id_du_jeton(jeton: Optional[str]) -> Optional[str]:
+    """L'identifiant PUBLIC d'un jeton d'appareil (jamais son secret), ou `None`.
+
+    Il sert à relier un traitement au jeton qui l'a lancé : avec ce jeton, le compagnon ne voit
+    que ses propres captures.
+    """
+    if not jeton:
+        return None
+    with closing(_connexion()) as con:
+        ligne = con.execute("SELECT id FROM jetons_appareil WHERE empreinte = ?",
+                            (_empreinte(jeton),)).fetchone()
+    return None if ligne is None else ligne["id"]
+
+
 def reinitialiser_mot_de_passe(identifiant: str, mot_de_passe: str) -> None:
     """Remplace le mot de passe, révoque les sessions et lève le blocage du compte."""
     if len(mot_de_passe or "") < LONGUEUR_MIN_MOT_DE_PASSE:

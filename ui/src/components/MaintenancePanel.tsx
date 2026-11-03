@@ -15,6 +15,8 @@ import { pluralKey } from '../lib/i18n'
 type Props = {
   viewScope: string
   scopeLabel: string
+  /** Mène à la Bibliothèque, où se change le projet consulté. */
+  onChangerPortee?: () => void
   /** Section d'arrivée, imposée par la navigation. Défaut : le diagnostic. */
   initialSection?: Section
   /** Remonte un changement (restauration, purge) pour rafraîchir le compteur. */
@@ -26,7 +28,7 @@ type Props = {
 type Section = 'status' | 'backfill' | 'duplicates' | 'trash'
 
 export function MaintenancePanel({
-  viewScope, scopeLabel, initialSection = 'status', onChanged, admin = true,
+  viewScope, scopeLabel, initialSection = 'status', onChanged, admin = true, onChangerPortee,
 }: Props) {
   const { t } = useLang()
   const depart: Section = admin || initialSection === 'trash' || initialSection === 'duplicates'
@@ -163,6 +165,7 @@ export function MaintenancePanel({
 
       <ScopeControl
         allProjects={allProjects}
+        viewScope={viewScope} onChangerPortee={onChangerPortee}
         canToggle={false}
         scopeLabel={scopeLabel}
         onToggle={() => {}}

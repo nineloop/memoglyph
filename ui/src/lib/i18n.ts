@@ -91,13 +91,15 @@ export type Traduire = (
 ) => string
 
 /**
- * Choisit la clé singulier/pluriel d'un compteur. Règle FRANÇAISE, la même que
- * le panneau Recherche : seul `n > 1` prend le pluriel — « 0
- * document » et « 1 document » restent au singulier. On garde une seule règle
- * pour tout le catalogue plutôt que d'en introduire une seconde par langue.
+ * Choisit la clé singulier/pluriel d'un compteur.
+ *
+ * Par défaut la règle FRANÇAISE (celle du panneau Recherche) : seul `n > 1` prend le pluriel,
+ * « 0 document » et « 1 document » restent au singulier. En ANGLAIS, zéro prend le pluriel
+ * (« 0 meetings ») : passer `lang` là où un compteur peut valoir zéro et se lit en anglais.
  */
-export function pluralKey(base: string, n: number): MessageKey {
-  return `${base}.${n > 1 ? 'other' : 'one'}` as MessageKey
+export function pluralKey(base: string, n: number, lang: Lang = 'fr'): MessageKey {
+  const pluriel = lang === 'en' ? n !== 1 : n > 1
+  return `${base}.${pluriel ? 'other' : 'one'}` as MessageKey
 }
 
 /**

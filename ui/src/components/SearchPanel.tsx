@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SearchMode, SearchResult } from '../api'
 import { porteeDocument, search } from '../api'
@@ -8,6 +8,7 @@ import { displayDocumentTitle } from '../lib/meetings'
 import { Badge } from '../design/primitives'
 import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
+import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
 import type { MessageKey } from '../lib/messages'
 
@@ -35,6 +36,10 @@ type Props = {
   viewScope?: string
   scopeLabel?: string
   initialQuery?: string
+  /** Lancée depuis la barre haute, la recherche couvre toutes les réunions (le bouton reste là pour revenir au projet). */
+  initialEverywhere?: boolean
+  /** Mène à la Bibliothèque, où se change le projet consulté. */
+  onChangerPortee?: () => void
   /** Nombre de documents dans la portée, si le parent le connaît déjà. */
   scopeCount?: number
   /** Le même compte pour TOUT le corpus, quand le bouton élargit la portée. */
@@ -55,8 +60,8 @@ type Props = {
 type OpenedPassage = { name: string; ts: string | null; scope: string; title: string }
 
 export function SearchPanel({
-  viewScope = '', scopeLabel = 'Non classé', initialQuery = '', scopeCount,
-  scopeCountAll, scopeLabelAll, onQueryChange,
+  viewScope = '', scopeLabel, initialQuery = '', initialEverywhere = false, scopeCount,
+  scopeCountAll, scopeLabelAll, onQueryChange, onChangerPortee,
 }: Props) {
   const [q, setQ] = useState(initialQuery)
   const [dq, setDq] = useState(initialQuery)
@@ -71,7 +76,7 @@ export function SearchPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [opened, setOpened] = useState<OpenedPassage | null>(null)
-  const [searchEverywhere, setSearchEverywhere] = useState(false)
+  const [searchEverywhere, setSearchEverywhere] = useState(initialEverywhere)
   const [beginSearch, isCurrentSearch, invalidateSearch] = useLatestRequest()
   const { t } = useLang()
 
@@ -83,14 +88,27 @@ export function SearchPanel({
   ) =>
     t(`${base}.${n > 1 ? 'other' : 'one'}` as MessageKey, { n })
 
-  useEffect(() => { setSearchEverywhere(false) }, [viewScope])
+  // Changer de projet consulté ramène la recherche à ce projet. PAS au montage : une recherche
+  // lancée depuis la barre haute arrive déjà élargie (`initialEverywhere`) et ne doit pas l'être
+  // défaite par l'effet de son propre premier rendu.
+  // On compare à la valeur PRÉCÉDENTE plutôt que de sauter « le premier appel » : sous StrictMode
+  // (développement) l'effet s'exécute deux fois sur la même instance, et un drapeau « premier
+  // rendu » serait déjà retombé au second passage.
+  const portee = useRef(viewScope)
+  useEffect(() => {
+    if (portee.current === viewScope) return
+    portee.current = viewScope
+    setSearchEverywhere(false)
+  }, [viewScope])
 
   const allProjects = viewScope === 'all' || searchEverywhere
   const activeScope = allProjects ? 'all' : viewScope
   // L'état initial doit décrire la portée RÉELLEMENT interrogée, pas celle que
   // le parent connaissait avant que l'utilisateur n'élargisse.
   const compteAffiche = allProjects ? scopeCountAll : scopeCount
-  const porteeAffichee = allProjects ? (scopeLabelAll ?? scopeLabel) : scopeLabel
+  // Sans libellé du parent : la réception du compte, dite dans la langue de l'interface (jamais « Non classé » en dur).
+  const libelleParDefaut = t('common.unclassified')
+  const porteeAffichee = allProjects ? (scopeLabelAll ?? scopeLabel ?? libelleParDefaut) : (scopeLabel ?? libelleParDefaut)
 
   useEffect(() => {
     const t = setTimeout(() => setDq(q), 250)
@@ -155,8 +173,9 @@ export function SearchPanel({
     <section className="card query-card">
       <ScopeControl
         allProjects={allProjects}
+        viewScope={viewScope} onChangerPortee={onChangerPortee}
         canToggle={viewScope !== 'all'}
-        scopeLabel={scopeLabel}
+        scopeLabel={scopeLabel ?? libelleParDefaut}
         onToggle={() => setSearchEverywhere((value) => !value)}
         detail={t('search.scope.detail')}
       />
@@ -254,7 +273,7 @@ export function SearchPanel({
                       <h2>{titre}</h2>
                     </div>
                     <div className="badges">
-                      {allProjects && meeting.project && <Badge tone="accent"><Icon name="folder" /> {meeting.project}</Badge>}
+                      {allProjects && meeting.project && <Badge tone="accent"><Icon name="folder" /> {libelleProjet(meeting.project, t)}</Badge>}
                       <Badge tone="neutral">{compte('search.count.passages', passages.length)}</Badge>
                     </div>
                   </header>

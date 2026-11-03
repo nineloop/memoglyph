@@ -57,11 +57,17 @@ beforeEach(() => {
   vi.mocked(getPartages).mockResolvedValue({ donnes: [], recus: [] })
 })
 
-/** Le sélecteur, une fois les projets du compte (et les partages reçus) chargés. */
-async function selecteur(attendu = 'Clients') {
-  const select = await screen.findByRole('combobox', { name: /Projet courant/ })
-  await within(select).findByRole('option', { name: new RegExp(attendu) })
-  return select
+/** Le panneau des projets de la Bibliothèque, une fois les projets (et les partages reçus) chargés. */
+async function panneau(attendu: RegExp | string = /Clients/) {
+  const nav = await screen.findByRole('navigation', { name: 'Projets de la bibliothèque' })
+  await within(nav).findByRole('link', { name: attendu })
+  return nav
+}
+
+/** Consulter un projet comme l'utilisateur : par un lien du panneau. */
+async function consulter(user: ReturnType<typeof userEvent.setup>, nom: RegExp | string) {
+  const nav = await panneau(nom)
+  await user.click(within(nav).getByRole('link', { name: nom }))
 }
 
 function dock() {
@@ -80,8 +86,8 @@ it('le propriétaire partage son projet, voit avec qui, et retire', async () => 
   history.replaceState(null, '', '/?vue=library')   // le bouton vit dans la Bibliothèque
   render(<App />)
 
-  await user.selectOptions(await selecteur(), CLIENTS)
-  await user.click(screen.getByRole('button', { name: 'Partager' }))
+  await consulter(user, /Clients/)
+  await user.click(await screen.findByRole('button', { name: 'Partager' }))
 
   const dialogue = await screen.findByRole('dialog', { name: 'Partager le projet « Clients »' })
   expect(await within(dialogue).findByText('carole')).toBeInTheDocument()
@@ -97,9 +103,9 @@ it('le bouton Partager est réservé au propriétaire du projet', async () => {
   history.replaceState(null, '', '/?vue=library')   // là où le bouton peut paraître
   render(<App />)
 
-  await user.selectOptions(await selecteur(), ANCIEN)       // sans propriétaire
+  await consulter(user, /Ancien/)                            // sans propriétaire
   expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
-  await user.selectOptions(screen.getByRole('combobox', { name: /Projet courant/ }), 'all')
+  await consulter(user, /Tous mes projets/)
   expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
 })
 
@@ -111,15 +117,16 @@ it('Partager n’apparaît que dans la Bibliothèque, jamais pour « Non classé
   history.replaceState(null, '', '/?vue=transcribe')
   render(<App />)
 
-  // Transcrire : le sélecteur ne choisit qu'une destination.
-  await user.selectOptions(await selecteur(), CLIENTS)
+  // Transcrire : on choisit une destination, on ne partage rien.
+  expect(await screen.findByRole('combobox', { name: 'Ranger dans' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
   // Bibliothèque : le projet du compte se partage, même vide ; sa réception, non.
   await user.click(within(dock()).getByRole('button', { name: /Bibliothèque/ }))
+  await consulter(user, /Clients/)
   expect(await screen.findByRole('button', { name: 'Partager' })).toBeInTheDocument()
-  await user.selectOptions(screen.getByRole('combobox', { name: /Projet courant/ }), VIDE)
-  expect(screen.getByRole('button', { name: 'Partager' })).toBeInTheDocument()
-  await user.selectOptions(screen.getByRole('combobox', { name: /Projet courant/ }), INBOX)
+  await consulter(user, /Vide/)
+  expect(await screen.findByRole('button', { name: 'Partager' })).toBeInTheDocument()
+  await consulter(user, /Non classé/)
   expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
 })
 
@@ -137,25 +144,24 @@ it('le refus du serveur s’affiche tel qu’il l’écrit', async () => {
   expect(await within(dialogue).findByRole('alert')).toHaveTextContent(refus)
 })
 
-// ---------- (2) « Partagés avec moi » dans le sélecteur ----------
+// ---------- (2) « Partagés avec moi » dans le panneau ----------
 
-it('le sélecteur propose ce qui est partagé, avec le nom de qui le partage', async () => {
+it('le panneau propose ce qui est partagé, avec le nom de qui le partage', async () => {
   const user = userEvent.setup()
   vi.mocked(getPartages).mockResolvedValue({ donnes: [], recus })
+  history.replaceState(null, '', '/?vue=library')
   render(<App />)
 
-  const select = await selecteur('Chantier')
-  const groupe = within(select).getByRole('group', { name: 'Partagés avec moi' })
-  expect(within(groupe).getAllByRole('option').map((o) => o.textContent)).toEqual([
-    'Partagés avec moi — tout', 'Chantier · de bruno', 'Réunion « Revue de chantier » · de bruno',
-  ])
-
-  await user.selectOptions(select, 'Réunion « Revue de chantier » · de bruno')
-  // Une réunion reçue s'ouvre à la bibliothèque, dans « Partagés avec moi ».
+  const nav = await panneau(/Chantier/)
+  expect(within(nav).getByRole('heading', { name: 'Partagés avec moi' })).toBeInTheDocument()
+  expect(within(nav).getByRole('link', { name: /Chantier.*bruno/ })).toBeInTheDocument()
+  // Les réunions reçues une à une se retrouvent dans « tout ce qui est partagé avec moi ».
+  await user.click(within(nav).getByRole('link', { name: 'Tout ce qui est partagé avec moi' }))
   await waitFor(() => expect(getMeetings).toHaveBeenCalledWith(
     expect.objectContaining({ viewScope: 'shared' })))
-  expect(select).toHaveValue('shared')
-  expect(screen.getAllByText('Lecture seule').length).toBeGreaterThan(0)
+  expect(within(nav).getByRole('link', { name: 'Tout ce qui est partagé avec moi' }))
+    .toHaveAttribute('aria-current', 'page')
+  expect(screen.getAllByText(/lecture seule/i).length).toBeGreaterThan(0)
 })
 
 // ---------- (3) Lecture seule : aucune action d'écriture ----------
@@ -165,7 +171,8 @@ it('en lecture seule, les vues du propriétaire quittent la navigation', async (
   vi.mocked(getPartages).mockResolvedValue({ donnes: [], recus })
   render(<App />)
 
-  await user.selectOptions(await selecteur('Chantier'), 'P-BRUNO')
+  history.replaceState(null, '', '/?vue=library')
+  await consulter(user, /Chantier/)
 
   for (const vue of ['Corbeille', 'Doublons', 'Usage', 'Maintenance']) {
     expect(within(dock()).queryByRole('button', { name: new RegExp(vue) })).not.toBeInTheDocument()
@@ -180,7 +187,8 @@ it('en lecture seule, les vues du propriétaire quittent la navigation', async (
     return trouve!
   })
   await user.upload(champ, new File(['a'], 'a.mp3', { type: 'audio/mpeg' }))
-  expect((await screen.findByText('Destination de la réunion')).parentElement).toHaveTextContent('Non classé')
+  // Un projet reçu n'est jamais une destination : « Ranger dans » reste sur Non classé.
+  expect(await screen.findByRole('combobox', { name: 'Ranger dans' })).toHaveValue('Non classé')
 })
 
 function item(name: string, type: string | null = null): LibraryItem {
@@ -258,13 +266,14 @@ it('l’assistant interroge ce qui est partagé', async () => {
 
 // ---------- (4) Rien ne change pour qui n'a rien reçu ----------
 
-it('sans partage reçu, le sélecteur et la navigation restent ceux d’avant', async () => {
+it('sans partage reçu, le panneau et la navigation restent ceux d’avant', async () => {
+  history.replaceState(null, '', '/?vue=library')
   render(<App />)
 
-  const select = await selecteur()
+  const nav = await panneau()
   await waitFor(() => expect(getPartages).toHaveBeenCalled())
-  expect(within(select).queryByRole('group', { name: 'Partagés avec moi' })).not.toBeInTheDocument()
-  expect(within(select).getByRole('option', { name: 'Tous mes projets' })).toBeInTheDocument()
+  expect(within(nav).queryByRole('heading', { name: 'Partagés avec moi' })).not.toBeInTheDocument()
+  expect(within(nav).getByRole('link', { name: /Tous mes projets/ })).toBeInTheDocument()
   for (const vue of ['Corbeille', 'Doublons', 'Usage']) {
     expect(within(dock()).getByRole('button', { name: new RegExp(vue) })).toBeInTheDocument()
   }
