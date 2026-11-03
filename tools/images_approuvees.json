@@ -53,6 +53,14 @@
       "chemin": "docs/assets/screenshots/report-citations.png"
     },
     {
+      "sha256": "7cc299a9affde1ae08334358b819958c0d56241d1f4d81a587b51bb11c4a5d1e",
+      "chemin": "docs/assets/screenshots/transcribe-fr.png"
+    },
+    {
+      "sha256": "c2324fda34919d90a38720b0d822086db92f40996eaadab871a5522bc1d1ec7b",
+      "chemin": "docs/assets/screenshots/transcribe.png"
+    },
+    {
       "sha256": "ce746c3bba77c9289ff51e44ca66b586b7df9c5bad6a6603c86371a994717b98",
       "chemin": "docs/ui/screenshots/reference/desktop/dark/01-transcribe.png"
     },

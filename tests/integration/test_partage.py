@@ -247,7 +247,8 @@ def test_dans_un_projet_partage_l_ultra_confidentiel_reste_invisible(bibliothequ
 # ---------- (5) Mode d'emploi de l'attribution ----------
 
 @pytest.mark.parametrize("fichier,mot", [("README.md", "before creating any new document"),
-                                         ("README.fr.md", "avant de créer le moindre document")])
+                                         ("README.fr.md", "avant de créer le moindre document"),
+                                         ("docs/comptes-et-partage.md", "avant de créer le moindre document")])
 def test_le_mode_d_emploi_dit_d_attribuer_avant_tout_nouveau_document(fichier, mot) -> None:
     from pathlib import Path
     texte = (Path(__file__).resolve().parents[2] / fichier).read_text(encoding="utf-8")

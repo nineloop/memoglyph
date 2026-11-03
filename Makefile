@@ -1,4 +1,4 @@
-.PHONY: lock-check lint-python test test-python test-ui test-cov test-ml test-ml-strict check hooks companion
+.PHONY: lock-check lint-python test test-python test-ui test-cov test-ml test-ml-strict check hooks companion readme
 
 # Interpréteur : le venv du projet s'il existe, sinon python3. Sans ça, `make`
 # invoquait `python` tout court — absent du PATH hors venv activé — et les tests
@@ -59,6 +59,12 @@ test-ml:
 
 test-ml-strict:
 	$(PYTHON) run_ml_tests.py --strict
+
+# Les deux README (README.md en anglais, README.fr.md en français) sont GÉNÉRÉS : on modifie les
+# rubriques de `readme/` ou le gabarit `readme/readme.yaml`, puis on lance cette cible. Elle ne
+# fait pas partie de `check` ; un test vérifie que les README publiés sont à jour.
+readme:
+	$(PYTHON) tools/readme.py generer
 
 # Portail local complet. La CI, elle, éclate ces étapes pour qu'un échec
 # Python n'empêche pas de savoir où en est l'interface.

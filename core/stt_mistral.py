@@ -6,7 +6,7 @@ successives qui se recouvrent : au palier par défaut, Mistral limite l'audio à
 Les envois suivent cette limite (`RythmeAudio`), les horodatages sont recalés
 sur la réunion entière, et les locuteurs raccordés d'une tranche à l'autre par
 leur temps de parole commun dans le recouvrement. Réglages : `MEMOGLYPH_MISTRAL_STT_TRANCHE_S`,
-`MEMOGLYPH_MISTRAL_STT_RECOUVREMENT_S` et `MEMOGLYPH_MISTRAL_AUDIO_S_PAR_MINUTE` (`README.fr.md`).
+`MEMOGLYPH_MISTRAL_STT_RECOUVREMENT_S` et `MEMOGLYPH_MISTRAL_AUDIO_S_PAR_MINUTE` (`docs/configuration.md`).
 """
 
 from __future__ import annotations

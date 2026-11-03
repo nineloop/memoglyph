@@ -223,7 +223,7 @@ def test_zero_test_execute_n_est_PAS_un_succes(monkeypatch, capsys) -> None:
     Reproduit sur un clone frais avec les modules rendus inimportables :
     EXIT=0. Un portail qui rend « succès » sans avoir rien exécuté n'est pas
     un portail — et `make test-ml` est présenté comme LE point d'entrée des
-    tests sur vrais modèles dans README.md et AGENTS.md.
+    tests sur vrais modèles dans docs/developpement.md et AGENTS.md.
     """
     monkeypatch.setattr(
         run_ml_tests, "runtime_preflight",

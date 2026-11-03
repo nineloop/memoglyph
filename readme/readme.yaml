@@ -1,0 +1,92 @@
+# Gabarit des README : ordre des rubriques, captures, liens, version. Aucune prose ici
+# (hors légendes, textes alternatifs et attribution du corpus). `make readme` assemble README.md
+# (anglais) et README.fr.md (français) ; les modifier à la main n'a aucun effet durable.
+# `version` égale la première entrée de CHANGELOG.md (un test le vérifie) et s'affiche par {{version}}.
+# `regles_strictes: true` : coupe d'un paragraphe par ligne, ton, longueur et attribution sont imposés.
+version: v1.1.1
+regles_strictes: true
+langues:
+- en
+- fr
+rubriques:
+- id: ouverture
+  fichier:
+    en: 01-opening.md
+    fr: 01-ouverture.md
+- id: probleme
+  fichier:
+    en: 02-problem.md
+    fr: 02-probleme.md
+- id: trois-gestes
+  fichier:
+    en: 03-three-steps.md
+    fr: 03-trois-gestes.md
+- id: local-ou-en-ligne
+  fichier:
+    en: 04-local-or-online.md
+    fr: 04-local-ou-en-ligne.md
+- id: demarrer
+  fichier:
+    en: 05-quick-start.md
+    fr: 05-demarrer.md
+- id: aller-plus-loin
+  fichier:
+    en: 06-learn-more.md
+    fr: 06-aller-plus-loin.md
+- id: limites
+  fichier:
+    en: 07-limits.md
+    fr: 07-limites.md
+- id: developper
+  fichier:
+    en: 08-develop.md
+    fr: 08-developper.md
+captures:
+  bibliotheque:
+    corpus_ami: true
+    chemin:
+      en: docs/assets/screenshots/library.png
+      fr: docs/assets/screenshots/library-fr.png
+    alt:
+      en: 'The Memoglyph library: projects and recent meetings'
+      fr: 'La bibliothèque de Memoglyph : projets et réunions récentes'
+    legende:
+      en: 'The library: the meetings of a project.'
+      fr: 'La bibliothèque : les réunions d''un projet.'
+  transcrire:
+    corpus_ami: false
+    chemin:
+      en: docs/assets/screenshots/transcribe.png
+      fr: docs/assets/screenshots/transcribe-fr.png
+    alt:
+      en: 'The Transcribe screen: a file drop area, the project to save to, and the processing steps'
+      fr: 'L''écran Transcrire : la zone de dépôt du fichier, le projet de destination et les étapes du traitement'
+    legende:
+      en: 'The Transcribe screen: file, project and processing steps.'
+      fr: 'L''écran Transcrire : fichier, projet et étapes du traitement.'
+  transcript:
+    corpus_ami: true
+    chemin:
+      en: docs/assets/screenshots/meeting-transcript.png
+      fr: docs/assets/screenshots/meeting-transcript-fr.png
+    alt:
+      en: A meeting transcript with speakers, waveform and timestamps
+      fr: Le transcript d'une réunion, avec locuteurs, frise d'onde et horodatages
+    legende:
+      en: 'A meeting: transcript with speakers, waveform and timestamps.'
+      fr: 'Une réunion : transcript avec locuteurs, frise d''onde et horodatages.'
+  rapport:
+    corpus_ami: true
+    chemin:
+      en: docs/assets/screenshots/report-citations.png
+      fr: docs/assets/screenshots/report-citations-fr.png
+    alt:
+      en: A meeting report whose statements carry timestamped citations
+      fr: Un compte rendu dont les affirmations portent des citations horodatées
+    legende:
+      en: A report whose statements carry timestamped citations; a click plays the audio at that moment.
+      fr: Un compte rendu dont les affirmations portent des citations horodatées ; un clic joue l'audio à cet instant.
+liens: {}
+attribution:
+  en: '<sub>The meeting screenshots on this page show demo data only: meeting IS1009a of the AMI Meeting Corpus (University of Edinburgh and the AMI project partners), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Reference: J. Carletta et al., "The AMI Meeting Corpus: A Pre-announcement", *Machine Learning for Multimodal Interaction* (MLMI), 2005.</sub>'
+  fr: '<sub>Les captures de réunions de cette page montrent des données de démonstration uniquement : la réunion IS1009a de l''AMI Meeting Corpus (University of Edinburgh et partenaires du projet AMI), sous licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Référence : J. Carletta et al., « The AMI Meeting Corpus: A Pre-announcement », *Machine Learning for Multimodal Interaction* (MLMI), 2005.</sub>'

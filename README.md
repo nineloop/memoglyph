@@ -1,3 +1,4 @@
+<!-- Generated file: edit readme/, then run make readme -->
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/memoglyph-logo-horizontal-sombre.svg">
@@ -9,99 +10,57 @@
 
 *English · [Français](README.fr.md)*
 
-**Local meeting transcripts and reports, with citations you can check against the audio.**
-
-Record a call or import a file, and Memoglyph gives you a timestamped transcript with speakers, a meeting report with decisions, actions and open questions, and answers to your questions across meetings. Every quoted claim links back to the second it was said.
+**Meeting transcripts and reports, local by default, with citations that can be checked against the audio.**
 
 ![The Memoglyph library: projects and recent meetings](docs/assets/screenshots/library.png)
 *The library: the meetings of a project.*
 
+<sub>The meeting screenshots on this page show demo data only: meeting IS1009a of the AMI Meeting Corpus (University of Edinburgh and the AMI project partners), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Reference: J. Carletta et al., "The AMI Meeting Corpus: A Pre-announcement", *Machine Learning for Multimodal Interaction* (MLMI), 2005.</sub>
+
+## The problem
+
+A meeting leaves decisions, actions and figures that are hard to find again. The recording is long, the summary is short, and nothing links the two.
+
+A summary written by a model can also be wrong without showing it. Checking one claim means finding the passage, then the second of audio where it was said.
+
+Memoglyph turns a recording into a timestamped transcript and a report. Each statement kept in the report carries a citation verified in the transcript, and the citation opens the audio at that second.
+
+## In three steps
+
+### 1. Transcribe
+
+An audio or video file dropped on the Transcribe screen, up to 2,048 MB by default, is filed in a project and, by default, processed on the Mac.
+
+![The Transcribe screen: a file drop area, the project to save to, and the processing steps](docs/assets/screenshots/transcribe.png)
+*The Transcribe screen: file, project and processing steps.*
+
+### 2. Read
+
+The transcript shows the waveform, the timestamps and, when diarization is installed, the speakers.
+
 ![A meeting transcript with speakers, waveform and timestamps](docs/assets/screenshots/meeting-transcript.png)
 *A meeting: transcript with speakers, waveform and timestamps.*
 
-![A meeting report where each statement carries timestamped citations](docs/assets/screenshots/report-citations.png)
-*The report: each statement carries timestamped citations; a click plays the audio at that moment.*
+### 3. Check
 
-<sub>Screenshots of the current version, with demo data only: meeting IS1009a of the AMI Meeting Corpus (University of Edinburgh and the AMI project partners), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Reference: J. Carletta et al., "The AMI Meeting Corpus: A Pre-announcement", *Machine Learning for Multimodal Interaction* (MLMI), 2005.</sub>
+The report lists, according to the type of meeting, decisions, actions and open questions. The statements of the report carry timestamped citations, and a click plays the audio at that moment.
 
-- **Verifiable**: each claim cites its timestamp, and a number that was never spoken is dropped.
-- **Local by default**: Whisper and a local model on Apple Silicon. Mistral, OpenAI, Anthropic or a self-hosted OpenAI-compatible server, only if you pick them.
-- **For you, or a small team, self-hosted**: accounts, one private space each, read-only sharing.
-- **Confidentiality levels**: ultra-confidential meetings are never sent to a cloud model unless their owner allows it.
-- **Agent-ready**: a read-only MCP server, scoped to one account.
-- **No telemetry**: usage is recorded locally; nothing goes anywhere except to the providers you choose and, on first use, to model downloads from Hugging Face.
+![A meeting report whose statements carry timestamped citations](docs/assets/screenshots/report-citations.png)
+*A report whose statements carry timestamped citations; a click plays the audio at that moment.*
 
-## What it does
+## Local or online, as chosen
 
-Memoglyph turns an audio or video file into a Markdown workspace on your own Mac:
-a timestamped transcript, speakers, a meeting report, search across meetings, and
-questions answered from your own corpus. It is built for Apple Silicon and runs
-**fully locally by default**: audio, transcripts and indexes stay on the machine.
+By default, everything runs on the Mac: Whisper for transcription, and a local MLX language model for reports and the assistant. Semantic search also uses a local embedding model by default.
 
-- **Transcription** with Whisper `large-v3-turbo` (local), language detected or set.
-- **Speaker diarization** with pyannote (local, optional), and voice identification
-  across meetings.
-- **Meeting reports** shaped by meeting type (project sync, steering committee,
-  interview, briefing, town hall, webinar…). Every claim carries a `[source]`
-  timestamp; a click plays the audio at that moment. The exact quotes are kept in an
-  appendix whose integrity is checked deterministically.
-- **Hybrid search** (full text with FTS5, plus semantic search with `sqlite-vec`) and
-  a question-answering assistant, scoped to a project or to the whole library.
-- **Projects, trash and verified purge**, duplicate detection, index maintenance.
-- **Usage and cost tracking** per document and per project.
-- **Read-only MCP server** for agents (Claude, Codex, Cursor…): projects, meetings,
-  search, reports with their timestamped citations, and meeting facts when enabled. Local, scoped to one
-  account; ultra-confidential content only if that account allows the cloud for it:
-  `./memoglyph mcp <username>`.
-- **Bilingual interface**, French and English.
+An online model can be added when needed: Mistral, OpenAI or Anthropic, or any service in the OpenAI format, such as Groq, through the `compatible` provider. Mistral can also transcribe, with Voxtral.
 
-Markdown files are the source of truth for meetings, and the search indexes rebuild from
-them. Accounts and device tokens (`auth.db`), the voice registry (`index.db`) and usage
-history (`usage.db`) do not: a full backup covers all four, see
-[docs/sauvegarde.md](docs/sauvegarde.md) (French) and `tools/sauvegarder.py`.
+Both can be combined according to the sensitivity of each meeting. A document labelled ultra-confidential goes to no online provider unless its owner allows it for their account. Details, in French: [docs/local-et-en-ligne.md](docs/local-et-en-ligne.md).
 
-## Local first, cloud only if you choose it
+There is no telemetry. Usage is recorded locally, and nothing leaves the machine except calls to the providers chosen and, on first use, model downloads from Hugging Face.
 
-The default pipeline uses only local models: Whisper, pyannote, and an MLX language
-model (`Qwen3-4B-Instruct`) served on your Mac. Three cloud providers are optional for
-reports, the assistant and meeting facts, **Mistral**, **OpenAI** and **Anthropic** (Claude),
-and Mistral can also transcribe. With Mistral, reports and the assistant use
-`ministral-14b-2512`, which Mistral's default tier serves (`mistral-small` gets a zero
-quota there). Voxtral transcribes a meeting longer than 50 minutes in overlapping chunks,
-paced to the default tier's audio limit (3,600 seconds of audio per minute), with
-timestamps realigned and speakers matched across chunks. With Anthropic, reports and the
-assistant use Claude Haiku 5.5 and meeting facts use Claude Sonnet 5.5. You have to pick
-them explicitly; they then send audio and/or text to their API. Semantic search always
-runs on a local embedding model. A document labelled **ultra-confidential** goes to no
-cloud provider by default: transcription, report, facts and assistant passages stay local.
-Each account can allow the cloud for its own ultra-confidential documents in **Privacy**
-(off by default, confirmed when turned on, effective at once when turned off); it opens
-nothing for shared documents or other accounts, and each allowed send is logged without
-content (see [SECURITY.md](SECURITY.md)).
+## Five commands to start
 
-A model server you host yourself (MLX, or an OpenAI-compatible server such as Ollama,
-LM Studio or vLLM, set in `.env`) counts as local only on this machine's loopback address.
-On any other host it is shown as **Private cloud** and follows the cloud rules,
-ultra-confidential included. Each meeting carries one sensitivity, read again before every
-cloud call. **Confidential** is a label for people: it does not route anything by itself,
-and you decide what goes where.
-
-Citations are landmarks for checking, not proof. Each one points to a passage at a
-timestamp, and the check confirms that this passage is in the transcript as written. The
-transcript itself can be wrong (a misheard word or figure, a voice given to the wrong
-person), and a model can read into a passage something it does not say. Click the
-citation, listen to the audio, and check what matters before you rely on it.
-
-Known limits: an amount with decimals can lose its decimal point in transcription
-(Whisper writes "1250" for "twelve fifty"), and no check on the text can see it, since the
-figure is in the quote. Listen to the quote of an amount before relying on it. A Whisper
-repetition loop is decoded a second time; if it persists, it is folded with a visible
-mark and shown as a caveat on the meeting.
-
-## Quick start
-
-Requirements: macOS on Apple Silicon, Python 3.11 with [uv](https://docs.astral.sh/uv/),
-Node.js 20.19+ or 22.12+, and `ffmpeg`.
+The requirements are a Mac with Apple Silicon and Homebrew, Python 3.11 with [uv](https://docs.astral.sh/uv/), Node.js 20.19+ or 22.12+, and `ffmpeg`. The commands run from a clone of the repository.
 
 ```bash
 brew install uv ffmpeg
@@ -111,94 +70,42 @@ cp .env.example .env
 ./start.sh
 ```
 
-The app prints its address, usually [http://127.0.0.1:8770](http://127.0.0.1:8770).
-The first start, and the first one after an update that changes the index, can take
-several minutes on a large library: the API rebuilds its index before it answers, and
-`./start.sh` waits for it (up to 900 s, set `MEMOGLYPH_ATTENTE_S` to change that).
-Stop it with `./stop.sh`. While a job runs (transcription, meeting facts, voices,
-archives), `./stop.sh` and `./restart.sh` refuse and name it, since jobs live in memory and
-would be lost; `--forcer` stops anyway. Models are downloaded on first use. Meeting facts (ECL, the « Faits » tab of a meeting) are
-experimental and disabled by default: set `MEMOGLYPH_FAITS=1` to enable them. Only then do they
-need `ibm-granite/granite-4.2-8b-q4-mlx` locally (4.9 GB, download it once
-with `hf download ibm-granite/granite-4.2-8b-q4-mlx`); without it, they fall back to the local
-report model, and the report says so.
+The app opens at [http://127.0.0.1:8770](http://127.0.0.1:8770). If that port is taken, `./start.sh` picks the next free pair and prints the address. Models are downloaded on first use.
 
-Speaker diarization is an optional group. It needs a Hugging Face token in `.env` and
-acceptance of the pyannote model terms (see [.env.example](.env.example)). The token is
-required even once the model is cached; without it, transcripts have no speakers, and
-the job and the meeting say why:
+The app stops with `./stop.sh`; a running job makes it refuse and name the job, and `--forcer` stops it anyway.
 
-```bash
-uv sync --locked --group diar
-```
+On first launch, `./start.sh` prints a one-time installation code. The app then shows a single screen to create the administrator account, and the administrator creates the other accounts.
 
-Sign-in is required everywhere, local use included. On first launch, `./start.sh`
-prints a one-time installation code; the app then shows a single screen to create
-the administrator account. There is no open sign-up: the administrator creates the
-other accounts. Forgotten password, on the machine: `./memoglyph reset-password <username>`.
+A library created before accounts existed is handed to an account with `./memoglyph attribuer-bibliotheque <username>`, run before creating any new document with that account. The steps are in [docs/comptes-et-partage.md](docs/comptes-et-partage.md), in French.
 
-Each account sees only its own projects, plus its own « Non classé » (inbox). The
-projects of a library created before accounts have no owner and are visible to
-administrators only. To hand them over to an account, preview first, then apply:
-`./memoglyph attribuer-bibliotheque <username>`, then the same with `--appliquer`.
-Only the project manifests change; the Markdown files are not rewritten.
-Do it **before creating any new document** with that account: otherwise it ends up
-with two « Non classé » (its own, created with the account, and the library's) and
-the same person may appear as two voices, to be merged by hand. An empty extra
-« Non classé » folder can be deleted by hand.
+## Further reading
 
-`./start.sh --lan` opens the app to other devices on your local network. They see the
-sign-in screen, but traffic is plain HTTP: do not use LAN mode on a public or
-untrusted Wi-Fi. The API refuses any state-changing request whose `Origin` is neither
-the host nor the app itself, and repeated failed sign-ins are slowed down (five
-failures in 15 minutes, then a growing delay capped at 15 minutes).
+The documents below are in French, like the codebase and most technical docs.
 
-## Recording a call (beta)
+- [Companion](docs/compagnon-capture.md): the menu bar app that records a call and sends it to Memoglyph, in beta and for macOS only.
+- [Accounts and sign-in](docs/comptes-et-partage.md): sign-in, accounts, handing a library over to an account, and the protections of the API.
+- [MCP for agents](docs/mcp.md): a read-only server scoped to one account.
+- [Diarization](docs/installation.md#diarisation-et-signatures-vocales): the separate installation and the Hugging Face token.
+- [Backup](docs/sauvegarde.md): what a full backup covers, and how to restore it.
+- [All documents](docs/README.md): features, configuration, architecture and limits.
 
-The menu bar companion records a call (the microphone and the call application's sound)
-or a replay, and hands the file to Memoglyph. It is in **beta** and **macOS only**. Build
-and install it with:
+## Limits
+
+- Citations are landmarks for checking, not proofs. The check confirms that a quote is in the transcript at the stated timestamp, but the transcript itself can be wrong.
+- An amount with decimals can lose its decimal point in transcription ("1250" for "twelve fifty"), and the text alone does not show it.
+- Diarization needs a separate installation and a Hugging Face token.
+- Memoglyph is designed for, and tested on, a Mac with Apple Silicon.
+- The companion is in beta.
+
+## Development and license
 
 ```bash
-make companion
+make hooks
+make check
 ```
 
-It installs into `/Applications`; if `/Applications` is not writable, it says so and
-installs into `~/Applications` instead. `DEST=<folder>` installs it elsewhere. The Finder
-then shows the app. The menu follows the system language. Its « Start in Visio mode »
-entry lists calls in progress first, then one line per open application, and also offers
-« All Mac audio ». A capture that cannot be sent right away (Memoglyph busy with another
-job, or not reachable) is sent again on its own, a limited number of times, and is never
-deleted from the Mac; the menu says in one short sentence where each capture stands.
-Details (French):
-[compagnon/README.md](compagnon/README.md) and
-[docs/compagnon-capture.md](docs/compagnon-capture.md).
+`make check` runs the lock check, Ruff, the Python and UI tests, the lint and the build. Contribution and security notes are in [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md); development details, in French, are in [docs/developpement.md](docs/developpement.md).
 
-## Learn more
+The code is under the Apache-2.0 license ([LICENSE](LICENSE), [NOTICE](NOTICE)). Models keep their own licenses. The Memoglyph name and logo are not covered by that license; the brand files are described in [docs/assets/brand/](docs/assets/brand/README.md).
 
-- [README.fr.md](README.fr.md): the full documentation (French), with configuration,
-  provenance, trash and purge, project scoping, and the test gates.
-- [SPEC.md](SPEC.md): design and architecture (French).
-- [docs/sauvegarde.md](docs/sauvegarde.md): what a full backup covers, and how to back up
-  and restore (French).
-- [docs/mcp.md](docs/mcp.md): the read-only MCP server, its tools and its guarantees
-  (French).
-- [docs/corpus-demo.md](docs/corpus-demo.md): the public demo corpus (AMI Meeting
-  Corpus, CC BY 4.0) used for screenshots and demos.
-- [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
-
-The codebase, its comments and most technical docs are written in French.
-
-## Development
-
-```bash
-make hooks     # installs the pre-push hook
-make check     # lock check, Ruff, Python and UI tests, lint and build
-make test-ml   # real media and local models; a manual gate, not run in CI
-```
-
-## License
-
-Apache-2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE). Models keep their own
-licenses. The Memoglyph name and logo are not covered by the Apache-2.0 license of the
-code; see [docs/assets/brand/](docs/assets/brand/README.md).
+Version v1.1.1.
