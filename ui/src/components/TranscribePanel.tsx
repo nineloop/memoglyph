@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppConfig, ListeTraitements, Project } from '../api'
-import { downloadUrl, streamJob, submitTranscribe } from '../api'
+import { DoublonError, downloadUrl, streamJob, submitTranscribe } from '../api'
+import { CODE_ANNULE } from '../lib/traitements'
 import { libelleProjet } from '../lib/libelleProjet'
 import { documentBody, isAtBottom, validateMediaFile } from '../lib/transcription'
 import type { MediaProblem } from '../lib/transcription'
@@ -198,6 +199,13 @@ export function TranscribePanel({
   const [progress, setProgress] = useState(0)
   const [ligne, setLigne] = useState<LigneEtat | null>(null)
   const [error, setError] = useState('')
+  // Un envoi REFUSÉ pendant qu'un autre traitement est suivi : l'alerte se dit sans toucher à la frise du traitement suivi.
+  const [erreurEnvoi, setErreurEnvoi] = useState('')
+  // Le traitement suivi a été ANNULÉ (avant d'avoir commencé) : la frise s'arrête, sans style d'erreur (chantier 005).
+  const [annule, setAnnule] = useState(false)
+  const [confirmation, setConfirmation] = useState<{ jobId: string; projet: string } | null>(null)
+  // Le fichier est déjà en attente ou en cours pour ce compte (409) : nommé, sans texte brut.
+  const [doublon, setDoublon] = useState<{ jobId: string; titre: string } | null>(null)
   const [result, setResult] = useState<JobResult | null>(null)
   const [partial, setPartial] = useState('')
   const [dragOver, setDragOver] = useState(false)
@@ -361,7 +369,11 @@ export function TranscribePanel({
     () => timelineItems(t, { sttDetail, diarizeDetail: diarisationDetail, llmNom, diarize, profile, reportOn }),
     [t, sttDetail, diarisationDetail, llmNom, diarize, profile, reportOn],
   )
-  const started = running || Boolean(result) || Boolean(error) || progress > 0
+  // Le traitement suivi attend sa place (un autre calcul lourd occupe la machine) : il n'a pas commencé, donc ni
+  // « envoi sécurisé » ni étape active à montrer (chantier 005). La liste partagée des traitements le dit.
+  const suiviEnAttente = Boolean(running && confirmation && traitements?.traitements.some(
+    (x) => x.id === confirmation.jobId && (x.statut === 'pending' || x.en_attente)))
+  const started = (running || Boolean(result) || Boolean(error) || progress > 0) && !annule && !suiviEnAttente
   const flowStep = running || result || error ? 3 : file ? 2 : 1
 
   function chooseFile(candidate: File | null) {
@@ -370,10 +382,27 @@ export function TranscribePanel({
     setFileProblem(probleme)
     setResult(null)
     setError('')
-    setPartial('')
-    setProgress(0)
-    setLigne(null)
+    setErreurEnvoi('')
+    setDoublon(null)
+    setAnnule(false)
+    // Un traitement lancé est encore SUIVI ici : choisir un autre fichier ne remet pas sa frise à zéro.
+    if (!stopStream.current) {
+      setPartial('')
+      setProgress(0)
+      setLigne(null)
+    }
     setFile(probleme ? null : candidate)
+  }
+
+  /** « Retirer ce fichier » : ne retire que le CHOIX. Le suivi du traitement déjà lancé et sa confirmation restent. */
+  function retirerFichier() {
+    if (!stopStream.current && !confirmation && !running) { clearFile(); return }
+    setFile(null)
+    setFileProblem(null)
+    setError('')
+    setErreurEnvoi('')
+    setDoublon(null)
+    if (inputRef.current) inputRef.current.value = ''
   }
 
   function clearFile() {
@@ -385,31 +414,36 @@ export function TranscribePanel({
     setFileProblem(null)
     setResult(null)
     setError('')
+    setErreurEnvoi('')
+    setAnnule(false)
+    setDoublon(null)
     setPartial('')
     setProgress(0)
     setLigne(null)
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  const [confirmation, setConfirmation] = useState<{ jobId: string; projet: string } | null>(null)
-
   async function run() {
     if (!file) return
     const runDestination = destinationProjectId
-    // Un envoi précédent encore suivi ici est détaché : il continue côté serveur et reste visible
-    // dans le panneau des traitements ; la frise de ce panneau suit le nouvel envoi.
-    stopStream.current?.()
-    stopStream.current = null
-    setRunning(true)
+    // Un traitement déjà lancé reste SUIVI ici tant que le nouvel envoi n'est pas ACCEPTÉ : un refus (doublon, plus de
+    // place, panne) ne doit ni couper sa frise ni effacer sa confirmation (chantier 005).
+    const suivi = stopStream.current !== null
     setEnvoi(true)
     setError('')
-    setResult(null)
-    setPartial('')
-    setWarnings([])
-    stick.current = true
-    setProgress(0)
-    setConfirmation(null)
-    setLigne({ source: 'ui', cle: 'transcribe.upload' })
+    setErreurEnvoi('')
+    setDoublon(null)
+    setAnnule(false)
+    if (!suivi) {
+      setRunning(true)
+      setResult(null)
+      setPartial('')
+      setWarnings([])
+      stick.current = true
+      setProgress(0)
+      setConfirmation(null)
+      setLigne({ source: 'ui', cle: 'transcribe.upload' })
+    }
     try {
       const jobId = await submitTranscribe(file, {
         engine,
@@ -422,7 +456,18 @@ export function TranscribePanel({
         llm_provider: llmProvider,
         sensitivity,
       })
-      // L'envoi est ACCEPTÉ : on le dit tout de suite (où la réunion est rangée) et on offre de la suivre.
+      // L'envoi est ACCEPTÉ : le traitement précédent encore suivi ici est détaché (il continue côté serveur et reste
+      // visible dans le panneau des traitements) ; la frise de ce panneau suit le nouvel envoi.
+      stopStream.current?.()
+      stopStream.current = null
+      setRunning(true)
+      setResult(null)
+      setPartial('')
+      setWarnings([])
+      stick.current = true
+      setProgress(0)
+      setLigne({ source: 'ui', cle: 'transcribe.upload' })
+      // On le dit tout de suite (où la réunion est rangée) et on offre de la suivre.
       // Le formulaire reste prêt : l'écran n'attend pas la fin du traitement.
       setEnvoi(false)
       const rangeDans = projects.find((p) => p.id === runDestination)
@@ -430,6 +475,11 @@ export function TranscribePanel({
         jobId,
         projet: libelleProjet(rangeDans?.name ?? config.default_project, t, rangeDans?.kind),
       })
+      // Le choix est VIDÉ : le bouton « Transcrire un autre enregistrement » ne doit jamais renvoyer le même fichier
+      // (chantier 005). Contrairement à `clearFile`, le suivi du traitement lancé n'est PAS coupé.
+      setFile(null)
+      setFileProblem(null)
+      if (inputRef.current) inputRef.current.value = ''
       onSubmitted?.(jobId)
       stopStream.current = streamJob(jobId, {
         onProgress: (p, _m, etape) => { setProgress(p); setLigne({ source: 'job', etape }) },
@@ -447,15 +497,20 @@ export function TranscribePanel({
           onCompleted()
         },
         onError: (streamError, etape) => {
-          // Le code de l'échec se traduit ; le texte brut du serveur n'est montré que sans code.
-          setError(etape?.code ? traduireEtape(lang, etape) : streamError)
           setRunning(false)
           stopStream.current = null
+          // Annulé avant d'avoir commencé : un choix, pas une panne. La frise s'arrête, sans alerte (chantier 005).
+          // La confirmation « Rangé dans… » ne dit plus vrai : rien n'est enregistré, l'écran redevient prêt à l'envoi.
+          if (etape?.code === CODE_ANNULE) { setAnnule(true); setConfirmation(null); return }
+          // Le code de l'échec se traduit ; le texte brut du serveur n'est montré que sans code.
+          setError(etape?.code ? traduireEtape(lang, etape) : streamError)
         },
       })
     } catch (caught) {
-      setError(String(caught))
-      setRunning(false)
+      if (caught instanceof DoublonError) setDoublon({ jobId: caught.jobId, titre: caught.titre })
+      else if (suivi) setErreurEnvoi(String(caught))
+      else setError(String(caught))
+      if (!suivi) setRunning(false)
       setEnvoi(false)
     }
   }
@@ -533,7 +588,7 @@ export function TranscribePanel({
               )}
             </div>
             {file && !envoi && (
-              <button type="button" className="text-action file-remove" onClick={clearFile}>
+              <button type="button" className="text-action file-remove" onClick={retirerFichier}>
                 <Icon name="close" /> {t('transcribe.file.remove')}
               </button>
             )}
@@ -549,7 +604,9 @@ export function TranscribePanel({
                         proposee={destinationSuggested} nomParDefaut={libelleProjet(config.default_project, t)} />
           </section>
 
-          {file && (
+          {/* La section reste affichée tant qu'un envoi accepté est confirmé, même fichier vidé : la confirmation
+              et le bouton « Transcrire un autre enregistrement » y vivent. */}
+          {(file || confirmation) && (
             <section className="studio-panel options-step" aria-labelledby="options-step-title">
               <div className="studio-panel-heading">
                 <span className="step-number">02</span>
@@ -744,11 +801,16 @@ export function TranscribePanel({
                   {onSuivre && <button type="button" className="btn sm" onClick={onSuivre}>{t('traitements.confirm.follow')}</button>}
                 </div>
               )}
-              <button className="primary transcribe-submit" onClick={run} disabled={envoi}>
+              <button className="primary transcribe-submit" disabled={envoi}
+                      onClick={() => {
+                        // Sans fichier, après un envoi accepté : demander QUEL enregistrement, jamais renvoyer le même.
+                        if (!file && confirmation) inputRef.current?.click()
+                        else void run()
+                      }}>
                 <Icon name={envoi ? 'clock' : 'upload'} />
                 {/* Pendant l'envoi : « Traitement en cours… » ; ensuite le formulaire est PRÊT et le bouton le dit
                     (un traitement tourne déjà, on peut en lancer un autre). */}
-                {envoi ? t('transcribe.submitting') : running ? t('transcribe.submitAnother') : t('transcribe.submit')}
+                {envoi ? t('transcribe.submitting') : (running || (confirmation && !file)) ? t('transcribe.submitAnother') : t('transcribe.submit')}
               </button>
               {warnings.length > 0 && (
                 <div className="error job-error" role="status" style={{ background: 'transparent' }}>
@@ -759,7 +821,17 @@ export function TranscribePanel({
                   </span>
                 </div>
               )}
+              {doublon && (
+                <div className="error job-error" role="alert">
+                  <Icon name="error" />
+                  <span>
+                    <strong>{t('transcribe.duplicate')}</strong> {t('transcribe.duplicate.existing', { titre: doublon.titre })}
+                  </span>
+                  {onSuivre && <button type="button" className="btn sm" onClick={onSuivre}>{t('traitements.confirm.follow')}</button>}
+                </div>
+              )}
               {error && <div className="error job-error" role="alert"><Icon name="error" /><span><strong>{t('transcribe.aborted')}</strong>{error}</span></div>}
+              {erreurEnvoi && <div className="error job-error" role="alert"><Icon name="error" /><span><strong>{t('transcribe.aborted')}</strong>{erreurEnvoi}</span></div>}
             </section>
           )}
 
@@ -775,7 +847,9 @@ export function TranscribePanel({
         <aside className="studio-panel process-panel" aria-labelledby="process-title">
           <div className="studio-panel-heading">
             <span className="step-number">03</span>
-            <div><h2 id="process-title">{t('transcribe.process.title')}</h2><p>{started ? rendreLigne(t, lang, ligne) || t('transcribe.process.init') : t('transcribe.process.idle')}</p></div>
+            <div><h2 id="process-title">{t('transcribe.process.title')}</h2><p>{annule ? t('traitements.cancelled.message')
+              : suiviEnAttente ? t('traitements.waiting.hint')
+                : started ? rendreLigne(t, lang, ligne) || t('transcribe.process.init') : t('transcribe.process.idle')}</p></div>
           </div>
 
           <div className="process-progress" aria-label={t('transcribe.process.progress', { pourcent: Math.round(progress * 100) })}>

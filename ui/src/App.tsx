@@ -682,7 +682,7 @@ function AppShell() {
         />
         {traitementsOuvert && (
           <PanneauTraitements liste={traitements} surFermer={() => basculerTraitements(false)}
-                              surOuvrirReunion={ouvrirReunionDuTraitement} />
+                              surOuvrirReunion={ouvrirReunionDuTraitement} rafraichir={rafraichirTraitements} />
         )}
 
         <TraitementsContext.Provider value={{ liste: traitements, rafraichir: rafraichirTraitements, suivre: () => basculerTraitements(true) }}>

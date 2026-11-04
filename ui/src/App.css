@@ -1558,6 +1558,13 @@ a.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; b
 .etat-termine { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--text-h); }
 .etat-termine .icon { color: var(--ok); }
 .etat-echec { background: color-mix(in srgb, var(--off, #c0392b) 16%, transparent); color: var(--text-h); }
+/* Annulé : un choix, pas une panne. Neutre (variables du thème : clair et sombre), distinct par sa forme et son libellé. */
+.etat-annule { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+/* Compact : la carte est une colonne qui étire ses enfants ; le bouton s'aligne à gauche, à la largeur de son texte,
+   et garde sa hauteur tactile (comme « Ouvrir la réunion »). */
+.traitement-annuler { align-self: flex-start; margin-top: 4px; min-height: 44px; min-width: 44px; padding: 0 16px; }
+.panneau-traitements-etat { margin: 0 0 8px; }
+.panneau-traitements-etat:empty { display: none; }
 .traitement-barre { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .traitement-barre > span { display: block; height: 100%; background: var(--grad); transition: width var(--fast); }
 .traitement-echec { margin: 0; font-size: 13px; color: var(--text-h); }

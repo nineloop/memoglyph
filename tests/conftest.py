@@ -37,6 +37,53 @@ VARIABLES_GIT_DEPOT = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON
 for _variable in VARIABLES_GIT_DEPOT:
     os.environ.pop(_variable, None)
 
+# PORT DU SERVEUR DE MODÈLE PENDANT LES TESTS : jamais ceux de l'utilisateur (8770 à 8772). Un traitement de test resté
+# vivant après la fin de son test a déjà lancé un vrai `mlx_lm.server` sur 8772. La garde est posée ICI, avant tout
+# import de `core` (qui lit `MEMOGLYPH_MLX_PORT` à l'import), et non laissée à une habitude de la personne qui lance
+# `pytest` ; le `Makefile` la pose aussi, pour que la valeur se lise sur la ligne de commande.
+PORTS_DE_PRODUCTION = (8770, 8771, 8772)
+PORT_D_ESSAI = "8773"
+# Posé sans condition (une écriture, pas une lecture : `test_prefixes_env`) : quoi qu'ait exporté la personne qui lance
+# les tests, la suite ne touche jamais aux ports de production.
+os.environ.update({"MEMOGLYPH_MLX_PORT": PORT_D_ESSAI})
+
+
+def _refuser_un_serveur_de_production(commande) -> None:
+    """Refuse de lancer `mlx_lm.server` sur un port de production, quelle que soit la forme de `--port`."""
+    morceaux = [str(m) for m in commande] if isinstance(commande, (list, tuple)) else str(commande).split()
+    if not any("mlx_lm.server" in m for m in morceaux):
+        return
+    port = None
+    for i, morceau in enumerate(morceaux):
+        if morceau == "--port" and i + 1 < len(morceaux):
+            port = morceaux[i + 1]
+        elif morceau.startswith("--port="):
+            port = morceau.split("=", 1)[1]
+    if port is not None and port.isdigit() and int(port) in PORTS_DE_PRODUCTION:
+        raise RuntimeError(
+            f"refusé : un test ne lance pas de serveur de modèle sur le port de production {port} "
+            f"(ports {PORTS_DE_PRODUCTION[0]} à {PORTS_DE_PRODUCTION[-1]}, ceux de l'utilisateur)")
+
+
+import subprocess  # noqa: E402
+
+_POPEN_REEL = subprocess.Popen
+
+
+class _PopenSansServeurDeProduction(_POPEN_REEL):  # type: ignore[valid-type, misc]
+    def __init__(self, args, *a, **k):
+        _refuser_un_serveur_de_production(args)
+        super().__init__(args, *a, **k)
+
+
+# Posée pour TOUTE la session (y compris un fil de traitement qui survivrait à son test) et rendue en fin de session.
+subprocess.Popen = _PopenSansServeurDeProduction  # type: ignore[misc]
+
+
+def pytest_unconfigure(config) -> None:
+    subprocess.Popen = _POPEN_REEL  # type: ignore[misc]
+
+
 RACINE_REELLE = Path(__file__).resolve().parent.parent
 
 # Les fichiers de données de la racine : magasins SQLite avec leurs journaux.

@@ -20,6 +20,9 @@ import {
   restoreTrashItem,
   streamJob,
   submitTranscribe,
+  DoublonError,
+  AnnulationError,
+  annulerTraitement,
 } from '../api'
 
 
@@ -75,6 +78,31 @@ describe('client API', () => {
     expect(form.get('diarize')).toBe('true')
     expect(form.get('profile')).toBe('false')
     expect(form.get('destination_project_id')).toBe('01KY243SVP5GA31F6KSBYXEAHR')
+  })
+
+  it('un 409 de doublon devient une erreur typée (code, traitement existant, titre), jamais un texte brut', async () => {
+    const corps = { detail: 'Ce fichier est déjà en cours de traitement.', code: 'transcribe.duplicate', job_id: 'job-9', titre: 'Point prix' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(corps), { status: 409 })))
+    const file = new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' })
+
+    const erreur = await submitTranscribe(file, {
+      engine: 'whisper', language: '', diarize: false, profile: false, timestamps: true, destinationProjectId: 'p1',
+    }).catch((e: unknown) => e)
+
+    expect(erreur).toBeInstanceOf(DoublonError)
+    expect(erreur).toMatchObject({ jobId: 'job-9', titre: 'Point prix' })
+  })
+
+  it('un autre refus reste une erreur HTTP ordinaire (pas un doublon)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'occupé' }), { status: 429 })))
+    const file = new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' })
+
+    const erreur = await submitTranscribe(file, {
+      engine: 'whisper', language: '', diarize: false, profile: false, timestamps: true, destinationProjectId: 'p1',
+    }).catch((e: unknown) => e)
+
+    expect(erreur).not.toBeInstanceOf(DoublonError)
+    expect(String(erreur)).toContain('HTTP 429')
   })
 
   it('nomme explicitement la destination lors du classement', async () => {
@@ -378,5 +406,38 @@ describe('Usage dashboard API — scope + filtres + bornes', () => {
     await getUsageExecutionDetail('01PROJ', 'EX1')
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/usage/executions/EX1?view_scope=01PROJ')
+  })
+})
+
+
+describe('annulerTraitement (chantier 005, tranche D)', () => {
+  it('POST /api/jobs/{id}/cancel ; un 200 se résout', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ statut: 'annule', job_id: 'j 1' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(annulerTraitement('j 1')).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledWith('/api/jobs/j%201/cancel', { method: 'POST' })
+  })
+
+  it('un 409 « ne peut plus être annulé » est une erreur typée qui porte l\'état actuel, sans texte brut', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: 'Ce traitement ne peut plus être annulé.', code: 'job.cancel.impossible', statut: 'running' }), { status: 409 })))
+    const erreur = await annulerTraitement('j1').catch((e) => e)
+    expect(erreur).toBeInstanceOf(AnnulationError)
+    expect(erreur.raison).toBe('impossible')
+    expect(erreur.statut).toBe('running')
+  })
+
+  it('un 404 (traitement oublié) est une erreur typée « introuvable »', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"detail":"Job inconnu"}', { status: 404 })))
+    const erreur = await annulerTraitement('j1').catch((e) => e)
+    expect(erreur).toBeInstanceOf(AnnulationError)
+    expect(erreur.raison).toBe('introuvable')
+  })
+
+  it('toute autre réponse reste une erreur HTTP ordinaire', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('boum', { status: 500 })))
+    const erreur = await annulerTraitement('j1').catch((e) => e)
+    expect(erreur).not.toBeInstanceOf(AnnulationError)
+    expect(String(erreur)).toMatch(/HTTP 500/)
   })
 })

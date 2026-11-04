@@ -6,7 +6,7 @@ import type { AppConfig } from '../api'
 import { TranscribePanel } from '../components/TranscribePanel'
 import { LangProvider, LangSelector } from '../components/LangProvider'
 import type { Lang } from '../lib/i18n'
-import { streamJob, submitTranscribe } from '../api'
+import { DoublonError, streamJob, submitTranscribe } from '../api'
 import { documentBody, STICK_MARGIN_PX, isAtBottom } from '../lib/transcription'
 
 
@@ -970,4 +970,293 @@ it('sans code (serveur plus ancien), le texte du serveur reste affiché', async 
   act(() => { gestionnaires.onError?.('Panne inconnue du serveur') })
 
   expect(await screen.findByText('Panne inconnue du serveur')).toBeInTheDocument()
+})
+
+
+// ---------- Chantier 005, tranche A : « Transcrire un autre enregistrement » demande un autre fichier ----------
+
+describe('après un envoi accepté (chantier 005, tranche A)', () => {
+  const AUTRE = 'Transcrire un autre enregistrement'
+
+  async function apresUnEnvoiAccepte(arreter = vi.fn()) {
+    const user = userEvent.setup()
+    vi.mocked(submitTranscribe).mockResolvedValue('job-1')
+    vi.mocked(streamJob).mockImplementation((() => arreter) as never)
+    const rendu = render(<TranscribePanel config={config} onCompleted={vi.fn()} />)
+    selectFile(rendu.container, new File(['audio'], 'premier.mp3', { type: 'audio/mpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+    await waitFor(() => expect(submitTranscribe).toHaveBeenCalledTimes(1))
+    await screen.findByRole('button', { name: AUTRE })
+    return { user, ...rendu }
+  }
+
+  it('deux clics sur « Transcrire un autre enregistrement » n’envoient PAS le même fichier et ouvrent le sélecteur', async () => {
+    const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    // La remise à zéro du champ est ce qui permet de rechoisir le MÊME fichier plus tard : on l'observe à l'écriture.
+    const miseAZero = vi.spyOn(HTMLInputElement.prototype, 'value', 'set')
+    try {
+      const { user, container } = await apresUnEnvoiAccepte()
+      expect(miseAZero).toHaveBeenCalledWith('')
+
+      await user.click(screen.getByRole('button', { name: AUTRE }))
+      await user.click(screen.getByRole('button', { name: AUTRE }))
+
+      expect(submitTranscribe).toHaveBeenCalledTimes(1)        // aucun renvoi du même fichier
+      expect(ouvrir).toHaveBeenCalled()                         // le sélecteur de fichier est ouvert
+      expect((container.querySelector('input[type="file"]') as HTMLInputElement).value).toBe('')
+      expect(screen.queryByText('premier.mp3')).not.toBeInTheDocument()   // le choix est vidé
+      // La confirmation de l'envoi accepté et le bouton restent : vider le choix ne fait pas disparaître la section.
+      expect(screen.getByRole('status', { name: 'Envoi accepté' })).toHaveTextContent('Rangé dans')
+      expect(screen.getByRole('button', { name: AUTRE })).toBeInTheDocument()
+    } finally {
+      ouvrir.mockRestore()
+      miseAZero.mockRestore()
+    }
+  })
+
+  it('le suivi du traitement lancé continue, et la frise reste à l’étape « Traitement »', async () => {
+    const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    try {
+      const arreter = vi.fn()
+      const { user } = await apresUnEnvoiAccepte(arreter)
+
+      await user.click(screen.getByRole('button', { name: AUTRE }))
+
+      expect(arreter).not.toHaveBeenCalled()                    // le flux du premier traitement n'est pas coupé
+      const etapes = screen.getByRole('list', { name: 'Étapes de transcription' })
+      expect(within(etapes).getByText('Traitement').closest('li')).toHaveAttribute('aria-current', 'step')
+    } finally {
+      ouvrir.mockRestore()
+    }
+  })
+
+  it('une fois le traitement terminé, le bouton continue de demander un autre fichier (sans fichier choisi)', async () => {
+    const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    try {
+      const user = userEvent.setup()
+      vi.mocked(submitTranscribe).mockResolvedValue('job-1')
+      let gestionnaires: { onDone?: (r: { name: string; content: string }) => void } = {}
+      vi.mocked(streamJob).mockImplementation(((_id: string, h: typeof gestionnaires) => { gestionnaires = h; return vi.fn() }) as never)
+      const { container } = render(<TranscribePanel config={config} onCompleted={vi.fn()} />)
+      selectFile(container, new File(['audio'], 'premier.mp3', { type: 'audio/mpeg' }))
+      await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+      await waitFor(() => expect(gestionnaires.onDone).toBeDefined())
+
+      act(() => { gestionnaires.onDone?.({ name: 'reunion.md', content: '# Réunion' }) })
+      await user.click(await screen.findByRole('button', { name: AUTRE }))
+
+      expect(submitTranscribe).toHaveBeenCalledTimes(1)
+      expect(ouvrir).toHaveBeenCalled()
+    } finally {
+      ouvrir.mockRestore()
+    }
+  })
+
+  it('un nouveau fichier choisi puis « Transcrire un autre enregistrement » part comme un second envoi', async () => {
+    const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    try {
+      const { user, container } = await apresUnEnvoiAccepte()
+      await user.click(screen.getByRole('button', { name: AUTRE }))
+
+      selectFile(container, new File(['autre audio'], 'second.mp3', { type: 'audio/mpeg' }))
+      await user.click(screen.getByRole('button', { name: AUTRE }))
+
+      await waitFor(() => expect(submitTranscribe).toHaveBeenCalledTimes(2))
+      expect((vi.mocked(submitTranscribe).mock.calls[1][0] as File).name).toBe('second.mp3')
+    } finally {
+      ouvrir.mockRestore()
+    }
+  })
+})
+
+it('un envoi qui ÉCHOUE ne vide pas le choix : le fichier reste, rien n’est confirmé, rien ne s’ouvre', async () => {
+  // Le choix n'est vidé qu'à l'ACCEPTATION : sinon un envoi refusé (réseau, 409 de doublon, 413…) ferait perdre le fichier.
+  const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+  try {
+    const user = userEvent.setup()
+    vi.mocked(submitTranscribe).mockRejectedValue(new Error('HTTP 500: boum'))
+    const { container } = render(<TranscribePanel config={config} onCompleted={vi.fn()} />)
+    selectFile(container, new File(['audio'], 'premier.mp3', { type: 'audio/mpeg' }))
+
+    await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 500')
+    expect(screen.getByText('premier.mp3')).toBeInTheDocument()                       // le fichier est toujours là
+    expect(screen.getByRole('button', { name: 'Lancer la transcription' })).toBeEnabled()   // on peut réessayer
+    expect(screen.queryByRole('status', { name: 'Envoi accepté' })).not.toBeInTheDocument()
+    expect(ouvrir).not.toHaveBeenCalled()
+  } finally {
+    ouvrir.mockRestore()
+  }
+})
+
+
+it('la première utilisation reste ce qu’elle est : sans fichier, il n’y a pas de bouton d’envoi et rien ne s’ouvre', async () => {
+  const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+  try {
+    render(<TranscribePanel config={config} onCompleted={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: 'Lancer la transcription' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Transcrire un autre enregistrement' })).not.toBeInTheDocument()
+    expect(submitTranscribe).not.toHaveBeenCalled()
+    expect(ouvrir).not.toHaveBeenCalled()
+  } finally {
+    ouvrir.mockRestore()
+  }
+})
+
+
+// ---------- Chantier 005, tranche B : le refus d'un doublon se dit clairement ----------
+
+describe('un fichier déjà en cours de traitement (chantier 005, tranche B)', () => {
+  it('dit une phrase claire, nomme le traitement existant, propose « Suivre » et GARDE le fichier choisi', async () => {
+    const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    try {
+      const user = userEvent.setup()
+      const surSuivre = vi.fn()
+      vi.mocked(submitTranscribe).mockRejectedValue(new DoublonError('job-9', 'Point prix'))
+      const { container } = render(<TranscribePanel config={config} onCompleted={vi.fn()} onSuivre={surSuivre} />)
+      selectFile(container, new File(['audio'], 'visio.mp3', { type: 'audio/mpeg' }))
+
+      await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+
+      const alerte = await screen.findByRole('alert')
+      expect(alerte).toHaveTextContent('Ce fichier est déjà en cours de traitement.')
+      expect(alerte).toHaveTextContent('Point prix')                              // le traitement existant
+      expect(alerte).not.toHaveTextContent(/HTTP|409|duplicate/)                  // ni code ni texte brut
+      expect(screen.getByText('visio.mp3')).toBeInTheDocument()                    // le choix n'est pas vidé
+      expect(screen.queryByRole('status', { name: 'Envoi accepté' })).not.toBeInTheDocument()
+
+      await user.click(within(alerte).getByRole('button', { name: 'Suivre' }))
+      expect(surSuivre).toHaveBeenCalledTimes(1)
+      expect(ouvrir).not.toHaveBeenCalled()
+    } finally {
+      ouvrir.mockRestore()
+    }
+  })
+})
+
+
+// ---------- Chantier 005, tranche D : suivi conservé, attente dite, annulation neutre ----------
+
+describe('le suivi du traitement lancé (chantier 005, tranche D)', () => {
+  const AUTRE = 'Transcrire un autre enregistrement'
+  type Gestionnaires = {
+    onProgress?: (p: number, m: string, etape?: unknown) => void
+    onDone?: (r: { name: string; content: string }) => void
+    onError?: (e: string, etape?: { code?: string; params?: Record<string, string>; message?: string }) => void
+  }
+
+  async function envoyerUnFichier(options: { arreter?: ReturnType<typeof vi.fn>; traitements?: unknown } = {}) {
+    const user = userEvent.setup()
+    const arreter = options.arreter ?? vi.fn()
+    const flux: { courant: Gestionnaires } = { courant: {} }
+    vi.mocked(submitTranscribe).mockResolvedValue('job-1')
+    vi.mocked(streamJob).mockImplementation(((_id: string, h: Gestionnaires) => { flux.courant = h; return arreter }) as never)
+    const rendu = render(<TranscribePanel config={config} onCompleted={vi.fn()} traitements={options.traitements as never} />)
+    selectFile(rendu.container, new File(['audio'], 'premier.mp3', { type: 'audio/mpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+    await screen.findByRole('button', { name: AUTRE })
+    return { user, arreter, flux, ...rendu }
+  }
+
+  it('« Retirer ce fichier » (un second fichier choisi) ne coupe NI le suivi du premier traitement NI la confirmation', async () => {
+    const { user, arreter, container } = await envoyerUnFichier()
+    selectFile(container, new File(['audio'], 'second.mp3', { type: 'audio/mpeg' }))
+    expect(screen.getByText('second.mp3')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Retirer ce fichier' }))
+
+    expect(screen.queryByText('second.mp3')).not.toBeInTheDocument()
+    expect(arreter).not.toHaveBeenCalled()                                   // le flux du premier traitement continue
+    expect(screen.getByRole('status', { name: 'Envoi accepté' })).toHaveTextContent('Rangé dans')
+    const etapes = screen.getByRole('list', { name: 'Étapes de transcription' })
+    expect(within(etapes).getByText('Traitement').closest('li')).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('choisir un second fichier ne remet pas à zéro la progression du premier traitement suivi', async () => {
+    const { flux, container } = await envoyerUnFichier()
+    act(() => { flux.courant.onProgress?.(0.42, 'x', { code: 'step.audio.prepare', params: {}, message: 'x' }) })
+    expect(screen.getByLabelText(/42 %/)).toBeInTheDocument()
+
+    selectFile(container, new File(['audio'], 'second.mp3', { type: 'audio/mpeg' }))
+
+    expect(screen.getByLabelText(/42 %/)).toBeInTheDocument()
+  })
+
+  it.each([
+    ['un doublon (409)', new DoublonError('job-1', 'premier')],
+    ['un refus de place (429)', new Error('HTTP 429: trop de traitements')],
+    ['une panne (500)', new Error('HTTP 500: boum')],
+  ])('un second envoi refusé par %s GARDE le suivi et la confirmation du premier', async (_nom, refus) => {
+    const { user, arreter, flux, container } = await envoyerUnFichier()
+    act(() => { flux.courant.onProgress?.(0.42, 'x', { code: 'step.audio.prepare', params: {}, message: 'x' }) })
+    selectFile(container, new File(['autre'], 'second.mp3', { type: 'audio/mpeg' }))
+    vi.mocked(submitTranscribe).mockRejectedValue(refus)
+
+    await user.click(screen.getByRole('button', { name: AUTRE }))      // un fichier est choisi : le bouton envoie
+
+    await waitFor(() => expect(submitTranscribe).toHaveBeenCalledTimes(2))
+    await screen.findByRole('alert')
+    expect(arreter).not.toHaveBeenCalled()                                    // le premier flux n'est pas détaché
+    expect(screen.getByRole('status', { name: 'Envoi accepté' })).toBeInTheDocument()   // sa confirmation reste
+    expect(screen.getByLabelText(/42 %/)).toBeInTheDocument()                  // la frise ne retombe pas à 0 %
+    expect(document.querySelector('.job-timeline .error')).toBeNull()          // et ne passe pas en style d'erreur
+    // Le premier traitement tourne toujours : l'écran reste à l'étape « Traitement » et le dit sur son bouton.
+    const etapes = screen.getByRole('list', { name: 'Étapes de transcription' })
+    expect(within(etapes).getByText('Traitement').closest('li')).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByRole('button', { name: AUTRE })).toBeInTheDocument()
+  })
+
+  it('un second envoi ACCEPTÉ détache le premier suivi et suit le nouveau', async () => {
+    const { user, arreter, container } = await envoyerUnFichier()
+    selectFile(container, new File(['autre'], 'second.mp3', { type: 'audio/mpeg' }))
+    vi.mocked(submitTranscribe).mockResolvedValue('job-2')
+
+    await user.click(screen.getByRole('button', { name: AUTRE }))
+
+    await waitFor(() => expect(streamJob).toHaveBeenCalledTimes(2))
+    expect(arreter).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(streamJob).mock.calls[1][0]).toBe('job-2')
+  })
+
+  it('tant que le traitement suivi ATTEND sa place, l\'en-tête le dit au lieu de « Envoi sécurisé du fichier… »', async () => {
+    const liste = (enAttente: boolean) => ({
+      actifs: 0, en_attente: enAttente ? 1 : 0,
+      traitements: [{ id: 'job-1', nature: 'transcription', statut: 'running', en_attente: enAttente, progression: 0,
+        titre: 'premier', projet_id: null, projet_nom: '', etape: null, etapes: null, message_code: null,
+        message_params: {}, debut: 0, meeting: null, erreur: null, erreur_code: null, erreur_params: {} }],
+    })
+    const { rerender } = await envoyerUnFichier({ traitements: liste(true) })
+    const entete = document.getElementById('process-title')!.nextElementSibling as HTMLElement
+    expect(entete).toHaveTextContent('En attente : un autre traitement est en cours.')
+    expect(entete).not.toHaveTextContent('Envoi sécurisé')
+    // L'étape « Préparation » n'est pas donnée comme active pendant l'attente.
+    expect(document.querySelector('.job-timeline [aria-current="step"]')).toBeNull()
+
+    rerender(<TranscribePanel config={config} onCompleted={vi.fn()} traitements={liste(false) as never} />)
+    expect(entete).not.toHaveTextContent('En attente : un autre traitement est en cours.')
+  })
+
+  it('un traitement ANNULÉ arrête la frise sans style d\'erreur et laisse l\'écran prêt pour un autre envoi', async () => {
+    const { flux, container } = await envoyerUnFichier()
+    act(() => { flux.courant.onError?.('Traitement annulé.', { code: 'step.error.cancelled', params: {}, message: 'Traitement annulé.' }) })
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()                          // pas d'erreur
+    const entete = document.getElementById('process-title')!.nextElementSibling as HTMLElement
+    expect(entete).toHaveTextContent('Traitement annulé.')
+    const frise = document.querySelector('.job-timeline') as HTMLElement
+    expect(frise.querySelector('[aria-current="step"]')).toBeNull()                       // aucune étape « courante » ni en erreur
+    expect(frise.querySelector('.error')).toBeNull()
+    // L'écran est prêt pour un autre envoi, et ne prétend plus que le fichier est « rangé » : rien n'a été enregistré.
+    expect(screen.queryByRole('status', { name: 'Envoi accepté' })).not.toBeInTheDocument()
+    selectFile(container, new File(['audio'], 'autre.mp3', { type: 'audio/mpeg' }))
+    expect(screen.getByRole('button', { name: 'Lancer la transcription' })).toBeEnabled()
+  })
+
+  it('un échec ordinaire garde, lui, son alerte (l\'arrêt neutre est propre à l\'annulation)', async () => {
+    const { flux } = await envoyerUnFichier()
+    act(() => { flux.courant.onError?.('boum', { code: 'step.error.unexpected', params: {}, message: 'boum' }) })
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+  })
 })

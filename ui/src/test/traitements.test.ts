@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ListeTraitements, Traitement } from '../api'
 import {
-  INTERVALLE_ACTIF_MS, INTERVALLE_REPOS_MS, comptes, demarrerReleve, etatAffiche, intervalleReleve,
+  INTERVALLE_ACTIF_MS, INTERVALLE_REPOS_MS, annulable, comptes, demarrerReleve, etatAffiche, intervalleReleve,
   separer, valeurDepuis,
 } from '../lib/traitements'
 
@@ -142,5 +142,33 @@ describe('la relève : 3 s quand quelque chose tourne, 15 s au repos, suspendue 
     await vi.advanceTimersByTimeAsync(3000)
     expect(recuperer).toHaveBeenCalledTimes(3)            // une seule boucle, pas deux
     releve.arreter()
+  })
+})
+
+describe('un traitement annulé (chantier 005, tranche D)', () => {
+  const annule = (extra: Partial<Traitement> = {}) => T({
+    statut: 'error', erreur: 'Traitement annulé.', erreur_code: 'step.error.cancelled', ...extra })
+
+  it('un échec de code « annulé » a son propre état affiché ; tout autre échec reste un échec', () => {
+    expect(etatAffiche(annule())).toBe('annule')
+    expect(etatAffiche(T({ statut: 'error', erreur_code: 'step.error.waitTooLong' }))).toBe('echec')
+    expect(etatAffiche(T({ statut: 'error', erreur_code: null }))).toBe('echec')
+    // Un traitement qui n'est pas en échec n'est jamais « annulé », quel que soit son code.
+    expect(etatAffiche(T({ statut: 'running', erreur_code: 'step.error.cancelled' }))).toBe('en_cours')
+  })
+
+  it('separer le range dans les terminés, pas dans les actifs', () => {
+    const liste = L([T({ id: 'a' }), annule({ id: 'x' }), T({ id: 'f', statut: 'done' })], 1, 0)
+    const { actifs, termines } = separer(liste, false)
+    expect(actifs.map((t) => t.id)).toEqual(['a'])
+    expect(termines.map((t) => t.id)).toEqual(['x', 'f'])
+  })
+
+  it('annulable : seulement « en cours de traitement » ET en attente de place (jamais pending, jamais fini)', () => {
+    expect(annulable(T({ statut: 'running', en_attente: true }))).toBe(true)
+    expect(annulable(T({ statut: 'pending', en_attente: true }))).toBe(false)     // en réception : l'API refuse (409)
+    expect(annulable(T({ statut: 'running', en_attente: false }))).toBe(false)
+    expect(annulable(T({ statut: 'done' }))).toBe(false)
+    expect(annulable(annule())).toBe(false)
   })
 })

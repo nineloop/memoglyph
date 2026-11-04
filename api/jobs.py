@@ -10,12 +10,13 @@ import time
 import traceback
 import uuid
 from collections import OrderedDict
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from core import erreurs, etapes, messages
+from core import config, erreurs, etapes, messages, resources
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,8 @@ class Job:
     etapes: Optional[int] = None
     # Vrai tant que le créneau de calcul lourd n'est pas obtenu (le traitement n'a pas commencé).
     en_attente: bool = False
+    # Vrai dès que l'annulation est décidée (sous `lock`) : le fil qui obtient plus tard le créneau ne touche à rien.
+    annule: bool = False
     # Instant de création, en secondes depuis l'époque (`depuis` reste le « HH:MM » du relevé de `stop.sh`).
     debut: float = field(default_factory=time.time)
     # Identité de la réunion produite (`name`, `meeting_id`, `project_id`), sans le texte.
@@ -67,6 +70,8 @@ class Job:
     jeton: Optional[str] = None
     # Identifiant d'idempotence d'une capture (tranche D).
     capture_id: Optional[str] = None
+    # SHA-256 du contenu reçu (chantier 005) : sert au refus d'un doublon, JAMAIS exposé (ni liste, ni `snapshot`).
+    empreinte: Optional[str] = None
     # Code et paramètres de l'erreur, comme pour les messages : le texte seul perdrait la traduction.
     error_code: Optional[str] = None
     error_params: dict[str, Any] = field(default_factory=dict)
@@ -91,6 +96,35 @@ def plan_etapes(*, diarize: bool, profile: bool, report_on: bool) -> list[str]:
 
 class JobsBusy(RuntimeError):
     """Trop de jobs actifs : refuser plutôt que saturer la machine."""
+
+
+class TraitementAnnule(Exception):
+    """Levée quand un traitement annulé obtient enfin le créneau : `resources.heavy` le rend aussitôt (chantier 005)."""
+
+
+@contextmanager
+def creneau_du_traitement(job: "Job", label: str):
+    """Le créneau de calcul lourd d'un traitement, avec une attente qui se VOIT et qui peut être ANNULÉE.
+
+    Un seul assistant pour la transcription et la régénération de compte rendu. Le choix « annulé ou obtenu » se
+    fait SOUS `job.lock`, au même endroit que dans `JobManager.annuler` : une annulation qui précède l'obtention
+    l'emporte (le fil rend le créneau sans rien exécuter), une obtention qui précède l'annulation la refuse.
+    Le délai est lu ICI, à chaque appel (jamais en valeur par défaut, figée à la définition).
+    """
+    def _en_attente() -> None:
+        with job.lock:
+            if not job.annule:
+                job.en_attente = True
+
+    def _obtenu() -> None:
+        with job.lock:
+            if job.annule:
+                raise TraitementAnnule()
+            job.en_attente = False
+
+    with resources.heavy(wait=config.ATTENTE_DE_FOND_API_S, label=label,
+                         on_wait=_en_attente, on_acquired=_obtenu):
+        yield
 
 
 # Une écriture du relevé au plus par intervalle pour une simple progression :
@@ -176,6 +210,28 @@ class JobManager:
                 self._jobs.pop(job.id, None)
         self._ecrire_releve()
 
+    def annuler(self, job: Job) -> str:
+        """Annule un traitement EN ATTENTE de place. Rend `"annule"` (fait, ou déjà fait) ou l'état actuel (impossible).
+
+        Annuler = poser l'état final « échec, cause codée annulé » (aucun nouvel état : le compagnon lit tout autre
+        état que « terminé » ou « en échec » comme « en cours »), pousser l'événement final et sortir du relevé de
+        `stop.sh`. La décision se prend sous `job.lock`, comme l'obtention du créneau (`creneau_du_traitement`) : un
+        traitement qui a obtenu sa place n'est jamais annulé, un traitement annulé n'exécute jamais rien.
+        """
+        with job.lock:
+            if job.annule:
+                return "annule"
+            if not (job.status == "running" and job.en_attente):
+                return job.status
+            details = messages.traitement_annule()
+            job.annule, job.en_attente, job.status = True, False, "error"
+            job.error = str(details)
+            job.error_code, job.error_params = details.code, dict(details.params)
+            self._append_event_locked(job, {"type": "error", "error": job.error,
+                                            "code": job.error_code, "params": job.error_params})
+        self._ecrire_releve()
+        return "annule"
+
     def active_count(self) -> int:
         return sum(1 for j in self._jobs.values() if j.status in ("pending", "running"))
 
@@ -230,6 +286,22 @@ class JobManager:
             job = self._creer_sous_verrou(owner, nature, capture_id=capture_id, **suivi)
         self._ecrire_releve()
         return job, True
+
+    def enregistrer_envoi(self, job: Job, empreinte: str) -> Optional[Job]:
+        """Reconnaît un doublon ET enregistre l'empreinte, d'un seul geste (sous le verrou du gestionnaire).
+
+        Rend le traitement EXISTANT du même compte, de même contenu et non final (`pending` ou `running`),
+        auquel cas rien n'est enregistré ; sinon enregistre `empreinte` sur `job` et rend `None`. Deux envois
+        identiques qui arrivent ensemble : un seul passe, parce que la recherche et l'enregistrement ne
+        se séparent pas. Un traitement terminé ou en échec, un autre compte ne comptent jamais.
+        """
+        with self._lock:
+            for autre in self._jobs.values():
+                if (autre is not job and autre.owner == job.owner and autre.empreinte == empreinte
+                        and autre.status in ("pending", "running")):
+                    return autre
+            job.empreinte = empreinte
+            return None
 
     def list_for(self, owner: Optional[str]) -> list[Job]:
         """Les traitements d'UN compte, du plus récent au plus ancien."""
@@ -344,6 +416,10 @@ class JobManager:
                     self._append_event_locked(job, {"type": "done", "result": result})
             except Exception as exc:  # noqa: BLE001
                 with job.lock:
+                    if job.annule:
+                        # Annulé en attente : l'état final est déjà posé. Ni « trop d'attente » ni
+                        # `TraitementAnnule` ne l'écrasent, et il n'y a pas d'échec à journaliser.
+                        return
                     job.status = "error"
                     job.en_attente = False
                     job.error = str(exc)

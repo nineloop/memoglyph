@@ -888,6 +888,19 @@ export const startFaithfulBackfill = (viewScope = '') =>
   fetch(withViewScope('/api/maintenance/backfill/faithful', viewScope), { method: 'POST' })
     .then(j<{ job_id: string }>)
 
+/** Un second envoi du même fichier pendant que le premier attend ou tourne (409, `transcribe.duplicate`). */
+export class DoublonError extends Error {
+  readonly jobId: string
+  readonly titre: string
+
+  constructor(jobId: string, titre: string) {
+    super('transcribe.duplicate')
+    this.name = 'DoublonError'
+    this.jobId = jobId
+    this.titre = titre
+  }
+}
+
 export async function submitTranscribe(
   file: File,
   opts: TranscribeOptions,
@@ -910,10 +923,39 @@ export async function submitTranscribe(
     fd.append('sensitivity_level', opts.sensitivity)
   }
   fd.append('destination_project_id', opts.destinationProjectId)
-  const { job_id } = await fetch('/api/transcribe', { method: 'POST', body: fd }).then(
-    j<{ job_id: string }>,
-  )
+  const reponse = await fetch('/api/transcribe', { method: 'POST', body: fd })
+  // Un fichier déjà en attente ou en cours pour ce compte : le serveur refuse (409) en nommant le traitement
+  // existant. L'écran en fait une phrase claire ; il ne montre jamais le texte brut.
+  if (reponse.status === 409) {
+    const corps = await reponse.clone().json().catch(() => null) as { code?: string; job_id?: string; titre?: string } | null
+    if (corps?.code === 'transcribe.duplicate' && corps.job_id) throw new DoublonError(corps.job_id, corps.titre ?? '')
+  }
+  const { job_id } = await j<{ job_id: string }>(reponse)
   return job_id
+}
+
+/** Pourquoi une annulation n'a pas eu lieu : le traitement a obtenu sa place entre-temps (`impossible`), ou le serveur l'a oublié. */
+export class AnnulationError extends Error {
+  readonly raison: 'impossible' | 'introuvable'
+  readonly statut: string
+
+  constructor(raison: 'impossible' | 'introuvable', statut: string) {
+    super(`job.cancel.${raison}`)
+    this.name = 'AnnulationError'
+    this.raison = raison
+    this.statut = statut
+  }
+}
+
+/** Annule un traitement EN ATTENTE de place (chantier 005). Résolu = annulé (ou déjà annulé). */
+export async function annulerTraitement(jobId: string): Promise<void> {
+  const reponse = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
+  if (reponse.status === 404) throw new AnnulationError('introuvable', '')
+  if (reponse.status === 409) {
+    const corps = await reponse.clone().json().catch(() => null) as { code?: string; statut?: string } | null
+    if (corps?.code === 'job.cancel.impossible') throw new AnnulationError('impossible', corps.statut ?? '')
+  }
+  await j<unknown>(reponse)
 }
 
 export const getJobStatus = (jobId: string) =>

@@ -68,6 +68,7 @@ def test_evenement_message_deplie_un_message_code():
 
 CONSTRUCTEURS = [
     (messages.trop_d_attente, ("traitement",)),
+    (messages.traitement_annule, ()),
     (messages.preparation_audio, ()),
     (messages.audio_pret, ()),
     (messages.diarisation, ()),
@@ -129,6 +130,7 @@ TEXTES_ATTENDUS = {
     # Texte historique de `ResourcesBusy`, conservé tel quel pour les clients existants ; le CODE est ce qui se traduit.
     "step.error.waitTooLong": ("Ressources occupées : un autre traitement est en cours. Réessaie dans un moment — "
                                "cette machine ne traite qu'une tâche lourde à la fois."),
+    "step.error.cancelled": "Traitement annulé.",
     "step.audio.prepare": "Preparing audio…",
     "step.audio.ready": "Audio ready.",
     "step.diarization": "Identifying speakers…",
@@ -212,3 +214,17 @@ def test_aucun_constructeur_n_echappe_a_la_table():
     couverts = {f.__name__ for f, _ in CONSTRUCTEURS}
     assert publics == couverts, (
         f"message(s) sans couverture : {sorted(publics - couverts)}")
+
+
+def test_le_message_d_annulation_existe_avec_son_code_et_sa_phrase():
+    """Chantier 005 : un traitement annulé est un échec à cause codée, sans nouvel état (le compagnon lit le texte brut)."""
+    msg = messages.traitement_annule()
+    assert msg.code == "step.error.cancelled" and str(msg) == "Traitement annulé."
+
+
+def test_l_interface_a_le_libelle_d_annulation_dans_les_deux_langues():
+    import re
+    from pathlib import Path
+    catalogue = (Path(__file__).resolve().parents[1] / "ui/src/lib/messages.ts").read_text(encoding="utf-8")
+    code = messages.traitement_annule().code
+    assert len(re.findall(rf"^\s*'job\.{re.escape(code)}':", catalogue, flags=re.M)) == 2

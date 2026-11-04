@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { AnnulationError } from '../api'
 import type { ListeTraitements, Traitement } from '../api'
 import { IndicateurTraitements } from '../components/IndicateurTraitements'
 import { LangProvider } from '../components/LangProvider'
@@ -210,3 +211,193 @@ describe('le panneau des traitements (US5)', () => {
     expect(screen.getByText('visio du 2 novembre')).toBeInTheDocument()
   })
 })
+
+
+// ---------- Chantier 005, tranche D : annuler un traitement en attente de place ----------
+
+describe('annuler un traitement en attente (chantier 005, tranche D)', () => {
+  const attente = (extra: Partial<Traitement> = {}) => T({
+    id: 'w1', statut: 'running', en_attente: true, etape: null, progression: 0, titre: 'Comité', ...extra })
+  const annule = (extra: Partial<Traitement> = {}) => T({
+    id: 'x1', statut: 'error', titre: 'Ancien envoi', progression: 0, etape: null, erreur: 'Traitement annulé.',
+    erreur_code: 'step.error.cancelled', ...extra })
+
+  function monterAnnulable(liste: ListeTraitements, annuler = vi.fn().mockResolvedValue(undefined), langue: 'fr' | 'en' = 'fr') {
+    localStorage.setItem('memoglyph.lang', langue)
+    const rafraichir = vi.fn()
+    const rendu = render(
+      <LangProvider initiale={langue}>
+        <IndicateurTraitements liste={liste} ouvert surBasculer={() => {}} />
+        <PanneauTraitements liste={liste} maintenant={MAINTENANT} surFermer={() => {}} surOuvrirReunion={() => {}}
+                            annuler={annuler} rafraichir={rafraichir} />
+      </LangProvider>)
+    return { annuler, rafraichir, ...rendu }
+  }
+
+  it('le bouton « Annuler » n\'existe QUE pour un traitement qui attend sa place (running + en attente)', () => {
+    monterAnnulable(L([
+      attente({ id: 'a1', titre: 'Attend' }),
+      T({ id: 'p1', titre: 'En réception', statut: 'pending', en_attente: true }),
+      T({ id: 'r1', titre: 'Tourne' }),
+      T({ id: 'd1', titre: 'Fini', statut: 'done', progression: 1 }),
+      annule({ id: 'x2', titre: 'Déjà annulé' }),
+    ], 1, 2))
+    expect(screen.getAllByRole('button', { name: /^Annuler le traitement/ })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Annuler le traitement « Attend »' })).toBeInTheDocument()
+  })
+
+  it('porte un nom accessible avec le titre, et une cible tactile de classe dédiée', () => {
+    monterAnnulable(L([attente()], 0, 1))
+    const bouton = screen.getByRole('button', { name: 'Annuler le traitement « Comité »' })
+    expect(bouton).toHaveTextContent('Annuler')
+    expect(bouton).toHaveClass('traitement-annuler')
+  })
+
+  it('une confirmation REFUSÉE ne change rien : ni appel, ni rafraîchissement, ni message', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    try {
+      const { annuler, rafraichir } = monterAnnulable(L([attente()], 0, 1))
+      await userEvent.click(screen.getByRole('button', { name: /^Annuler le traitement/ }))
+      expect(confirmer).toHaveBeenCalledWith('Annuler ce traitement ? Le fichier envoyé ne sera pas traité.')
+      expect(annuler).not.toHaveBeenCalled()
+      expect(rafraichir).not.toHaveBeenCalled()
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    } finally { confirmer.mockRestore() }
+  })
+
+  it('une confirmation ACCEPTÉE annule, relève la liste tout de suite et le dit dans une zone d\'état', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const { annuler, rafraichir } = monterAnnulable(L([attente()], 0, 1))
+      await userEvent.click(screen.getByRole('button', { name: /^Annuler le traitement/ }))
+      expect(annuler).toHaveBeenCalledWith('w1')
+      await waitFor(() => expect(rafraichir).toHaveBeenCalledTimes(1))
+      expect(screen.getByRole('status')).toHaveTextContent('Traitement annulé.')
+    } finally { confirmer.mockRestore() }
+  })
+
+  it('un double clic n\'envoie qu\'une annulation (le bouton se désactive pendant la requête)', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      let finir: () => void = () => {}
+      const annuler = vi.fn(() => new Promise<void>((resolve) => { finir = resolve }))
+      monterAnnulable(L([attente()], 0, 1), annuler)
+      const bouton = screen.getByRole('button', { name: /^Annuler le traitement/ })
+      await userEvent.click(bouton)
+      await userEvent.click(bouton)
+      expect(annuler).toHaveBeenCalledTimes(1)
+      expect(bouton).toBeDisabled()
+      await act(async () => { finir() })
+    } finally { confirmer.mockRestore() }
+  })
+
+  it('après l\'annulation, le focus passe à la ligne suivante ; sans autre ligne, au déclencheur du panneau', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const deux = monterAnnulable(L([attente({ id: 'w1', titre: 'Premier' }), attente({ id: 'w2', titre: 'Second' })], 0, 2))
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler le traitement « Premier »' }))
+      await waitFor(() => expect(deux.rafraichir).toHaveBeenCalled())
+      expect(document.activeElement).toBe(document.querySelector('[data-traitement="w2"]'))
+      deux.unmount()
+
+      monterAnnulable(L([attente({ id: 'w1', titre: 'Seul' })], 0, 1))
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler le traitement « Seul »' }))
+      await waitFor(() => expect(document.activeElement).toBe(document.querySelector('.indicateur-traitements')))
+    } finally { confirmer.mockRestore() }
+  })
+
+  it('perdre la course (le traitement a obtenu sa place) se dit en une phrase, sans texte brut, et relève la liste', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const annuler = vi.fn().mockRejectedValue(new AnnulationError('impossible', 'running'))
+      const { rafraichir } = monterAnnulable(L([attente()], 0, 1), annuler)
+      await userEvent.click(screen.getByRole('button', { name: /^Annuler le traitement/ }))
+      await waitFor(() => expect(rafraichir).toHaveBeenCalledTimes(1))
+      const etat = screen.getByRole('status')
+      expect(etat).toHaveTextContent('Ce traitement ne peut plus être annulé.')
+      expect(etat).not.toHaveTextContent(/HTTP|409|running|impossible/)
+    } finally { confirmer.mockRestore() }
+  })
+
+  it('un traitement déjà oublié du serveur (404) se dit aussi, et la liste est relevée', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const annuler = vi.fn().mockRejectedValue(new AnnulationError('introuvable', ''))
+      const { rafraichir } = monterAnnulable(L([attente()], 0, 1), annuler)
+      await userEvent.click(screen.getByRole('button', { name: /^Annuler le traitement/ }))
+      await waitFor(() => expect(rafraichir).toHaveBeenCalledTimes(1))
+      expect(screen.getByRole('status')).toHaveTextContent('Ce traitement n’existe plus.')
+    } finally { confirmer.mockRestore() }
+  })
+
+  it('une autre panne dit « L\'annulation a échoué », sans montrer l\'erreur brute', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const annuler = vi.fn().mockRejectedValue(new Error('HTTP 500: boum'))
+      monterAnnulable(L([attente()], 0, 1), annuler)
+      await userEvent.click(screen.getByRole('button', { name: /^Annuler le traitement/ }))
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('L’annulation a échoué. Réessayez.'))
+      expect(screen.getByRole('status')).not.toHaveTextContent(/HTTP|boum/)
+    } finally { confirmer.mockRestore() }
+  })
+
+  it('une ligne annulée : pastille neutre « Annulé », dans « Récemment terminés », sans lien ni détail technique', () => {
+    monterAnnulable(L([annule({ meeting: { name: 'a.md', meeting_id: 'M1', project_id: 'P' } })], 0, 0))
+    const ligne = screen.getByText('Ancien envoi').closest('li') as HTMLElement
+    // Rangée sous « Terminés récemment », jamais parmi les traitements actifs.
+    expect(ligne.closest('ul')?.previousElementSibling).toHaveTextContent('Terminés récemment')
+    expect(screen.queryByRole('heading', { name: 'En cours et en attente' })).not.toBeInTheDocument()
+    const pastille = within(ligne).getByText('Annulé')
+    expect(pastille.closest('.traitement-etat')).toHaveClass('etat-annule')
+    expect(within(ligne).queryByRole('link')).not.toBeInTheDocument()                   // pas d'« Ouvrir la réunion »
+    expect(ligne.querySelector('details, .traitement-echec-bloc')).toBeNull()           // ni bloc d'échec ni détail technique
+    expect(ligne).not.toHaveTextContent(/Échec|Détail technique|Traitement annulé/)     // ni vocabulaire d'échec
+    expect(within(ligne).queryByRole('button', { name: /Annuler/ })).not.toBeInTheDocument()
+  })
+
+  it('en anglais : tous les libellés nouveaux', async () => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const annuler = vi.fn().mockResolvedValue(undefined)
+      monterAnnulable(L([attente({ titre: 'Board' }), annule({ id: 'x9', titre: 'Old upload' })], 0, 1), annuler, 'en')
+      expect(within(screen.getByText('Old upload').closest('li') as HTMLElement).getByText('Cancelled')).toBeInTheDocument()
+      const bouton = screen.getByRole('button', { name: 'Cancel job “Board”' })
+      expect(bouton).toHaveTextContent('Cancel')
+      await userEvent.click(bouton)
+      expect(confirmer).toHaveBeenCalledWith('Cancel this job? The file you sent will not be processed.')
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Job cancelled.'))
+    } finally { confirmer.mockRestore() }
+  })
+})
+
+describe('le focus après une annulation qui n\'a pas eu lieu (chantier 005, tranche E)', () => {
+  const attente = (extra: Partial<Traitement> = {}) => T({
+    id: 'w1', statut: 'running', en_attente: true, etape: null, progression: 0, titre: 'Comité', ...extra })
+
+  it.each([
+    ['la course perdue (409)', new AnnulationError('impossible', 'running')],
+    ['un traitement oublié (404)', new AnnulationError('introuvable', '')],
+    ['une panne', new Error('HTTP 500: boum')],
+  ])('après %s, le focus va au TITRE du panneau, puis y reste quand la liste relevée retire le bouton', async (_nom, refus) => {
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      const annuler = vi.fn().mockRejectedValue(refus)
+      const surFermer = () => {}, surOuvrir = () => {}
+      const monter = (liste: ListeTraitements) => (
+        <LangProvider initiale="fr"><PanneauTraitements liste={liste} maintenant={MAINTENANT} surFermer={surFermer}
+          surOuvrirReunion={surOuvrir} annuler={annuler} rafraichir={() => {}} /></LangProvider>)
+      const { rerender } = render(monter(L([attente()], 0, 1)))
+
+      await userEvent.click(screen.getByRole('button', { name: /^Annuler le traitement/ }))
+
+      const titre = screen.getByRole('heading', { name: 'Traitements', level: 2 })
+      await waitFor(() => expect(document.activeElement).toBe(titre))
+      // La liste relevée : le traitement a obtenu sa place, le bouton n'existe plus ; le focus ne tombe pas sur le document.
+      rerender(monter(L([attente({ en_attente: false, progression: 0.1, etape: 1 })], 1, 0)))
+      expect(screen.queryByRole('button', { name: /^Annuler le traitement/ })).not.toBeInTheDocument()
+      expect(document.activeElement).toBe(titre)
+      expect(document.activeElement).not.toBe(document.body)
+    } finally { confirmer.mockRestore() }
+  })
+})
+

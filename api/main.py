@@ -6,6 +6,7 @@ Lancement :  uvicorn api.main:app --reload --port 8000
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -31,7 +32,7 @@ from core import voiceprint
 from core import maintenance
 from core import projects as project_store
 from . import auth, partages, portee
-from .jobs import GROUPES_COMPTE_RENDU, JobManager, JobsBusy, plan_etapes
+from .jobs import GROUPES_COMPTE_RENDU, JobManager, JobsBusy, creneau_du_traitement, plan_etapes
 
 config.load_env()  # charge .env (HF_TOKEN) au démarrage de l'API
 
@@ -930,6 +931,34 @@ def _deja_recue_par_travail(job) -> dict:
     return _reponse_deja_recue(nom, resultat) if nom else {"deja_recue": True, "job_id": job.id}
 
 
+class DoublonRefuse(Exception):
+    """Le même compte a déjà ce fichier en attente ou en cours : refus 409 (chantier 005)."""
+
+    def __init__(self, existant) -> None:
+        super().__init__(existant.id)
+        self.existant = existant
+
+
+@app.exception_handler(DoublonRefuse)
+async def _doublon_refuse(_request: Request, exc: DoublonRefuse) -> JSONResponse:
+    """Corps PLAT (comme le refus d'envoi vers le cloud) : de quoi dire une phrase claire et suivre le traitement existant."""
+    return JSONResponse({"detail": "Ce fichier est déjà en cours de traitement.", "code": "transcribe.duplicate",
+                         "job_id": exc.existant.id, "titre": exc.existant.titre}, status_code=409)
+
+
+def _effacer_envoi(job_id: str) -> None:
+    """Efface le fichier reçu d'un traitement et son dossier. Idempotent ; sans effet s'il n'y en a pas (régénération)."""
+    dossier = UPLOAD_DIR / job_id
+    if not dossier.is_dir():
+        return
+    for fichier in dossier.glob("*"):
+        fichier.unlink(missing_ok=True)
+    try:
+        dossier.rmdir()
+    except OSError:
+        pass
+
+
 @app.post("/api/transcribe")
 async def transcribe(
     request: Request,
@@ -1008,15 +1037,25 @@ async def transcribe(
     # fichier en mémoire, sans limite (une vidéo peut faire des Go).
     limit = config.MAX_UPLOAD_MB * 1024 * 1024
     written = 0
+    empreinte = hashlib.sha256()
     try:
         with dest.open("wb") as out:
             while chunk := await file.read(1024 * 1024):
+                empreinte.update(chunk)
                 written += len(chunk)
                 if written > limit:
                     raise HTTPException(
                         413, f"Fichier trop volumineux (limite : {config.MAX_UPLOAD_MB} Mo)"
                     )
                 out.write(chunk)
+        # Un second envoi du MÊME contenu par le même compte, pendant que le premier attend ou tourne, est refusé
+        # (chantier 005). Jamais pour un envoi de capture (le compagnon se reconnaît à son identifiant : un 409 serait
+        # pour lui un refus définitif) ni pour un JETON d'appareil : le refus nommerait un traitement de la session,
+        # que le jeton n'a pas le droit de voir (`_job_du_compte`). Le refus passe par le nettoyage ci-dessous, comme un 413.
+        if not capture_id and not getattr(request.state, "par_jeton", False):
+            existant = jobs.enregistrer_envoi(job, empreinte.hexdigest())
+            if existant is not None:
+                raise DoublonRefuse(existant)
     except Exception:
         # L'upload n'aboutira pas : rendre le slot, sinon le job reste « pending »
         # pour toujours et bloque les transcriptions suivantes.
@@ -1086,21 +1125,32 @@ async def transcribe(
     def target(cb):
         # Un seul jeton couvre STT, puis les deux indexations dérivées. Sans
         # cette enveloppe, pipeline.run rendait le jeton avant semantic/voix.
-        # L'attente du créneau se VOIT : `en_attente` tant qu'un autre calcul lourd occupe la machine.
-        def _en_attente() -> None:
-            with job.lock:
-                job.en_attente = True
-
-        def _obtenu() -> None:
-            with job.lock:
-                job.en_attente = False
-
-        with resources.heavy(wait=config.ATTENTE_DE_FOND_API_S, label="traitement",
-                             on_wait=_en_attente, on_acquired=_obtenu):
-            return target_locked(cb)
+        # L'attente du créneau se VOIT (`en_attente`) et peut être annulée : `creneau_du_traitement`.
+        try:
+            with creneau_du_traitement(job, "traitement"):
+                return target_locked(cb)
+        finally:
+            # `target_locked` efface le fichier reçu quand il a tourné. Si le créneau n'a jamais été obtenu
+            # (« trop d'attente », annulation), c'est ici : sans cela le fichier restait sur disque (chantier 005).
+            _effacer_envoi(job.id)
 
     jobs.run(job, target)
     return {"job_id": job.id}
+
+
+class AnnulationImpossible(Exception):
+    """Le traitement n'attend plus sa place : on ne l'annule pas (chantier 005). `statut` : son état actuel."""
+
+    def __init__(self, statut: str) -> None:
+        super().__init__(statut)
+        self.statut = statut
+
+
+@app.exception_handler(AnnulationImpossible)
+async def _annulation_impossible(_request: Request, exc: AnnulationImpossible) -> JSONResponse:
+    """Corps PLAT, comme le refus d'un doublon : une phrase et l'état actuel, que l'interface sait lire."""
+    return JSONResponse({"detail": "Ce traitement ne peut plus être annulé.", "code": "job.cancel.impossible",
+                         "statut": exc.statut}, status_code=409)
 
 
 def _job_du_compte(request: Request, job_id: str):
@@ -1118,6 +1168,18 @@ def _job_du_compte(request: Request, job_id: str):
         if jeton is None or job.jeton != jeton:
             raise HTTPException(404, "Job inconnu")
     return job
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def annuler_traitement(request: Request, job_id: str) -> dict:
+    """Annule un traitement EN ATTENTE de place (chantier 005). Session seulement : la route n'est pas dans
+    `ROUTES_DU_COMPAGNON`. Un autre compte, ou un identifiant inconnu : le même 404. Idempotent."""
+    job = _job_du_compte(request, job_id)
+    etat = jobs.annuler(job)
+    if etat != "annule":
+        raise AnnulationImpossible(etat)
+    _effacer_envoi(job.id)              # le fichier reçu part tout de suite, sans attendre le réveil du fil
+    return {"statut": "annule", "job_id": job.id}
 
 
 @app.get("/api/jobs")
@@ -2048,16 +2110,7 @@ def lancer_compte_rendu(request: Request, name: str, view_scope: str,
         raise HTTPException(429, str(exc))
 
     def target(cb):
-        def _en_attente() -> None:
-            with job.lock:
-                job.en_attente = True
-
-        def _obtenu() -> None:
-            with job.lock:
-                job.en_attente = False
-
-        with resources.heavy(wait=config.ATTENTE_DE_FOND_API_S, label="compte-rendu",
-                             on_wait=_en_attente, on_acquired=_obtenu):
+        with creneau_du_traitement(job, "compte-rendu"):
             sortie = report.generate_report(name, provider=fournisseur, mistral_api_key=cle, progress=cb)
         resultat = {"name": sortie["name"], "genre": sortie.get("genre")}
         if sortie.get("warnings"):

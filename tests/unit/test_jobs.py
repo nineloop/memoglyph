@@ -321,3 +321,147 @@ def test_un_traitement_en_echec_puis_renvoye_cree_un_nouveau_traitement() -> Non
     premier.status = "error"
     second, cree2 = manager.create_or_find_capture("alice", "cap-2", nature="transcription")
     assert cree and cree2 and second.id != premier.id
+
+
+# ---------- Annulation d'un traitement en attente de place (chantier 005, tranche C) ----------
+#
+# Le créneau lourd (`resources._SEM`) est GLOBAL à toute la session de tests : chaque tenue est dans un
+# `try/finally`, chaque attente a un délai, et chaque tentative attend la FIN du fil de traitement avant la suivante
+# (un traitement annulé est « en échec » tout de suite, mais son fil peut rester bloqué sur le créneau).
+
+def _fils_de_traitement() -> list[threading.Thread]:
+    return [t for t in threading.enumerate()
+            if t.is_alive() and getattr(getattr(t, "_target", None), "__qualname__", "").endswith("run.<locals>._worker")]
+
+
+class _CreneauTenu:
+    """Un autre travail lourd tient le créneau global tant qu'on ne l'a pas relâché ; toujours relâché à la sortie."""
+
+    def __enter__(self):
+        from core import resources
+        self.pris, self.relache = threading.Event(), threading.Event()
+
+        def occuper() -> None:
+            with resources.heavy(label="autre travail"):
+                self.pris.set()
+                self.relache.wait(30)
+
+        self.fil = threading.Thread(target=occuper)
+        self.fil.start()
+        assert self.pris.wait(5), "le créneau n'a pas pu être pris"
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.relache.set()
+        self.fil.join(10)
+
+
+def _lancer_en_attente(manager: JobManager, ran: list):
+    from api.jobs import creneau_du_traitement
+    job = manager.create(owner="alice")
+
+    def cible(_cb):
+        with creneau_du_traitement(job, "traitement"):
+            ran.append(job.id)
+            return {"ok": True}
+
+    manager.run(job, cible)
+    assert _attendre(lambda: job.en_attente, 5), "le traitement n'attend jamais sa place"
+    assert _fils_de_traitement(), "ancre : le fil de traitement en attente doit être détecté (attribut privé `_target`)"
+    return job
+
+
+def _attendre_fin_des_fils(avant: set) -> None:
+    for fil in _fils_de_traitement():
+        if id(fil) not in avant:
+            fil.join(15)
+            assert not fil.is_alive(), "un fil de traitement tient encore le créneau"
+
+
+def test_annuler_et_obtenir_la_place_se_croisent_sans_incoherence_cent_fois() -> None:
+    import random
+    import time
+    manager = JobManager()
+    classees = {"annule": 0, "en_cours": 0}
+    for tentative in range(100):
+        avant = {id(t) for t in _fils_de_traitement()}
+        ran: list = []
+        with _CreneauTenu() as tenu:
+            job = _lancer_en_attente(manager, ran)
+            barriere = threading.Barrier(2, timeout=5)
+            reponse: list = []
+            hasard = random.Random(tentative)
+
+            def annuler() -> None:
+                barriere.wait()
+                time.sleep(hasard.random() * 0.002)
+                reponse.append(manager.annuler(job))
+
+            fil = threading.Thread(target=annuler)
+            fil.start()
+            barriere.wait()
+            time.sleep(hasard.random() * 0.002)
+            tenu.relache.set()
+            fil.join(10)
+        _attendre_fin_des_fils(avant)
+
+        # Invariant : « annulé » ⇒ la cible n'a pas tourné et l'état est annulé ; sinon elle a tourné.
+        if reponse == ["annule"]:
+            classees["annule"] += 1
+            assert ran == [], f"tentative {tentative} : annulé, mais la cible a tourné"
+            assert job.status == "error" and job.error_code == "step.error.cancelled"
+        else:
+            classees["en_cours"] += 1
+            assert reponse in (["running"], ["done"]), f"tentative {tentative} : réponse inattendue {reponse}"
+            assert ran == [job.id] and job.status == "done", f"tentative {tentative} : « déjà en cours » sans exécution"
+    assert classees["annule"] + classees["en_cours"] == 100            # ancre : toutes les tentatives sont classées
+
+
+def test_trop_d_attente_n_ecrase_pas_annule(monkeypatch) -> None:
+    from core import config
+    monkeypatch.setattr(config, "ATTENTE_DE_FOND_API_S", 0.3)
+    manager = JobManager()
+    avant = {id(t) for t in _fils_de_traitement()}
+    ran: list = []
+    with _CreneauTenu():
+        job = _lancer_en_attente(manager, ran)
+        assert manager.annuler(job) == "annule"
+        _attendre_fin_des_fils(avant)                       # le délai (0,3 s) s'écoule, le fil échoue sur « trop d'attente »
+    assert ran == []
+    assert job.status == "error" and job.error_code == "step.error.cancelled", "pas « trop d'attente »"
+    assert job.error == "Traitement annulé." and job.en_attente is False
+    finaux = [e.payload for e in job.events if e.payload["type"] == "error"]
+    assert len(finaux) == 1 and finaux[0]["code"] == "step.error.cancelled", "un seul événement final, annulé"
+
+
+def test_le_releve_de_stop_sh_oublie_le_traitement_annule_dans_le_vrai_fichier(tmp_path) -> None:
+    import json
+    releve = tmp_path / "releve.json"
+    manager = JobManager(releve=releve)
+    avant = {id(t) for t in _fils_de_traitement()}
+    autre = manager.create(owner="alice", nature="transcription")        # reste « pending » : garde le fichier
+    ran: list = []
+    with _CreneauTenu():
+        job = _lancer_en_attente(manager, ran)
+        assert {t["id"] for t in json.loads(releve.read_text())["traitements"]} == {autre.id, job.id}, \
+            "ancre : le relevé liste d'abord les deux"
+
+        assert manager.annuler(job) == "annule"
+
+        assert {t["id"] for t in json.loads(releve.read_text())["traitements"]} == {autre.id}
+    _attendre_fin_des_fils(avant)
+
+
+def test_annuler_dit_l_etat_quand_ce_n_est_plus_possible() -> None:
+    manager = JobManager(max_active=10)
+    en_reception = manager.create(owner="alice")
+    assert manager.annuler(en_reception) == "pending" and en_reception.status == "pending"
+    en_cours = manager.create(owner="alice")
+    en_cours.status = "running"                                         # tourne, n'attend pas
+    assert manager.annuler(en_cours) == "running" and en_cours.status == "running"
+    fini = manager.create(owner="alice")
+    fini.status = "done"
+    assert manager.annuler(fini) == "done" and fini.status == "done"
+    rate = manager.create(owner="alice")
+    rate.status, rate.error_code = "error", "step.error.unexpected"
+    assert manager.annuler(rate) == "error" and rate.error_code == "step.error.unexpected"

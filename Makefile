@@ -30,7 +30,7 @@ lint-python:
 # les lignes d'une même recette, et ne construit pas une cible dont un
 # prérequis a échoué. Vérifié plutôt que supposé.
 test-python:
-	$(PYTHON) -m pytest -m "not slow and not ml"
+	MEMOGLYPH_MLX_PORT=8773 $(PYTHON) -m pytest -m "not slow and not ml"
 
 test-ui:
 	npm --prefix ui test
@@ -48,7 +48,7 @@ test: test-python test-ui
 # Le plancher n'est pas une cible à atteindre, c'est une alarme de CHUTE. Deux
 # points de marge : il ne bloque rien aujourd'hui et parle si ça décroche.
 test-cov:
-	$(PYTHON) -m pytest -m "not slow and not ml" --cov=core --cov=api \
+	MEMOGLYPH_MLX_PORT=8773 $(PYTHON) -m pytest -m "not slow and not ml" --cov=core --cov=api \
 		--cov-report=term-missing --cov-fail-under=80
 
 # Tests ML : préflight sans import natif, puis un processus isolé par module.

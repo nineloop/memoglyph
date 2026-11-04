@@ -10,6 +10,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from collections.abc import Iterator
 
 import pytest
 import yaml
@@ -80,13 +81,27 @@ class FauxPipeline:
         return sortie, "Texte"
 
 
+def _fils_de_traitement() -> list[threading.Thread]:
+    return [t for t in threading.enumerate()
+            if t.is_alive() and getattr(getattr(t, "_target", None), "__qualname__", "").endswith("run.<locals>._worker")]
+
+
 @pytest.fixture
-def pipeline(comptes, monkeypatch) -> FauxPipeline:
+def pipeline(comptes, monkeypatch) -> Iterator[FauxPipeline]:
+    avant = {id(t) for t in _fils_de_traitement()}
     faux = FauxPipeline()
     monkeypatch.setattr(api_main.pipeline, "run", faux)
     monkeypatch.setattr(api_main.semantic, "index_name", lambda name: 0)
     monkeypatch.setattr(api_main.voiceprint, "index_name", lambda name: {})
-    return faux
+    yield faux
+    # Aucun fil de traitement ne survit à son test : un fil resté vivant appelle, quand il obtient le créneau global, le
+    # `pipeline.run` patché à cet instant (celui du test SUIVANT) et tient ce créneau plus longtemps. La libération et
+    # l'attente se font ICI, avant que `monkeypatch` ne défasse les remplacements (il est démonté après cette fixture).
+    faux.libere.set()
+    for fil in _fils_de_traitement():
+        if id(fil) not in avant:
+            fil.join(15)
+            assert not fil.is_alive(), "un fil de traitement tient encore le créneau après le test"
 
 
 def envoyer(client: TestClient, capture_id: str | None, **champs):

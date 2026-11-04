@@ -344,3 +344,11 @@ def trop_d_attente(label: str) -> Message:
         f"Ressources occupées : un autre {label} est en cours. Réessaie dans un moment — "
         "cette machine ne traite qu'une tâche lourde à la fois.",
         label=label)
+
+
+def traitement_annule() -> Message:
+    """Un traitement annulé avant d'avoir commencé : un échec à cause codée, sans nouvel état (chantier 005).
+
+    La phrase est courte et propre : le compagnon lit le texte brut de `job.error`.
+    """
+    return Message("step.error.cancelled", "Traitement annulé.")

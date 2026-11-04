@@ -253,3 +253,35 @@ def test_la_cle_en_ligne_ne_figure_dans_aucun_suivi(comptes, modele) -> None:
     assert cle not in alice.get(f"/api/jobs/{job}").text
     assert cle not in alice.get("/api/jobs").text
     assert cle not in str(etat)
+
+
+def test_une_regeneration_en_attente_annulee_n_ecrit_aucun_compte_rendu(comptes, modele) -> None:
+    """Chantier 005 : la régénération passe par le MÊME assistant de créneau que la transcription (FR-008)."""
+    from tests.integration.test_annulation_job import creneau_tenu, _fils_de_traitement
+    alice = connecte("alice")
+    nom = reunion(comptes, "alice")
+    avant_fichiers = sorted(p.name for p in comptes.rglob("*.md"))
+    fils_avant = {id(t) for t in _fils_de_traitement()}
+    try:
+        with creneau_tenu():
+            job = lancer(alice, nom).json()["job_id"]
+            for _ in range(1000):
+                if alice.get(f"/api/jobs/{job}").json()["en_attente"]:
+                    break
+                time.sleep(0.005)
+            assert alice.get(f"/api/jobs/{job}").json()["en_attente"] is True, "ancre : il attend sa place"
+
+            reponse = alice.post(f"/api/jobs/{job}/cancel")
+
+            assert reponse.status_code == 200 and reponse.json()["statut"] == "annule"
+    finally:                                   # le créneau est libéré ; on attend la fin du fil, quoi qu'il arrive
+        for fil in _fils_de_traitement():
+            if id(fil) not in fils_avant:
+                fil.join(15)
+    assert modele.appels == [], "le modèle n'a pas été appelé"
+    assert sorted(p.name for p in comptes.rglob("*.md")) == avant_fichiers, "aucun compte rendu écrit"
+    etat = alice.get(f"/api/jobs/{job}").json()
+    assert etat["status"] == "error" and etat["error_code"] == "step.error.cancelled"
+    # Ancre : sans annulation, la même chaîne appelle bien le modèle une fois.
+    second = lancer(alice, nom).json()["job_id"]
+    assert attendre(alice, second)["status"] == "done" and len(modele.appels) == 1

@@ -2,6 +2,16 @@
 
 All notable changes to Memoglyph are documented in this file. Versions are listed from the most recent to the oldest; dates use the ISO 8601 format.
 
+## v1.1.2 (2026-11-04)
+
+Fixes and a small feature on the Transcribe screen and the processing view: "Transcribe another recording" now asks for another file instead of sending the same one again, a second upload of a file that is already waiting or running is refused with a clear message, a job that is still waiting for its turn can be cancelled, and a file that stayed on disk after a job waited too long is now removed.
+
+### Changes
+- Transcribe screen: after a file is accepted, "Transcribe another recording" opens the file picker instead of sending the same file a second time. Removing a chosen file, or a second upload that is refused, no longer interrupts the follow-up of the job already started. While that job waits for its turn, the Processing header says "Waiting: another job is running." instead of showing the upload message.
+- Duplicate uploads: sending a file whose content is already waiting or running in your account is refused with a clear message that names the existing job, with a "Follow" link. A job that is done or failed never blocks a new upload of the same file. The rule does not apply to files sent by the menu-bar companion, which recognizes its own captures. When the maximum number of active jobs is reached, that limit is reported before the duplicate refusal.
+- Cancel a waiting job: the processing panel shows a "Cancel" button on each job that is waiting for its turn (a transcription or a report regeneration), with one confirmation. The job moves to "Recently finished" with a neutral "Cancelled" badge and no link to a meeting, and nothing is written to the library. For a transcription, the file you uploaded is deleted. A job that has already started has no Cancel button; if it starts at the very moment you confirm, the panel says it can no longer be cancelled. In the menu-bar companion, a capture cancelled from the web shows as failed; its file stays on the Mac and can be sent again on purpose.
+- Fix: when a job waited too long for the machine ("Waited too long"), the file it had received stayed on disk. It is now removed.
+
 ## v1.1.1 (2026-11-03)
 
 A documentation release: the READMEs are rebuilt from short sections in English and in French, the technical detail moves to documents under docs/, and a few statements of the published text are corrected. The application's behavior does not change.

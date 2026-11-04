@@ -374,3 +374,18 @@ def test_l_echec_de_la_diarisation_remonte_dans_les_avertissements_du_travail(co
     assert etat["status"] == "done"
     assert etat["result"]["warnings"] == [
         "diarisation indisponible, locuteurs non identifiés : DiarizationError: HF_TOKEN manquant."]
+
+
+def test_un_jeton_d_appareil_ne_peut_pas_annuler_meme_sa_propre_capture(comptes, monkeypatch) -> None:
+    """Chantier 005 : l'annulation est réservée à la session ; la route n'est pas dans `ROUTES_DU_COMPAGNON`."""
+    alice = connecte("alice")
+    _jeton, secret = creer_jeton(alice)
+    compagnon = porteur(secret)
+    assert ("POST", "/api/jobs/{job_id}/cancel") in _routes_api(), "ancre : la route existe"
+    assert ("POST", "/api/jobs/{job_id}/cancel") not in api_main.ROUTES_DU_COMPAGNON
+    propre = api_main.jobs.create(owner=auth.utilisateur_actif("alice").id, nature="transcription")
+
+    reponse = compagnon.post(f"/api/jobs/{propre.id}/cancel")
+
+    assert reponse.status_code == 401
+    assert propre.status == "pending"

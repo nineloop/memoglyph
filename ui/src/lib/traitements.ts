@@ -12,12 +12,23 @@ export const INTERVALLE_REPOS_MS = 15000
 /** Combien de traitements terminés le panneau montre avant « Tout voir ». */
 export const TERMINES_VISIBLES = 5
 
-export type EtatAffiche = 'en_attente' | 'en_cours' | 'termine' | 'echec'
+/** Le code d'un traitement annulé avant d'avoir commencé : un échec à cause codée, sans nouvel état serveur (chantier 005). */
+export const CODE_ANNULE = 'step.error.cancelled'
+
+export type EtatAffiche = 'en_attente' | 'en_cours' | 'termine' | 'echec' | 'annule'
+
+/**
+ * Seul un traitement qui ATTEND sa place peut être annulé : `running` ET `en_attente`. Jamais `pending` (le fichier
+ * est encore en cours de réception : l'API refuse, 409), jamais un traitement qui tourne ou qui est fini.
+ */
+export function annulable(t: Traitement): boolean {
+  return t.statut === 'running' && t.en_attente
+}
 
 /** « En attente » = le créneau n'est pas obtenu (`en_attente`) ou le traitement n'a pas démarré (`pending`). */
 export function etatAffiche(t: Traitement): EtatAffiche {
   if (t.statut === 'done') return 'termine'
-  if (t.statut === 'error') return 'echec'
+  if (t.statut === 'error') return t.erreur_code === CODE_ANNULE ? 'annule' : 'echec'
   if (t.statut === 'pending' || t.en_attente) return 'en_attente'
   return 'en_cours'
 }
@@ -32,7 +43,7 @@ export function comptes(liste: ListeTraitements | null): { enCours: number; enAt
 export function separer(liste: ListeTraitements | null, tout: boolean): { actifs: Traitement[]; termines: Traitement[] } {
   const toutes = liste?.traitements ?? []
   const actifs = toutes.filter((t) => etatAffiche(t) === 'en_cours' || etatAffiche(t) === 'en_attente')
-  const termines = toutes.filter((t) => etatAffiche(t) === 'termine' || etatAffiche(t) === 'echec')
+  const termines = toutes.filter((t) => ['termine', 'echec', 'annule'].includes(etatAffiche(t)))
   return { actifs, termines: tout ? termines : termines.slice(0, TERMINES_VISIBLES) }
 }
 

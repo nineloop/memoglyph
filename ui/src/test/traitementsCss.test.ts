@@ -35,4 +35,16 @@ describe('CSS des traitements', () => {
     const i = css.lastIndexOf('@media (prefers-reduced-motion: reduce)')
     expect(css.slice(i)).toMatch(/\.indicateur-signal \.icon[^{]*\{[^}]*animation:\s*none/)
   })
+
+  it('chantier 005 : le bouton « Annuler » a une cible d\'au moins 44 px et la pastille « Annulé » est NEUTRE', () => {
+    expect(css).toMatch(/\.traitement-annuler\s*\{[^}]*min-height:\s*44px/)
+    // Compact : la carte est une colonne qui étire ses enfants ; le bouton s'aligne à gauche et prend la
+    // largeur de son texte, sans perdre sa hauteur tactile.
+    expect(css).toMatch(/\.traitement-annuler\s*\{[^}]*align-self:\s*flex-start/)
+    const regle = css.match(/\.etat-annule\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(regle).not.toBe('')
+    // Neutre : jamais les couleurs d'erreur ni de succès ; uniquement des variables du thème (clair ET sombre).
+    expect(regle).not.toMatch(/--err|--off|--ok|#[0-9a-f]{3,6}/i)
+    expect(regle).toMatch(/var\(--(muted|panel-2|border|text)/)
+  })
 })
