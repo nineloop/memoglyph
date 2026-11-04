@@ -24,7 +24,7 @@ import threading
 from core import config, pipeline, stt
 from core import faithful_backfill
 from core import sensitivity
-from core import llm, resources
+from core import erreurs, llm, modeles_gratuits, resources
 from core import docid, library, sqlite_db
 from core import ecl
 from core import semantic
@@ -624,6 +624,25 @@ def _refuser_le_cloud(sensibilite: object, *, local: bool, proprietaire: Optiona
         raise HTTPException(403, sensitivity.REFUS_CLOUD) from exc
 
 
+def _refuser_modele_gratuit(sensibilite: object, *, fournisseur: str) -> None:
+    """403 à corps plat si ce document n'est pas « public · normal » et que le modèle du fournisseur est marqué gratuit.
+
+    La règle est celle de `core/modeles_gratuits.py`, appelée ICI sous forme d'un contrôle SÉPARÉ de `_refuser_le_cloud` : celui-ci
+    rend la main aussitôt pour un document « confidentiel » (le nuage ne le refuse pas), la règle des gratuits ne peut donc pas y
+    vivre. Placée juste APRÈS lui à chaque point d'appel : un ultra-confidentiel non autorisé garde son refus du nuage, et un
+    refus ne crée rien (aucun traitement, aucun fichier reçu). Le cœur la réapplique juste avant chaque appel au moteur."""
+    modeles_gratuits.verifier(fournisseur, lambda: llm.modele_servi(fournisseur), [sensibilite])
+
+
+@app.exception_handler(sensitivity.ModeleGratuitRefuse)
+async def _modele_gratuit_refuse(_request: Request, exc: sensitivity.ModeleGratuitRefuse) -> JSONResponse:
+    """Un modèle gratuit refuse ce document : corps plat `{detail, code}`. L'interface traduit le code, jamais la phrase.
+
+    Déclaré avec son PROPRE type : Starlette choisit le gestionnaire de la classe la plus précise, donc celui d'`EnvoiRefuse`
+    (qui rend la phrase de l'ultra-confidentiel) ne la masque pas."""
+    return JSONResponse({"detail": str(exc), "code": exc.code}, status_code=403)
+
+
 @app.exception_handler(sensitivity.EnvoiRefuse)
 async def _envoi_refuse(_request: Request, _exc: sensitivity.EnvoiRefuse) -> JSONResponse:
     """Un refus du cœur (réglage désactivé entre la garde de route et l'envoi) : le même 403."""
@@ -1003,6 +1022,7 @@ async def transcribe(
     if report_on or profile:
         _refuser_le_cloud(sensitivity_level, local=llm.est_local(llm_provider),
                           proprietaire=proprietaire)
+        _refuser_modele_gratuit(sensitivity_level, fournisseur=llm_provider)
     if report_on and not timestamps:
         # Chaque phrase d'un CR cite `[source HH:MM:SS]` : sans horodatage, il
         # finirait sur zéro unité, après la transcription entière.
@@ -1066,23 +1086,27 @@ async def transcribe(
 
     def target_locked(cb):
         try:
-            out_path, content = pipeline.run(
-                dest,
-                engine_name=engine,
-                language=language.strip() or None,
-                mistral_api_key=mistral_api_key.strip() or None,
-                llm_provider=llm_provider,  # déjà validé à la frontière
-                diarize_on=diarize,
-                profile_on=profile,
-                report_on=report_on,
-                timestamps=timestamps,
-                sensitivity=sensitivity_level,
-                capture=capture,
-                progress=cb,
-                output_dir=target_dir,
-                # Texte affiché au fil de l'eau (transcription progressive).
-                on_partial=lambda chunk: jobs.push(job, {"type": "partial", "text": chunk}),
-            )
+            # L'attente d'un quota atteint (429) d'un fournisseur nommé : UN contexte autour du profilage ET du compte rendu
+            # automatique (même fil, un seul plafond de 300 s pour la transcription), pause dite à la fraction courante.
+            from core import attente_quota  # noqa: PLC0415
+            with attente_quota.suivre(cb) as progression:
+                out_path, content = pipeline.run(
+                    dest,
+                    engine_name=engine,
+                    language=language.strip() or None,
+                    mistral_api_key=mistral_api_key.strip() or None,
+                    llm_provider=llm_provider,  # déjà validé à la frontière
+                    diarize_on=diarize,
+                    profile_on=profile,
+                    report_on=report_on,
+                    timestamps=timestamps,
+                    sensitivity=sensitivity_level,
+                    capture=capture,
+                    progress=progression,
+                    output_dir=target_dir,
+                    # Texte affiché au fil de l'eau (transcription progressive).
+                    on_partial=lambda chunk: jobs.push(job, {"type": "partial", "text": chunk}),
+                )
             library.sync_file(out_path)  # met à jour l'index FTS immédiatement
             # Ces deux index sont DÉRIVÉS : leur échec ne doit pas perdre le
             # Markdown, qui fait foi. Mais il était avalé par un `pass` nu —
@@ -1395,7 +1419,13 @@ def ask(request: Request, body: AskBody) -> dict:
         # attente inexpliquée de plusieurs minutes.
         raise HTTPException(429, str(exc))
     except llm.LLMError as exc:
-        raise HTTPException(503, f"Assistant indisponible : {exc}")
+        # 503, jamais 429 (« occupé » partout ailleurs). Un quota atteint porte en plus son CODE, que l'interface traduit : la
+        # phrase du serveur est en français. Le code vient du tableau de `core/erreurs.py` (par nom de classe), pas d'ici.
+        corps = {"detail": f"Assistant indisponible : {exc}"}
+        code = erreurs.code_de(exc)[0]
+        if code == "step.error.rateLimited":
+            corps["code"] = code
+        return JSONResponse(corps, status_code=503)
 
 
 @app.post("/api/library/reindex")
@@ -1531,22 +1561,26 @@ def rerun_meeting_facts(request: Request, meeting_id: str, body: EclRelanceBody,
     # transcript `standard` d'une réunion ultra-confidentielle reste ultra-confidentiel.
     envoi = library.envoi_du_document(retenu["name"])
     _refuser_le_cloud(envoi.sensibilite, local=llm.est_local(fournisseur), proprietaire=envoi.proprietaire)
+    _refuser_modele_gratuit(envoi.sensibilite, fournisseur=fournisseur)
     try:
         job = jobs.create(owner=portee.utilisateur(request).id, nature="faits")
     except JobsBusy as exc:
         raise HTTPException(429, str(exc))
 
     def target(cb):
-        from core import telemetry  # noqa: PLC0415
-        cb(0.05, "Extraction des faits de la réunion")
-        # Une exécution FinOps à elle : hors de ce contexte, la télémétrie est un no-op,
-        # et le coût d'une relance (Sonnet en cloud) échappait au suivi.
-        with telemetry.execution(
-            kind="ecl", document_id=retenu.get("id"), meeting_id=meeting_id,
-            project_id=retenu.get("project_id"), provider=fournisseur,
-            model=ecl.modele_cloud(fournisseur) or llm.modele_servi(fournisseur),
-        ), telemetry.stage("ecl"):
-            bilan = ecl.extraire(retenu["name"], provider=fournisseur)
+        from core import attente_quota, telemetry  # noqa: PLC0415
+        # L'attente d'un quota atteint (429) d'un fournisseur nommé se dit dans la progression, à la fraction courante, puis
+        # la dernière étape est republiée.
+        with attente_quota.suivre(cb) as progression:
+            progression(0.05, "Extraction des faits de la réunion")
+            # Une exécution FinOps à elle : hors de ce contexte, la télémétrie est un no-op,
+            # et le coût d'une relance (Sonnet en cloud) échappait au suivi.
+            with telemetry.execution(
+                kind="ecl", document_id=retenu.get("id"), meeting_id=meeting_id,
+                project_id=retenu.get("project_id"), provider=fournisseur,
+                model=ecl.modele_cloud(fournisseur) or llm.modele_servi(fournisseur),
+            ), telemetry.stage("ecl"):
+                bilan = ecl.extraire(retenu["name"], provider=fournisseur)
         cb(1.0, "Faits extraits")
         return bilan
 
@@ -2034,6 +2068,7 @@ def _controles_compte_rendu(request: Request, name: str, view_scope: str,
     # Sensibilité EFFECTIVE, celle de la réunion (`library.sensibilite_effective`), comme le cœur.
     envoi = library.envoi_du_document(name, (item or {}).get("meta") or {})
     _refuser_le_cloud(envoi.sensibilite, local=llm.est_local(fournisseur), proprietaire=envoi.proprietaire)
+    _refuser_modele_gratuit(envoi.sensibilite, fournisseur=fournisseur)
     try:
         # Avant la réservation et avant tout appel au modèle.
         chunking.verifier_citable((item or {}).get("body") or "")

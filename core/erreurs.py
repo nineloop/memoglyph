@@ -25,6 +25,9 @@ PAR_CLASSE: dict[str, str] = {
     "TranscriptNonCitable": "step.error.notCitable",
     "ExtractionVide": "step.error.emptyExtraction",
     "EnvoiRefuse": "step.error.sendRefused",
+    # Chantier 006 : deux sous-classes, trouvées par leur nom AVANT celui de leur famille (`EnvoiRefuse`, `LLMError`).
+    "ModeleGratuitRefuse": "step.error.freeModelRestricted",
+    "LimiteDeDemandes": "step.error.rateLimited",
     "LLMError": "step.error.modelUnavailable",
     "LLMMalformedOutputError": "step.error.modelUnavailable",
 }

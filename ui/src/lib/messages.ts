@@ -185,6 +185,8 @@ const fr = {
   'app.provider.openaiCloud': 'OpenAI (cloud)',
   'app.provider.anthropicCloud': 'Anthropic Claude (cloud)',
   'app.provider.compatible': 'Serveur compatible OpenAI',
+  'app.provider.openrouter': 'OpenRouter (cloud)',
+  'app.provider.groq': 'Groq (cloud)',
   'app.mode.privateCloud': 'Cloud privé',
 
   'app.lang.label': 'Langue de l’interface',
@@ -447,6 +449,7 @@ const fr = {
     'Mistral a refusé la requête (HTTP {status}), nouvelle tentative dans {delay_s} s…',
   'job.step.upload.mistral.pause':
     'Pause imposée par la limite audio de Mistral, reprise dans {delay_s} s…',
+  'job.step.provider.quota.pause': 'Quota du fournisseur : reprise dans {delay_s} s…',
   'job.step.segments.format': 'Formatage des segments et locuteurs…',
   'job.step.transcription.mistral.done': 'Transcription Mistral AI terminée.',
   'job.step.diarization.loading': 'Chargement du modèle de diarisation…',
@@ -1095,6 +1098,8 @@ const fr = {
   'job.step.error.emptyExtraction': 'Le modèle n’a rien retenu de cette réunion. Essayez avec un autre modèle.',
   'job.step.error.notCitable': 'Ce transcript n’a pas d’horodatage : un compte rendu n’aurait rien à citer.',
   'job.step.error.sendRefused': 'Ce document est ultra-confidentiel : il ne part vers aucun fournisseur en ligne.',
+  'job.step.error.freeModelRestricted': 'Un modèle gratuit ne reçoit pas de document ultra-confidentiel : choisissez un modèle payant ou un autre fournisseur.',
+  'job.step.error.rateLimited': 'Le quota du fournisseur est atteint : attendez un moment ou choisissez un autre modèle.',
   'traitements.confirm.saved': 'Rangé dans {projet}.',
   'traitements.confirm.follow': 'Suivre',
   'traitements.confirm.aria': 'Envoi accepté',
@@ -1276,6 +1281,8 @@ const en: Record<MessageKey, string> = {
   'app.provider.openaiCloud': 'OpenAI (cloud)',
   'app.provider.anthropicCloud': 'Anthropic Claude (cloud)',
   'app.provider.compatible': 'OpenAI-compatible server',
+  'app.provider.openrouter': 'OpenRouter (cloud)',
+  'app.provider.groq': 'Groq (cloud)',
   'app.mode.privateCloud': 'Private cloud',
 
   'app.lang.label': 'Interface language',
@@ -1500,6 +1507,7 @@ const en: Record<MessageKey, string> = {
     'Mistral refused the request (HTTP {status}), retrying in {delay_s} s…',
   'job.step.upload.mistral.pause':
     'Pause imposed by Mistral’s audio limit, resuming in {delay_s} s…',
+  'job.step.provider.quota.pause': 'Provider quota: resuming in {delay_s} s…',
   'job.step.segments.format': 'Formatting segments and speakers…',
   'job.step.transcription.mistral.done': 'Mistral AI transcription complete.',
   'job.step.diarization.loading': 'Loading the diarization model…',
@@ -2146,6 +2154,8 @@ const en: Record<MessageKey, string> = {
   'job.step.error.emptyExtraction': 'The model kept nothing from this meeting. Try another model.',
   'job.step.error.notCitable': 'This transcript has no timestamps: a report would have nothing to quote.',
   'job.step.error.sendRefused': 'This document is ultra-confidential: it is not sent to any online provider.',
+  'job.step.error.freeModelRestricted': 'A free model does not receive ultra-confidential documents: choose a paid model or another provider.',
+  'job.step.error.rateLimited': 'The provider’s quota has been reached: wait a moment or choose another model.',
   'traitements.confirm.saved': 'Saved to {projet}.',
   'traitements.confirm.follow': 'Follow',
   'traitements.confirm.aria': 'Upload accepted',

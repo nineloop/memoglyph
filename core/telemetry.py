@@ -56,7 +56,7 @@ class _ExecBuffer:
         "execution_id", "kind", "document_id", "meeting_id", "project_id",
         "produced_artifact_id", "provider", "model", "started_at", "ended_at",
         "wall_clock_s", "status", "audio_seconds", "envoi_ultra_autorise", "_t0", "_calls",
-        "_envois_notes",
+        "_envois_notes", "modeles_servis",
     )
 
     def __init__(self, kind: str, *, document_id=None, meeting_id=None,
@@ -80,12 +80,17 @@ class _ExecBuffer:
         self._t0 = time.perf_counter()
         self._calls: list[dict] = []
         self._envois_notes: set = set()
+        # Les modèles qui ont RÉELLEMENT répondu, distincts, dans l'ordre d'apparition (un routeur peut en choisir un par appel).
+        self.modeles_servis: list[str] = []
 
     def add_call(self, call: dict) -> None:
         call["seq"] = len(self._calls) + 1
         call["call_id"] = docid.nouveau()
         call["execution_id"] = self.execution_id
         call["created_at"] = _now_iso()
+        servi = call.get("model_servi")
+        if isinstance(servi, str) and servi and servi not in self.modeles_servis:
+            self.modeles_servis.append(servi)
         self._calls.append(call)
 
     def close(self, status: str) -> None:
@@ -184,6 +189,8 @@ def record_model_call(
     out_tok: Optional[int] = None,
     cached_tok: Optional[int] = None,
     reasoning_tok: Optional[int] = None,
+    served_model: Optional[str] = None,
+    error_code: Optional[str] = None,
 ) -> None:
     """Enregistre UN appel fournisseur/modèle sur l'exécution courante. Ne lève JAMAIS.
 
@@ -210,9 +217,11 @@ def record_model_call(
             "stage": stage if stage is not None else _current_stage.get(),
             "provider": provider,
             "model": model,
+            "model_servi": served_model,      # celui qui a répondu ; `model` reste le DEMANDÉ (le barème s'apparie dessus)
             "started_at": _now_iso(),
             "latency_s": round(latency_s, 4) if isinstance(latency_s, (int, float)) else None,
             "status": status,
+            "error_code": error_code,         # le CODE seul d'un appel refusé ou inutilisable (429, 404, timeout, length…)
             "usage_source": usage_source,
             "in_tok": f_in,
             "out_tok": f_out,

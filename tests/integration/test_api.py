@@ -1169,11 +1169,13 @@ def test_MLX_seul_disponible_suffit_a_declarer_un_LLM(client, monkeypatch) -> No
     monkeypatch.setattr(llm.MOTEURS["openai"], "pret_declare", lambda: False)
     monkeypatch.setattr(llm.MOTEURS["anthropic"], "pret_declare", lambda: False)
     monkeypatch.setattr(llm.MOTEURS["compatible"], "pret_declare", lambda: False)
+    monkeypatch.setattr(llm.MOTEURS["openrouter"], "pret_declare", lambda: False)
+    monkeypatch.setattr(llm.MOTEURS["groq"], "pret_declare", lambda: False)
 
     config = client.get("/api/config").json()
 
     assert config["llm_ready"] == {"mistral": False, "mlx": True, "openai": False, "anthropic": False,
-                                   "compatible": False}
+                                   "compatible": False, "openrouter": False, "groq": False}
     assert config["llm_available"] is True, (
         "une machine MLX-only s'annonce sans LLM — c'est la cible produit"
     )

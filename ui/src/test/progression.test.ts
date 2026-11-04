@@ -27,6 +27,12 @@ describe('traduireEtape', () => {
     expect(traduireEtape('en', etape)).toBe('Profiling with qwen2.5:7b…')
   })
 
+  it('dit la pause d\u2019un quota atteint avec son délai, dans les deux langues', () => {
+    const etape = { code: 'step.provider.quota.pause', params: { delay_s: 40 }, message: 'Provider quota reached, resuming in 40 s…' }
+    expect(traduireEtape('fr', etape)).toBe('Quota du fournisseur : reprise dans 40 s…')
+    expect(traduireEtape('en', etape)).toBe('Provider quota: resuming in 40 s…')
+  })
+
   it('rend les états de PREMIER USAGE du modèle (téléchargement / préparation)', () => {
     // La barre ne doit plus paraître figée. Ces états sont ceux
     // affichés dans la ligne d'activité du panneau de traitement (line 610).
@@ -122,6 +128,7 @@ describe('traduireEtape', () => {
       'step.upload.compressed',
       'step.upload.mistral.retry',
       'step.upload.mistral.pause',
+      'step.provider.quota.pause',
       'step.segments.format',
       'step.transcription.mistral.done',
       'step.diarization.loading',

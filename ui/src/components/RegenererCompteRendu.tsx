@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { getConfig, lancerCompteRendu, type AppConfig } from '../api'
+import { ModeleGratuitError, getConfig, lancerCompteRendu, type AppConfig } from '../api'
 import { useLang } from '../lib/langContext'
 import { useCloudUltra } from '../lib/cloudUltra'
 import { getLlmProvider } from '../lib/llmProvider'
@@ -25,6 +25,8 @@ const NOMS: Record<string, MessageKey> = {
   openai: 'app.provider.openaiCloud',
   anthropic: 'app.provider.anthropicCloud',
   compatible: 'app.provider.compatible',
+  openrouter: 'app.provider.openrouter',
+  groq: 'app.provider.groq',
 }
 
 /**
@@ -103,7 +105,9 @@ export function RegenererCompteRendu({ name, documentScope, surTermine, ultra: u
       rafraichir()          // le traitement apparaît tout de suite dans l'indicateur et le panneau
     } catch (raison) {
       const statut = /HTTP (\d{3})/.exec(String(raison))?.[1]
-      setErreur(statut === '403' ? t('regenerer.refused.confidential')
+      // Un modèle gratuit refuse ce document : SA phrase, pas celle de l'ultra-confidentiel.
+      setErreur(raison instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted')
+        : statut === '403' ? t('regenerer.refused.confidential')
         : statut === '429' ? t('regenerer.refused.busy')
           : t('regenerer.refused.other', { erreur: String(raison) }))
     } finally {

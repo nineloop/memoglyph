@@ -289,6 +289,15 @@ def pause_limite_audio_mistral(delai_s: int) -> Message:
     )
 
 
+def pause_quota_fournisseur(delai_s: int) -> Message:
+    """Un fournisseur en ligne a atteint son quota : on attend le délai annoncé puis on réessaie (chantier 006, H)."""
+    return Message(
+        "step.provider.quota.pause",
+        f"Provider quota reached, resuming in {delai_s} s…",
+        delay_s=delai_s,
+    )
+
+
 def audio_compresse(avant_mo: int, apres_mo: int) -> Message:
     return Message(
         "step.upload.compressed",

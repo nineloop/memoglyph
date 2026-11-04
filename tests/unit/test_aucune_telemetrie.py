@@ -45,6 +45,7 @@ AUTORISES = {
     "core/llm_compatible.py": "moteur « Serveur compatible OpenAI » : l'hôte de COMPATIBLE_BASE_URL",
     "core/llm_mistral.py": "moteur Mistral (Chat API)",
     "core/llm_mlx.py": "mlx_lm.server local : sonde de port (socket) et client OpenAI vers lui",
+    "core/llm_nomme.py": "fournisseurs en ligne nommés (OpenRouter, Groq) : client OpenAI vers l'adresse FIXE du profil",
     "core/llm_openai.py": "moteur OpenAI (Responses API)",
     "core/stt_mistral.py": "transcription Voxtral, chez Mistral",
     # Modèles : lecture du cache local de Hugging Face, jamais un envoi.

@@ -23,7 +23,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Callable, Optional
 
-from core import config, docid, library, llm, provenance, semantic, writer_md
+from core import attente_quota, config, docid, library, llm, provenance, semantic, writer_md
 from core import report_citations
 from core import sensitivity
 
@@ -65,6 +65,11 @@ def make_local_report(
     # `contextvars`. N'altère aucun contrat produit ; hors contexte, la
     # télémétrie serait simplement un no-op.
     from core import telemetry  # noqa: PLC0415
+
+    # Le quota d'un fournisseur nommé atteint (429) : le moteur attend le délai annoncé puis réessaie, et la pause se DIT dans la
+    # progression (à la dernière fraction, puis la dernière étape est republiée). Le contexte est ouvert ICI, dans le fil qui exécute
+    # le traitement, et couvre les étapes comme le classifieur de genre. Ouvert dans un traitement déjà ouvert (une transcription),
+    # il en partage le plafond.
     with telemetry.execution(
         kind="report",
         document_id=meta.get("id"),
@@ -72,19 +77,23 @@ def make_local_report(
         project_id=meta.get("project_id"),
         provider=provider,
         model=llm.modele_servi(provider),
-    ) as execution:
+    ) as execution, attente_quota.suivre(progress) as _progress:
         out = _pipeline.run_stages(name, item, provider=provider, seed=seed,
-                                   mistral_api_key=mistral_api_key, progress=progress,
+                                   mistral_api_key=mistral_api_key, progress=_progress,
                                    envoi=envoi)
 
         # Genre : réutilise le classifieur hérité (même moteur) pour l'étiquette UI.
         # Il ne lève jamais (retombe sur « generique ») — import paresseux pour ne
         # pas charger `core.report` sur le chemin par défaut.
         from core import report as _report  # noqa: PLC0415
+        # `detail` : d'où vient le genre et la réponse BRUTE du classifieur (chantier 007) ; gardés dans le diagnostic et dans le
+        # résultat, jamais dans le front matter (un modèle peut répéter du transcript).
+        detail_genre: dict = {}
         with telemetry.stage("genre"):
             genre = _report.classify_genre(item.get("body") or "", out["language"],
                                            provider=provider, mistral_api_key=mistral_api_key,
-                                           envoi=envoi)
+                                           envoi=envoi, detail=detail_genre)
+        out["diag"]["genre"] = dict(detail_genre)
 
         # Découplage ECL / CR : le CR n'extrait plus les faits de la réunion. Ils se
         # lancent à part, à la demande (onglet « Faits », route POST de la réunion) ou par
@@ -99,7 +108,8 @@ def make_local_report(
         # façade a marqué l'exécution (`sensitivity.tracer`), la provenance le dit (T3).
         ultra_autorise = ultra_autorise or bool(getattr(execution, "envoi_ultra_autorise", False))
         content = _assemble_app_report(name, meta, genre, out, report_id=report_id,
-                                       ultra_autorise=ultra_autorise)
+                                       ultra_autorise=ultra_autorise,
+                                       modeles_servis=list(getattr(execution, "modeles_servis", []) or []))
 
         # Stockage IDENTIQUE au CR hérité : dossier du transcript source, index FTS +
         # sémantique. Le CR reste dans le projet de sa source.
@@ -121,7 +131,8 @@ def make_local_report(
 
         return {"name": out_path.name, "content": content, "genre": genre,
                 "warnings": warnings or None,
-                "generation": {"engine": "local_hybrid_v1", **out["diag"]["totals"]}}
+                "generation": {"engine": "local_hybrid_v1", **out["diag"]["totals"],
+                               "classifieur": dict(detail_genre)}}
 
 
 # Rubriques du CR : (type d'unité, intitulé FR, intitulé EN), dans l'ordre du document.
@@ -178,7 +189,8 @@ def _avec_porteur(texte: str, porteur: Optional[str], fr: bool) -> str:
 
 
 def _assemble_app_report(name: str, meta: dict, genre: str, out: dict,
-                         report_id: Optional[str] = None, ultra_autorise: bool = False) -> str:
+                         report_id: Optional[str] = None, ultra_autorise: bool = False,
+                         modeles_servis: Optional[list] = None) -> str:
     struct, rendered = out["struct"], out["rendered"]
     units, diag = out["units"], out["diag"]
     title, language = out["title"], out["language"]
@@ -222,6 +234,9 @@ def _assemble_app_report(name: str, meta: dict, genre: str, out: dict,
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%S"),
         "genre": genre,
         "report_engine": "local_hybrid_v1",
+        # Les modèles qui ont RÉELLEMENT répondu quand le fournisseur en choisit un par appel (un routeur) : `model` ne dit alors
+        # que le nom demandé (chantier 006, G2). Absent pour un fournisseur qui n'en dit rien.
+        "models_served": list(modeles_servis) if modeles_servis else None,
         # Réserves surfacées par l'aside qualité (tableaux) — jamais de perte
         # silencieuse : les tranches d'extraction en échec sont déclarées.
         "map_chunks_failed": failed or None,

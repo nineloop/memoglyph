@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getConfig, getFaitsReunion, getJobStatus, relancerFaitsReunion, type FaitEcl } from '../api'
+import { ModeleGratuitError, getConfig, getFaitsReunion, getJobStatus, relancerFaitsReunion, type FaitEcl } from '../api'
 import { Badge } from '../design/primitives'
 import { useCloudUltra } from '../lib/cloudUltra'
 import { traduireEtape } from '../lib/i18n'
@@ -55,6 +55,8 @@ const NOMS: Record<string, MessageKey> = {
   openai: 'app.provider.openaiCloud',
   anthropic: 'app.provider.anthropicCloud',
   compatible: 'app.provider.compatible',
+  openrouter: 'app.provider.openrouter',
+  groq: 'app.provider.groq',
 }
 
 /** Proposé d'abord pour relancer en cloud : Anthropic sert Sonnet pour les faits (`ECL_ANTHROPIC_MODEL`). */
@@ -142,7 +144,7 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
       // Un échec de traitement se dit par son code traduit ; le texte brut du serveur n'est montré que sans code.
       const dit = raison instanceof EchecTraitement && raison.code
         ? traduireEtape(lang, { code: raison.code, params: raison.params, message: raison.message })
-        : String(raison)
+        : raison instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted') : String(raison)
       setEtat(t('meeting.facts.rerun.error', { reason: dit }))
     } finally {
       setEnCours(false)
