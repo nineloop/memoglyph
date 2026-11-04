@@ -99,6 +99,7 @@ CONSTRUCTEURS = [
     (messages.audio_compresse, (120, 30)),
     (messages.nouvelle_tentative_mistral, (429, 10)),
     (messages.pause_limite_audio_mistral, (52,)),
+    (messages.pause_quota_fournisseur, (20,)),
     (messages.formatage_segments, ()),
     (messages.transcription_mistral_terminee, ()),
     (messages.chargement_diarisation, ()),
@@ -164,6 +165,8 @@ TEXTES_ATTENDUS = {
         "Mistral refused the request (HTTP 429), retrying in 10 s…",
     "step.upload.mistral.pause":
         "Pause imposed by Mistral's audio limit, resuming in 52 s…",
+    "step.provider.quota.pause":
+        "Provider quota reached, resuming in 20 s…",
     "step.segments.format": "Formatting segments and speakers…",
     "step.transcription.mistral.done": "Mistral AI transcription complete.",
     "step.diarization.loading": "Loading the diarization model…",

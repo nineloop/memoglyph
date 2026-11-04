@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppConfig, ListeTraitements, Project } from '../api'
-import { DoublonError, downloadUrl, streamJob, submitTranscribe } from '../api'
+import { DoublonError, ModeleGratuitError, downloadUrl, streamJob, submitTranscribe } from '../api'
 import { CODE_ANNULE } from '../lib/traitements'
 import { libelleProjet } from '../lib/libelleProjet'
 import { documentBody, isAtBottom, validateMediaFile } from '../lib/transcription'
@@ -258,6 +258,7 @@ export function TranscribePanel({
   // Nom d'affichage court (donnée, pas logique) ; repli sur l'id si inconnu.
   const NOMS_CLOUD: Record<string, string> = {
     mistral: 'Mistral', openai: 'OpenAI', anthropic: 'Anthropic (Claude)', compatible: t('app.provider.compatible'),
+    openrouter: 'OpenRouter', groq: 'Groq',
   }
   const nomCloud = (p: string) => NOMS_CLOUD[p] || p
   // Un serveur hébergé par l'utilisateur hors de cette machine : « cloud privé ».
@@ -507,9 +508,11 @@ export function TranscribePanel({
         },
       })
     } catch (caught) {
+      // Un modèle gratuit refuse ce document : SA phrase (traduite), jamais le texte brut ni celle de l'ultra-confidentiel.
+      const dit = caught instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted') : String(caught)
       if (caught instanceof DoublonError) setDoublon({ jobId: caught.jobId, titre: caught.titre })
-      else if (suivi) setErreurEnvoi(String(caught))
-      else setError(String(caught))
+      else if (suivi) setErreurEnvoi(dit)
+      else setError(dit)
       if (!suivi) setRunning(false)
       setEnvoi(false)
     }

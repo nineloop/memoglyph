@@ -2,7 +2,7 @@
 
 By default, everything runs on the Mac: Whisper for transcription, and a local MLX language model for reports and the assistant. Semantic search also uses a local embedding model by default.
 
-An online model can be added when needed: Mistral, OpenAI or Anthropic, or any service in the OpenAI format, such as Groq, through the `compatible` provider. Mistral can also transcribe, with Voxtral.
+An online model can be added when needed: Mistral, OpenAI, Anthropic, OpenRouter or Groq, or any other service in the OpenAI format through the `compatible` provider. Mistral can also transcribe, with Voxtral.
 
 Both can be combined according to the sensitivity of each meeting. A document labelled ultra-confidential goes to no online provider unless its owner allows it for their account. Details, in French: [docs/local-et-en-ligne.md](docs/local-et-en-ligne.md).
 

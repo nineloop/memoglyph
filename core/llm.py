@@ -12,7 +12,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, Callable, Literal, Optional, TypeVar, get_args
 
-from . import config, llm_anthropic, llm_compatible, llm_mistral, llm_mlx, llm_openai, sensitivity
+from . import config, llm_anthropic, llm_compatible, llm_mistral, llm_mlx, llm_nomme, llm_openai, modeles_gratuits, sensitivity
 from .llm_base import LLMEngine, LLMError, LLMMalformedOutputError
 
 # Ré-exporté ici parce que la production l'attrape sous ce nom (`llm.LLMError`
@@ -34,7 +34,7 @@ __all__ = [
 #
 # `ollama` est SORTI de la cible produit : le local tourne sur MLX, et aucun
 # moteur Ollama n'est au registre.
-Fournisseur = Literal["mistral", "cloud", "mlx", "openai", "anthropic", "compatible"]
+Fournisseur = Literal["mistral", "cloud", "mlx", "openai", "anthropic", "compatible", "openrouter", "groq"]
 FOURNISSEURS: tuple[str, ...] = get_args(Fournisseur)
 
 # Moteurs au registre que l'interface ne propose pas : `/api/config` les
@@ -64,6 +64,10 @@ MOTEURS: dict[str, LLMEngine] = {
     "openai": llm_openai.OpenAIEngine(),
     "anthropic": llm_anthropic.AnthropicEngine(),
     "compatible": llm_compatible.CompatibleEngine(),
+    # Fournisseurs en ligne NOMMÉS (chantier 006) : deux préréglages d'un même moteur, un par profil. Jamais locaux, jamais
+    # « auto-hébergés » : leur identité dit « en ligne », pas leur adresse (`llm_nomme.py`).
+    "openrouter": llm_nomme.MoteurNomme(llm_nomme.PROFILS["openrouter"]),
+    "groq": llm_nomme.MoteurNomme(llm_nomme.PROFILS["groq"]),
 }
 
 # « cloud » est un alias historique de « mistral », annoncé par l'API et encore
@@ -243,7 +247,7 @@ def modele_servi(provider: str = FOURNISSEUR_DEFAUT, model: Optional[str] = None
     return moteur(provider).modele_servi(model)
 
 
-def _controler_envoi(cible: LLMEngine, provider: str, envoi: sensitivity.Envois) -> None:
+def _controler_envoi(cible: LLMEngine, provider: str, envoi: sensitivity.Envois, model: Optional[str] = None) -> None:
     """La règle de sensibilité, AVANT tout appel au moteur (`sensitivity.verifier_envoi`).
 
     Ici et non dans chaque appelant : une étape ajoutée au tronc passe par cette
@@ -251,8 +255,14 @@ def _controler_envoi(cible: LLMEngine, provider: str, envoi: sensitivity.Envois)
     cœur dit ce qu'il envoie. L'autorisation du propriétaire est relue à chaque
     appel : un réglage désactivé pendant un compte rendu arrête l'appel suivant.
     Hors de `_normalise` : un refus n'est pas une panne de moteur.
+
+    La règle des modèles gratuits (`core/modeles_gratuits.py`) passe par le même point : après le refus du nuage, avant la
+    trace, avec la sensibilité relue. Elle ne fait rien pour un fournisseur sans profil nommé.
     """
-    sensitivity.autoriser_envoi(envoi, local=est_local(provider), fournisseur=cible.name)
+    sensitivity.autoriser_envoi(
+        envoi, local=est_local(provider), fournisseur=cible.name,
+        avant_trace=lambda actuels: modeles_gratuits.verifier(
+            cible.name, lambda: cible.modele_servi(model), [e.sensibilite for e in actuels]))
 
 
 def chat(
@@ -281,7 +291,7 @@ def chat(
     `sensitivity.EnvoiRefuse` sans appeler le moteur si la règle le refuse.
     """
     cible = moteur(provider)
-    _controler_envoi(cible, provider, envoi)
+    _controler_envoi(cible, provider, envoi, model)
     return _normalise(
         cible.name,
         lambda: cible.chat(system, user, model=model, api_key=api_key,
@@ -322,7 +332,7 @@ def chat_json(
     `envoi` : comme pour `chat`, vérifié avant tout appel au moteur.
     """
     cible = moteur(provider)
-    _controler_envoi(cible, provider, envoi)
+    _controler_envoi(cible, provider, envoi, model)
     return _normalise(
         cible.name,
         lambda: cible.chat_json(

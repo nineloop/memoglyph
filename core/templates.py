@@ -66,6 +66,8 @@ compte-rendu.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Optional
 
 GENERIC = "generique"
@@ -114,6 +116,12 @@ _ALIASES = {
     "sports_analysis": "analyse_sportive",
     "podcast": "interview",
     "reunion": "projet",
+    "project meeting": "projet",
+    "workshop": "projet",
+    "team meeting": "projet",
+    "réunion de travail": "projet",
+    "reunion de travail": "projet",
+    "atelier": "projet",
     "réunion": "projet",
     "meeting": "projet",
     "project": "projet",
@@ -419,6 +427,82 @@ _QUESTIONS: dict[str, dict[str, list[str]]] = {
         ],
     },
 }
+
+
+# Les types de profil qui désignent une RÉUNION : les alias de `projet` (une seule source, la table ci-dessus), `projet` lui-même
+# et son libellé. Le « Type » écrit par le profilage décide alors du genre sans interroger le classifieur (chantier 007).
+TYPES_REUNION = frozenset(
+    {alias for alias, genre in _ALIASES.items() if genre == "projet"} | {"projet", LABELS["projet"].lower()}
+)
+
+
+def _cle(brut: Optional[str]) -> str:
+    return (brut or "").strip().strip(".\"'` \n").lower().replace("-", "_")
+
+
+def est_type_reunion(brut: Optional[str]) -> bool:
+    """Ce « Type » du profil désigne-t-il une réunion ? Égalité EXACTE avec un alias : « sports meeting » ne l'est pas."""
+    return _cle(brut) in TYPES_REUNION
+
+
+# Une ligne de définition par genre, dans les deux langues : le classifieur est un petit modèle local, des clés nues ne lui
+# disent pas ce qu'est « projet » ou « interview ».
+DEFINITIONS = {
+    GENERIC: {"fr": "tout enregistrement qui n'entre dans aucune autre catégorie, ou en cas de doute",
+              "en": "any recording that fits no other category, or when in doubt"},
+    "interview": {"fr": "un animateur interroge une ou plusieurs personnes (entretien, podcast)",
+                  "en": "a host questions one or more people (interview, podcast)"},
+    "projet": {"fr": "réunion de travail d'une équipe : décisions, actions, avancement d'un projet, conception d'un produit",
+               "en": "a team working meeting: decisions, actions, project progress, product design"},
+    "steerco": {"fr": "comité de pilotage : point d'avancement formel devant des décideurs, arbitrages",
+                "en": "steering committee: a formal progress review in front of decision makers, trade-offs"},
+    "entretien_embauche": {"fr": "entretien d'embauche : une personne est évaluée pour un poste",
+                           "en": "job interview: a person is assessed for a position"},
+    "webinar": {"fr": "présentation en ligne à un public, avec questions", "en": "an online presentation to an audience, with questions"},
+    "keynote": {"fr": "conférence ou présentation devant un public", "en": "a talk or presentation in front of an audience"},
+    "town_hall": {"fr": "réunion plénière : la direction s'adresse à toute l'organisation",
+                  "en": "town hall: management addresses the whole organisation"},
+    "internal_briefing": {"fr": "briefing interne court : une information transmise à une équipe",
+                          "en": "short internal briefing: information passed to a team"},
+    "analyse_sportive": {"fr": "commentaire ou débat sur un sport : matchs, joueurs, entraîneurs, saisons, résultats sportifs",
+                         "en": "commentary or debate about a sport: matches, players, coaches, seasons, sporting results"},
+}
+
+
+def genre_definitions(*, commitments: bool = True, language: Optional[str] = None) -> str:
+    """Les genres proposés au classifieur, UNE LIGNE DE DÉFINITION chacun, `analyse_sportive` EN DERNIER.
+
+    Mêmes restrictions que `genre_list` (`commitments=False` retire `projet` et `steerco`). Les petits modèles favorisent les
+    premières options quand ils hésitent : le sport, le genre le plus étroit, ne doit pas être le premier proposé."""
+    lang = "en" if (language or "fr").lower()[:2] == "en" else "fr"
+    ordre = [g for g in GENRES if g != "analyse_sportive"] + ["analyse_sportive"]
+    if not commitments:
+        ordre = [g for g in ordre if g not in COMMITMENT_GENRES]
+    return "\n".join(f"- {g} : {DEFINITIONS[g][lang]}" for g in ordre)
+
+
+# Le garde-fou : un genre dont le domaine est étroit n'est gardé que si le texte contient AU MOINS `MINIMUM_MOTS_DOMAINE` mots
+# distincts de son domaine. Liste choisie par MESURE (aucun de ces mots dans le profil ni le transcript d'IS1009c ; « team »,
+# « score », « game », « goal », « player » sont écartés : ce sont des mots de toute réunion).
+MINIMUM_MOTS_DOMAINE = 2
+_MOTS_DOMAINE = {
+    "analyse_sportive": frozenset({
+        "sport", "sports", "sportif", "sportifs", "sportive", "sportives", "match", "matches", "matchs", "joueur", "joueurs",
+        "players", "coach", "coachs", "coaches", "entraineur", "entraineurs", "saison", "season", "championnat",
+        "championship", "tournoi", "tournament", "ligue", "league", "football", "soccer", "rugby", "tennis", "basket",
+        "basketball", "handball", "penalty", "arbitre", "referee", "stade", "stadium"}),
+}
+
+
+def domaine_present(genre: str, texte: Optional[str]) -> bool:
+    """Le texte contient-il assez de mots du domaine de ce genre ? Vrai pour un genre sans garde."""
+    mots = _MOTS_DOMAINE.get(genre)
+    if mots is None:
+        return True
+    plat = unicodedata.normalize("NFKD", (texte or "").lower())
+    plat = "".join(c for c in plat if not unicodedata.combining(c))
+    trouves = {m for m in re.findall(r"[a-z]+", plat) if m in mots}
+    return len(trouves) >= MINIMUM_MOTS_DOMAINE
 
 
 def normalize(raw: Optional[str]) -> str:

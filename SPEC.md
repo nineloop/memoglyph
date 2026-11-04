@@ -810,6 +810,8 @@ Détail, livré et envisagé : [docs/ecl.md](docs/ecl.md).
 | `MISTRAL_STT_MODEL` | `voxtral-mini-2602` | modèle STT Mistral |
 | `MISTRAL_CHAT_MODEL` | `ministral-14b-2512` | modèle chat Mistral |
 | `OPENAI_API_KEY` | — | clé OpenAI (comptes-rendus, Responses API) |
+| `OPENROUTER_API_KEY` | — | clé OpenRouter (fournisseur `openrouter`, en ligne) |
+| `GROQ_API_KEY` | — | clé Groq (fournisseur `groq`, en ligne) |
 
 **LLM / CR** (préfixe `MEMOGLYPH_`)
 
@@ -817,6 +819,8 @@ Détail, livré et envisagé : [docs/ecl.md](docs/ecl.md).
 |---|---|---|
 | `MEMOGLYPH_MLX_LLM_MODEL` | `mlx-community/Qwen3-4B-Instruct-2507-4bit` | LLM local (fournisseur `mlx`, défaut). Doit être **sans raisonnement** |
 | `MEMOGLYPH_OPENAI_CHAT_MODEL` | `gpt-5.6-luna` | LLM OpenAI |
+| `MEMOGLYPH_OPENROUTER_MODEL` | — | modèle choisi chez OpenRouter ; sans lui, le fournisseur n'est pas proposé |
+| `MEMOGLYPH_GROQ_MODEL` | — | modèle choisi chez Groq ; sans lui, le fournisseur n'est pas proposé |
 | `MEMOGLYPH_MLX_PORT` | `8772` | port ÉPINGLÉ de `mlx_lm.server` (pas 8080) |
 | `MEMOGLYPH_MLX_MAX_TOKENS` | `16384` | plafond de génération (le défaut `mlx_lm` de 512 couperait un CR) |
 | `MEMOGLYPH_MLX_SONDE_TIMEOUT` | `60` | délai de la sonde de disponibilité MLX |

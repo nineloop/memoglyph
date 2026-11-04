@@ -332,6 +332,9 @@
 .option-tile.llm .option-icon { color: var(--llm); }
 .option-icon .icon { width: 17px; height: 17px; }
 .option-tile > span:nth-of-type(2) { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+/* Sélecteur « Fournisseur cloud » : pas d'icône, donc un seul <span> (nom et modèle) : même empilement que ci-dessus. */
+.cloud-provider-select .option-tile { text-align: left; font: inherit; }
+.cloud-provider-select .option-tile > span:only-of-type { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .option-tile strong { color: var(--text-h); font-size: 12.5px; }
 .option-tile small { color: var(--text); font-size: 10.5px; line-height: 1.35; }
 

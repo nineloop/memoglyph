@@ -19,8 +19,8 @@ flowchart TD
         AudioPrep["FFmpeg : Normalisation PCM 16kHz mono"]
         STTEngine["STT : Whisper Large v3 Turbo (MLX Apple Silicon)"]
         DiarEngine["Diarisation : pyannote (community-1) & Registre d'empreintes vocales"]
-        LLMProfile["Profilage : Résumé + Détection de genre LLM (MLX · Mistral · OpenAI · Anthropic)"]
-        LLMReport["Auto-CR : pipeline riche par strates (MLX · Mistral · OpenAI · Anthropic)"]
+        LLMProfile["Profilage : Résumé + Détection de genre LLM (MLX · Mistral · OpenAI · Anthropic · OpenRouter · Groq)"]
+        LLMReport["Auto-CR : pipeline riche par strates (MLX · Mistral · OpenAI · Anthropic · OpenRouter · Groq)"]
     end
 
     subgraph Storage ["Source de Vérité & Indexation"]

@@ -7,6 +7,7 @@ la Bibliothèque, est cherchable et indexé pour le RAG.
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime
 from typing import Callable, Optional
@@ -620,6 +621,15 @@ def profile_excerpt(body: str, *, limit: int = 1400) -> tuple[str, bool]:
     # transcript » : les .md d'avant le profilage n'ont ni titre « Profil » ni
     # titre « Transcript », et cette heuristique y avalait tout le transcript en
     # le prenant pour un profil — donc annonçait une preuve forte qui n'existait pas.
+    head = _lignes_du_profil(body)
+    if head:
+        return "\n".join(head)[:limit], True
+    spoken = quality.transcript_texts(body)
+    return " ".join(spoken)[:limit], False
+
+
+def _lignes_du_profil(body: str) -> list[str]:
+    """Les lignes du bloc de profil RECONNU (titre « Profil » ou « Profile »), jusqu'au titre « Transcript »."""
     head: list[str] = []
     in_profile = False
     for raw in body.splitlines():
@@ -632,10 +642,21 @@ def profile_excerpt(body: str, *, limit: int = 1400) -> tuple[str, bool]:
             continue
         if in_profile and line:
             head.append(line)
-    if head:
-        return "\n".join(head)[:limit], True
-    spoken = quality.transcript_texts(body)
-    return " ".join(spoken)[:limit], False
+    return head
+
+
+_LIGNE_TYPE = re.compile(r"^\*\*\s*Type\s*:?\s*\*\*\s*:?\s*(.+?)\s*$", re.IGNORECASE)
+
+
+def type_du_profil(body: str) -> Optional[str]:
+    """Le « Type » que le profilage a écrit (`**Type:** meeting`, `**Type :** réunion`), lu dans le BLOC DE PROFIL seulement.
+
+    Une ligne « **Type:** … » prononcée dans le transcript n'est pas lue : elle ne décide de rien."""
+    for ligne in _lignes_du_profil(body):
+        trouve = _LIGNE_TYPE.match(ligne)
+        if trouve:
+            return trouve.group(1)
+    return None
 
 
 def classify_genre(
@@ -646,8 +667,15 @@ def classify_genre(
     provider: str = llm.FOURNISSEUR_DEFAUT,
     mistral_api_key: Optional[str] = None,
     envoi: sensitivity.Envois = None,
+    detail: Optional[dict] = None,
 ) -> str:
     """Genre du gabarit. Toute défaillance retombe sur le gabarit sobre.
+
+    Chantier 007 : (1) le « Type » du profil, quand il désigne une réunion, décide SANS appeler le modèle ; (2) sinon le message
+    porte une définition par catégorie, le sport en dernier ; (3) `analyse_sportive` n'est gardé que si le texte contient des mots
+    du sport (`templates.domaine_present`) ; (4) `detail`, s'il est donné, reçoit `{"source", "brut"}` : d'où vient le genre
+    (`profil`, `modele`, `garde`, `repli`, `vide`) et la réponse BRUTE du modèle, bornée à 200 caractères (jamais écrite dans le
+    document : un modèle peut répéter du transcript).
 
     Le classifieur ne peut pas casser la génération du CR : une erreur LLM, une
     réponse hors liste ou un profil absent donnent `GENERIC`, c'est-à-dire un
@@ -658,12 +686,19 @@ def classify_genre(
     chez un utilisateur Mistral-only, donc `except` → gabarit générique EN SILENCE,
     alors que le CR lui-même se générait bien via Mistral.
     """
+    def _fin(genre: str, source: str, brut: Optional[str] = None) -> str:
+        if detail is not None:
+            detail.update({"source": source, "brut": (brut or "").strip()[:200] or None})
+        return genre
+
     excerpt, profiled = profile_excerpt(body)
     if not excerpt.strip():
-        return templates.GENERIC
+        return _fin(templates.GENERIC, "vide")
+    if profiled and templates.est_type_reunion(type_du_profil(body)):
+        return _fin("projet", "profil")
     prompt = (
-        "Catégories possibles / possible categories : "
-        f"{templates.genre_list(commitments=profiled)}\n\n"
+        "Catégories possibles / possible categories :\n"
+        f"{templates.genre_definitions(commitments=profiled, language=language)}\n\n"
         f"Enregistrement / Recording :\n{excerpt}\n\n"
         "Catégorie ? / Category?"
     )
@@ -682,13 +717,16 @@ def classify_genre(
         # gabarit sobre laisserait croire que le texte pouvait partir.
         raise
     except Exception:  # noqa: BLE001 — le CR doit rester possible sans classifieur
-        return templates.GENERIC
+        return _fin(templates.GENERIC, "repli")
     genre = templates.normalize(raw)
     # Deuxième barrière, vérifiée en code : sans profil on juge sur du texte brut,
     # preuve trop faible pour engager un gabarit qui réclame décisions et actions.
     if not profiled and genre in templates.COMMITMENT_GENRES:
-        return templates.GENERIC
-    return genre
+        return _fin(templates.GENERIC, "garde", raw)
+    # Troisième barrière : un genre au domaine étroit (le sport) exige des mots de son domaine dans le texte jugé.
+    if not templates.domaine_present(genre, excerpt):
+        return _fin(templates.GENERIC, "garde", raw)
+    return _fin(genre, "modele", raw)
 
 
 def _bindings_notice(retirees: list[str], language: str | None) -> str:

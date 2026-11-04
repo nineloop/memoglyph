@@ -27,6 +27,21 @@ def test_chaque_cause_a_son_code(exc, code) -> None:
     assert erreurs.code_de(exc) == (code, {})
 
 
+def test_le_refus_des_gratuits_a_son_code_et_non_celui_de_l_envoi_refuse() -> None:
+    """Chantier 006 : la recherche par la hiérarchie trouve le nom de la sous-classe AVANT celui de sa famille (`EnvoiRefuse`)."""
+    assert erreurs.code_de(sensitivity.ModeleGratuitRefuse())[0] == "step.error.freeModelRestricted"
+
+
+def test_la_limite_de_demandes_a_son_code_et_non_celui_de_la_panne_generale() -> None:
+    from core.llm_nomme import LimiteDeDemandes
+    assert erreurs.code_de(LimiteDeDemandes("Quota atteint"))[0] == "step.error.rateLimited"
+
+
+def test_ancre_une_panne_ordinaire_d_un_fournisseur_nomme_garde_le_code_general() -> None:
+    from core.llm_nomme import NommeLLMError
+    assert erreurs.code_de(NommeLLMError("injoignable"))[0] == "step.error.modelUnavailable"
+
+
 def test_une_sous_classe_garde_le_code_de_sa_famille() -> None:
     class PanneDeModele(LLMError):
         pass
@@ -36,8 +51,9 @@ def test_une_sous_classe_garde_le_code_de_sa_famille() -> None:
 
 def test_la_table_nomme_de_vraies_classes() -> None:
     """La table se lit par nom de classe : un renommage la rendrait muette sans ce contrôle."""
+    from core.llm_nomme import LimiteDeDemandes   # chantier 006 : deux entrées de plus, une par cause nouvelle
     vraies = {c.__name__ for c in (LLMError, LLMMalformedOutputError, ExtractionVide, TranscriptNonCitable,
-                                   sensitivity.EnvoiRefuse)}
+                                   sensitivity.EnvoiRefuse, LimiteDeDemandes, sensitivity.ModeleGratuitRefuse)}
     assert set(erreurs.PAR_CLASSE) == vraies
     assert llm.LLMError is LLMError
 

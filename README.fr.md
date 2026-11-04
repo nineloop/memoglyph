@@ -52,7 +52,7 @@ Le compte rendu liste, selon le type de réunion, des décisions, des actions et
 
 Par défaut, tout tourne sur le Mac : Whisper pour la transcription et un modèle de langage MLX local pour les comptes rendus et l'Assistant. La recherche sémantique utilise aussi, par défaut, un modèle d'embeddings local.
 
-Un modèle en ligne peut s'ajouter au besoin : Mistral, OpenAI ou Anthropic, ou tout service au format OpenAI, tel que Groq, par le fournisseur `compatible`. Mistral peut aussi transcrire, avec Voxtral.
+Un modèle en ligne peut s'ajouter au besoin : Mistral, OpenAI, Anthropic, OpenRouter ou Groq, ou tout autre service au format OpenAI par le fournisseur `compatible`. Mistral peut aussi transcrire, avec Voxtral.
 
 Les deux se combinent selon la sensibilité de chaque réunion. Un document étiqueté ultra-confidentiel ne part vers aucun fournisseur en ligne, sauf si son propriétaire l'autorise pour son compte. Détails : [docs/local-et-en-ligne.md](docs/local-et-en-ligne.md).
 
@@ -106,4 +106,4 @@ make check
 
 Le code est sous licence Apache-2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). Les modèles gardent leurs propres licences. Le nom et le logo Memoglyph ne sont pas couverts par cette licence ; les fichiers de la marque sont décrits dans [docs/assets/brand/](docs/assets/brand/README.md).
 
-Version v1.1.2.
+Version v1.2.0.

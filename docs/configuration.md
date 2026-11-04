@@ -21,6 +21,10 @@ Les réglages se lisent sous le préfixe `MEMOGLYPH_*`. Les clés et modèles cl
 | `MEMOGLYPH_MISTRAL_AUDIO_S_PAR_MINUTE` | limite audio du palier Mistral suivie par les envois, `3600` s d'audio par minute par défaut |
 | `OPENAI_API_KEY` | clé API OpenAI pour les comptes-rendus (Responses API) |
 | `MEMOGLYPH_OPENAI_CHAT_MODEL` | modèle LLM OpenAI, `gpt-5.6-luna` par défaut |
+| `OPENROUTER_API_KEY` | clé API OpenRouter (fournisseur `openrouter`, en ligne) |
+| `MEMOGLYPH_OPENROUTER_MODEL` | identifiant du modèle chez OpenRouter ; aucun défaut : sans lui, le fournisseur n'est pas proposé |
+| `GROQ_API_KEY` | clé API Groq (fournisseur `groq`, en ligne) |
+| `MEMOGLYPH_GROQ_MODEL` | identifiant du modèle chez Groq ; aucun défaut : sans lui, le fournisseur n'est pas proposé |
 | `MEMOGLYPH_MLX_PORT` | port épinglé du `mlx_lm.server`, `8772` par défaut |
 | `MEMOGLYPH_PORT_BASE` | port UI de base, API sur le suivant |
 | `MEMOGLYPH_ATTENTE_S` | attente maximale du démarrage par `start.sh`, `900` s par défaut |
@@ -29,6 +33,8 @@ Les réglages se lisent sous le préfixe `MEMOGLYPH_*`. Les clés et modèles cl
 | `MEMOGLYPH_USAGE_DB` | chemin du magasin de télémétrie FinOps `usage.db` (tests / emplacement alternatif) |
 | `MEMOGLYPH_EMBED_LOCAL_MODEL` | modèle d'embeddings local, `intfloat/multilingual-e5-large` par défaut |
 | `MEMOGLYPH_KEEP_FAITHFUL` | conserve le FLAC fidèle, activé par défaut |
+
+Pour OpenRouter et Groq : après avoir ajouté ou changé une clé dans `.env`, redémarrer l'instance. Les clés ne se saisissent que dans `.env` (jamais à l'écran) ; l'adresse de chaque service est fixe et aucun réglage ne la change.
 
 Exemple de ports imposés :
 

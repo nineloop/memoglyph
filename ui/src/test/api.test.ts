@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  ErreurAvecCode,
+  ModeleGratuitError,
+  lancerCompteRendu,
+  relancerFaitsReunion,
   archiveMeeting,
   ask,
   deleteTrashItem,
@@ -439,5 +443,87 @@ describe('annulerTraitement (chantier 005, tranche D)', () => {
     const erreur = await annulerTraitement('j1').catch((e) => e)
     expect(erreur).not.toBeInstanceOf(AnnulationError)
     expect(String(erreur)).toMatch(/HTTP 500/)
+  })
+})
+
+describe('refus « modèle gratuit » (chantier 006)', () => {
+    const corps = { detail: 'Un modèle gratuit ne reçoit pas de document ultra-confidentiel : …', code: 'model.free.restricted' }
+    const refus = () => vi.stubGlobal('fetch', vi.fn().mockImplementation(
+      () => Promise.resolve(new Response(JSON.stringify(corps), { status: 403 }))))
+    const fichier = () => new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' })
+    const options = { engine: 'whisper', language: '', diarize: false, profile: false, timestamps: true, destinationProjectId: 'p1' } as const
+
+    it('un 403 à corps plat devient une erreur typée pour les quatre appels', async () => {
+      refus()
+      const erreurs = await Promise.all([
+        submitTranscribe(fichier(), options).catch((e: unknown) => e),
+        lancerCompteRendu('reunion.md', 'all', 'openrouter').catch((e: unknown) => e),
+        relancerFaitsReunion('M1', 'all', 'openrouter').catch((e: unknown) => e),
+        ask('Question', { mode: 'all' }).catch((e: unknown) => e),
+      ])
+      for (const erreur of erreurs) expect(erreur).toBeInstanceOf(ModeleGratuitError)
+    })
+
+    it('le 403 de l’ultra-confidentiel et un 429 restent des erreurs HTTP ordinaires', async () => {
+      for (const [statut, detail] of [[403, { detail: 'Un document ultra-confidentiel ne part pas vers un fournisseur cloud' }], [429, { detail: 'occupé' }]] as const) {
+        vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(detail), { status: statut }))))
+        const erreurs = await Promise.all([
+          lancerCompteRendu('reunion.md', 'all', 'openrouter').catch((e: unknown) => e),
+          relancerFaitsReunion('M1', 'all', 'openrouter').catch((e: unknown) => e),
+        ])
+        for (const erreur of erreurs) {
+          expect(erreur).not.toBeInstanceOf(ModeleGratuitError)
+          expect(String(erreur)).toContain(`HTTP ${statut}`)
+        }
+      }
+    })
+  })
+
+describe('Assistant : la phrase du serveur, sans l’enveloppe HTTP (chantier 006, tranche E)', () => {
+  const repondre = (statut: number, corps: unknown) => vi.stubGlobal('fetch', vi.fn().mockImplementation(
+    () => Promise.resolve(new Response(typeof corps === 'string' ? corps : JSON.stringify(corps), { status: statut }))))
+
+  it('un 503 rend la phrase du serveur, sans « HTTP », sans accolade', async () => {
+    repondre(503, { detail: 'Assistant indisponible : Quota atteint chez OpenRouter : attendez un moment ou choisissez un autre modèle.' })
+    const erreur = await ask('Question', { mode: 'all' }).catch((e: unknown) => e) as Error
+    expect(erreur).toBeInstanceOf(Error)
+    expect(erreur.message).toBe('Assistant indisponible : Quota atteint chez OpenRouter : attendez un moment ou choisissez un autre modèle.')
+    expect(erreur.message).not.toMatch(/HTTP|[{}]/)
+  })
+
+  it('le refus de l’ultra-confidentiel (403) et le 429 de travail rendent aussi leur phrase', async () => {
+    repondre(403, { detail: 'Un document ultra-confidentiel ne part pas vers un fournisseur cloud' })
+    expect(((await ask('Q', { mode: 'all' }).catch((e: unknown) => e)) as Error).message)
+      .toBe('Un document ultra-confidentiel ne part pas vers un fournisseur cloud')
+    repondre(429, { detail: '1 traitement(s) déjà en cours' })
+    expect(((await ask('Q', { mode: 'all' }).catch((e: unknown) => e)) as Error).message).toBe('1 traitement(s) déjà en cours')
+  })
+
+  it('un corps sans « detail » texte garde le statut, et le refus des gratuits reste typé', async () => {
+    repondre(500, 'pas du JSON')
+    expect(((await ask('Q', { mode: 'all' }).catch((e: unknown) => e)) as Error).message).toBe('HTTP 500')
+    repondre(422, { detail: [{ msg: 'x' }] })
+    expect(((await ask('Q', { mode: 'all' }).catch((e: unknown) => e)) as Error).message).toBe('HTTP 422')
+    repondre(403, { detail: 'Un modèle gratuit…', code: 'model.free.restricted' })
+    expect(await ask('Q', { mode: 'all' }).catch((e: unknown) => e)).toBeInstanceOf(ModeleGratuitError)
+  })
+
+  it('un 503 qui porte un code devient une erreur à code (la phrase du serveur reste le message)', async () => {
+    repondre(503, { detail: 'Assistant indisponible : Quota atteint chez OpenRouter : attendez un moment ou choisissez un autre modèle.', code: 'step.error.rateLimited' })
+    const erreur = await ask('Q', { mode: 'all' }).catch((e: unknown) => e)
+    expect(erreur).toBeInstanceOf(ErreurAvecCode)
+    expect(erreur).toMatchObject({ code: 'step.error.rateLimited', message: 'Assistant indisponible : Quota atteint chez OpenRouter : attendez un moment ou choisissez un autre modèle.' })
+  })
+
+  it('un 503 sans code, ou un code qui n’est pas du texte, reste une erreur ordinaire', async () => {
+    repondre(503, { detail: 'Assistant indisponible : panne' })
+    expect(await ask('Q', { mode: 'all' }).catch((e: unknown) => e)).not.toBeInstanceOf(ErreurAvecCode)
+    repondre(503, { detail: 'Assistant indisponible : panne', code: 42 })
+    expect(await ask('Q', { mode: 'all' }).catch((e: unknown) => e)).not.toBeInstanceOf(ErreurAvecCode)
+  })
+
+  it('une réponse réussie est rendue telle quelle', async () => {
+    repondre(200, { answer: 'Réponse', sources: [] })
+    expect(await ask('Q', { mode: 'all' })).toEqual({ answer: 'Réponse', sources: [] })
   })
 })

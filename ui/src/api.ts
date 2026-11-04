@@ -454,7 +454,7 @@ export interface FaitEcl {
 export const relancerFaitsReunion = (meetingId: string, viewScope: string, provider: string) =>
   fetch(withViewScope(`/api/meetings/${encodeURIComponent(meetingId)}/ecl`, viewScope), {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }),
-  }).then(j<{ job_id: string }>)
+  }).then(leverModeleGratuit).then(j<{ job_id: string }>)
 
 export const getFaitsReunion = (meetingId: string, viewScope: string) =>
   fetch(withViewScope(`/api/meetings/${encodeURIComponent(meetingId)}/ecl`, viewScope))
@@ -526,7 +526,13 @@ export const ask = (question: string, scope: RagScope) =>
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, scope, llm_provider: getLlmProvider() }),
-  }).then(j<RagAnswer>)
+  }).then(leverModeleGratuit).then(async (r) => {
+    if (r.ok) return r.json() as Promise<RagAnswer>
+    // La phrase du serveur, sans l'enveloppe HTTP ; avec son code quand le serveur en donne un (un quota atteint).
+    const corps = await r.clone().json().catch(() => null) as { detail?: unknown; code?: unknown } | null
+    if (typeof corps?.code === 'string' && typeof corps?.detail === 'string') throw new ErreurAvecCode(corps.code, corps.detail)
+    return refus(r)
+  })
 
 export interface DupMember {
   name: string
@@ -798,7 +804,7 @@ export const lancerCompteRendu = (name: string, viewScope: string, provider: str
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ llm_provider: provider }),
-  }).then(j<{ job_id: string }>)
+  }).then(leverModeleGratuit).then(j<{ job_id: string }>)
 
 // ---- Voix (signature vocale) ----
 export interface VoiceOccurrence {
@@ -888,6 +894,38 @@ export const startFaithfulBackfill = (viewScope = '') =>
   fetch(withViewScope('/api/maintenance/backfill/faithful', viewScope), { method: 'POST' })
     .then(j<{ job_id: string }>)
 
+/** Un modèle que le service marque gratuit ne reçoit que des documents « public · normal » (403 à corps plat, `model.free.restricted`).
+ * L'écran en fait SA phrase ; il ne montre jamais le texte brut, ni celle de l'ultra-confidentiel. */
+export class ModeleGratuitError extends Error {
+  readonly code = 'model.free.restricted'
+
+  constructor() {
+    super('model.free.restricted')
+    this.name = 'ModeleGratuitError'
+  }
+}
+
+/** Une panne dont le serveur donne le CODE (corps plat `{detail, code}`) : l'écran la traduit s'il connaît le code, et garde la
+ * phrase du serveur (`message`) sinon. */
+export class ErreurAvecCode extends Error {
+  readonly code: string
+
+  constructor(code: string, detail: string) {
+    super(detail)
+    this.name = 'ErreurAvecCode'
+    this.code = code
+  }
+}
+
+/** Lève `ModeleGratuitError` si la réponse est ce refus ; tout autre statut ou corps passe à l'appelant, inchangé. */
+async function leverModeleGratuit(reponse: Response): Promise<Response> {
+  if (reponse.status === 403) {
+    const corps = await reponse.clone().json().catch(() => null) as { code?: string } | null
+    if (corps?.code === 'model.free.restricted') throw new ModeleGratuitError()
+  }
+  return reponse
+}
+
 /** Un second envoi du même fichier pendant que le premier attend ou tourne (409, `transcribe.duplicate`). */
 export class DoublonError extends Error {
   readonly jobId: string
@@ -924,6 +962,7 @@ export async function submitTranscribe(
   }
   fd.append('destination_project_id', opts.destinationProjectId)
   const reponse = await fetch('/api/transcribe', { method: 'POST', body: fd })
+  await leverModeleGratuit(reponse)
   // Un fichier déjà en attente ou en cours pour ce compte : le serveur refuse (409) en nommant le traitement
   // existant. L'écran en fait une phrase claire ; il ne montre jamais le texte brut.
   if (reponse.status === 409) {

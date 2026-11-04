@@ -146,6 +146,7 @@ it('aucun message ne reste identique par oubli de traduction', () => {
     'traitements.nature.transcription', 'traitements.nature.archives',
     'app.provider.ollamaLocal', 'app.provider.mlxLocal', 'app.provider.mistralCloud',
     'app.provider.openaiCloud', 'app.provider.anthropicCloud',
+    'app.provider.openrouter', 'app.provider.groq',      // noms propres (chantier 006)
     'spoken.codePlaceholder',
     'diar.engine.cloud', 'diar.engine.local',
     'transcribe.flow.options', 'transcribe.options.title',

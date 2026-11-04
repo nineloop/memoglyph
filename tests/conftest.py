@@ -67,21 +67,191 @@ def _refuser_un_serveur_de_production(commande) -> None:
 
 import subprocess  # noqa: E402
 
-_POPEN_REEL = subprocess.Popen
+# Ce module peut exister EN DEUX COPIES dans un processus : celle que pytest charge comme conftest, et celle que les tests
+# importent par `tests.conftest`. Tout ce qui est posé ICI se détecte donc sur l'objet posé (un marqueur), jamais sur une
+# variable du module : sans cela la seconde copie envelopperait la garde une seconde fois, et prendrait la garde pour le vrai.
+_POPEN_REEL = getattr(subprocess.Popen, "_popen_reel", subprocess.Popen)
 
 
 class _PopenSansServeurDeProduction(_POPEN_REEL):  # type: ignore[valid-type, misc]
+    _popen_reel = _POPEN_REEL
+    _garde_lancement = True
+
     def __init__(self, args, *a, **k):
         _refuser_un_serveur_de_production(args)
         super().__init__(args, *a, **k)
 
 
 # Posée pour TOUTE la session (y compris un fil de traitement qui survivrait à son test) et rendue en fin de session.
-subprocess.Popen = _PopenSansServeurDeProduction  # type: ignore[misc]
+if not getattr(subprocess.Popen, "_garde_lancement", False):
+    subprocess.Popen = _PopenSansServeurDeProduction  # type: ignore[misc]
+
+
+# ---------- GARDE RÉSEAU (chantier 006) : un test ne joint aucun hôte hors de la machine ----------
+#
+# Les fournisseurs en ligne nommés multiplient les endroits où un appel réel pourrait partir. Comme la garde de port,
+# elle est posée ICI, avant tout import de `core`, pour toute la session.
+#
+# - REFUSE : `connect`, `connect_ex`, `sendto` vers une adresse IP non locale, **et vers un NOM** (`connect(("nom", 443))`
+#   résout dans la couche C, sans passer par `getaddrinfo` : le nom lui-même est refusé, sauf `localhost`) ; les points
+#   d'entrée de résolution `getaddrinfo`, `gethostbyname`, `gethostbyname_ex`, `gethostbyaddr`, `getnameinfo` (et donc
+#   `getfqdn`, qui passe par `gethostbyaddr`) : AUCUNE requête de noms ne part ;
+# - PERMET : la boucle locale (`127.0.0.0/8`, `::1`, y compris IPv4 écrite en IPv6), les adresses non spécifiées
+#   (`0.0.0.0`, `::`), l'absence d'hôte (`getaddrinfo(None, port)` : liaison passive d'un serveur), les sockets de domaine
+#   Unix ;
+# - TÉMOIN : chaque refus est ENREGISTRÉ (`REFUS`) ; un test dont le code a attrapé l'`OSError` échoue quand même
+#   (`aucun_refus_de_la_garde_reseau`), et nomme l'hôte ;
+# - LIMITES DITES : un SOUS-PROCESSUS (pytester en sous-processus, `run_ml_tests.py`, les fils du crochet de poussée) n'est
+#   pas couvert, ni Vitest ; un socket créé hors du module `socket` (extension C) non plus.
+import ipaddress  # noqa: E402
+import socket  # noqa: E402
+
+# L'ÉTAT vit sur le module `socket` (une seule instance par processus) : les deux copies de ce module le partagent.
+_ETAT: dict = socket.__dict__.setdefault("_etat_garde_reseau", {"refus": [], "reels": {}, "profondeur": 0})
+
+REFUS: list[str] = _ETAT["refus"]
+"""Les refus de la garde réseau, dans l'ordre : le témoin les relit après chaque test."""
+
+
+class ReseauInterdit(ConnectionRefusedError):
+    """Un test a voulu joindre un hôte hors de la machine. Une `OSError` : le code sous test la voit comme une panne réseau."""
+
+
+def hote_local(hote) -> bool:
+    """L'hôte est-il sur cette machine (ou absent : liaison passive) ? Un NOM autre que `localhost` ne l'est jamais."""
+    if hote is None:
+        return True
+    if isinstance(hote, bytes):
+        hote = hote.decode("ascii", "replace")
+    nom = str(hote).strip().strip("[]").split("%", 1)[0].lower()
+    if nom in ("", "localhost"):
+        return True
+    try:
+        adresse = ipaddress.ip_address(nom)
+    except ValueError:
+        return False            # un nom : il se résoudrait hors de la machine
+    ecrite_en_ipv4 = getattr(adresse, "ipv4_mapped", None)
+    if ecrite_en_ipv4 is not None:
+        adresse = ecrite_en_ipv4
+    return adresse.is_loopback or adresse.is_unspecified
+
+
+def _refuser(operation: str, hote) -> None:
+    import threading
+
+    message = (f"garde réseau : un test ne joint aucun hôte hors de la machine ({operation} vers {hote!r}, "
+               f"fil {threading.current_thread().name})")
+    REFUS.append(message)
+    raise ReseauInterdit(message)
+
+
+def _hote_de(adresse):
+    return adresse[0] if isinstance(adresse, tuple) and adresse else None
+
+
+_REELS: dict = _ETAT["reels"]
+
+
+def _garde_de_socket(nom: str):
+    reel = _REELS[nom]
+
+    def garde(self, adresse, *reste):
+        if self.family in (socket.AF_INET, socket.AF_INET6) and not hote_local(_hote_de(adresse)):
+            _refuser(nom, _hote_de(adresse))
+        return reel(self, adresse, *reste)
+    garde._garde_reseau = True
+    return garde
+
+
+def _garde_envoi():
+    reel = _REELS["sendto"]
+
+    def garde(self, donnees, *reste):
+        if self.family in (socket.AF_INET, socket.AF_INET6) and reste and not hote_local(_hote_de(reste[-1])):
+            _refuser("sendto", _hote_de(reste[-1]))
+        return reel(self, donnees, *reste)
+    garde._garde_reseau = True
+    return garde
+
+
+def _garde_de_resolution(nom: str, extraire):
+    reel = _REELS[nom]
+
+    def garde(*args, **kwargs):
+        hote = extraire(*args, **kwargs)
+        if not hote_local(hote):
+            _refuser(nom, hote)
+        return reel(*args, **kwargs)
+    garde._garde_reseau = True
+    return garde
+
+
+def poser_la_garde_reseau() -> None:
+    """Pose la garde, UNE seule fois par processus : un second appel (ou une session imbriquée) ne l'enveloppe pas deux fois."""
+    if getattr(socket.socket.connect, "_garde_reseau", False):
+        return
+    _REELS.update({
+        "connect": socket.socket.connect, "connect_ex": socket.socket.connect_ex, "sendto": socket.socket.sendto,
+        "getaddrinfo": socket.getaddrinfo, "gethostbyname": socket.gethostbyname,
+        "gethostbyname_ex": socket.gethostbyname_ex, "gethostbyaddr": socket.gethostbyaddr,
+        "getnameinfo": socket.getnameinfo,
+    })
+    socket.socket.connect = _garde_de_socket("connect")  # type: ignore[method-assign]
+    socket.socket.connect_ex = _garde_de_socket("connect_ex")  # type: ignore[method-assign]
+    socket.socket.sendto = _garde_envoi()  # type: ignore[method-assign]
+    socket.getaddrinfo = _garde_de_resolution(  # type: ignore[assignment]
+        "getaddrinfo", lambda *a, **k: k.get("host", a[0] if a else None))   # `host=` nommé compris
+    socket.gethostbyname = _garde_de_resolution("gethostbyname", lambda nom, *a, **k: nom)  # type: ignore[assignment]
+    socket.gethostbyname_ex = _garde_de_resolution("gethostbyname_ex", lambda nom, *a, **k: nom)  # type: ignore[assignment]
+    socket.gethostbyaddr = _garde_de_resolution("gethostbyaddr", lambda adresse, *a, **k: adresse)  # type: ignore[assignment]
+    socket.getnameinfo = _garde_de_resolution(  # type: ignore[assignment]
+        "getnameinfo", lambda adresse, *a, **k: _hote_de(adresse))
+
+
+def rendre_la_garde_reseau() -> None:
+    if not _REELS:
+        return
+    socket.socket.connect = _REELS["connect"]  # type: ignore[method-assign]
+    socket.socket.connect_ex = _REELS["connect_ex"]  # type: ignore[method-assign]
+    socket.socket.sendto = _REELS["sendto"]  # type: ignore[method-assign]
+    for nom in ("getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr", "getnameinfo"):
+        setattr(socket, nom, _REELS[nom])
+    _REELS.clear()
+
+
+poser_la_garde_reseau()
+
+# Les sessions `pytester` tournent DANS ce processus et peuvent charger ces crochets : seule la session la plus EXTERNE
+# rend les gardes (compteur de profondeur). Sans lui, la fin d'une session interne retirait la garde de la session externe.
+def pytest_configure(config) -> None:
+    _ETAT["profondeur"] += 1
 
 
 def pytest_unconfigure(config) -> None:
-    subprocess.Popen = _POPEN_REEL  # type: ignore[misc]
+    _ETAT["profondeur"] -= 1
+    if _ETAT["profondeur"] <= 0:
+        subprocess.Popen = _POPEN_REEL  # type: ignore[misc]
+        rendre_la_garde_reseau()
+
+
+def _refus_hors_d_un_test(session) -> None:
+    """Un refus survenu HORS d'un test (collecte, fixture de session) ne passe pas inaperçu : la session échoue."""
+    if REFUS and _ETAT["profondeur"] <= 1:
+        import sys
+
+        print("\n[tests] refus de la garde réseau hors d'un test : " + " ; ".join(REFUS), file=sys.stderr)
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
+@pytest.fixture(autouse=True)
+def aucun_refus_de_la_garde_reseau(request):
+    """Un test dont le code a voulu joindre l'extérieur échoue, MÊME s'il a attrapé l'erreur ; le refus nomme l'hôte."""
+    avant = len(REFUS)
+    yield
+    nouveaux = REFUS[avant:]
+    if nouveaux:
+        del REFUS[avant:]
+        raise AssertionError(f"{request.node.nodeid} : " + " ; ".join(nouveaux))
 
 
 RACINE_REELLE = Path(__file__).resolve().parent.parent
@@ -227,6 +397,7 @@ def aucune_ecriture_dans_la_vraie_racine(request):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    _refus_hors_d_un_test(session)
     touches = ecarts(_RELEVE_INITIAL, releve_complet(RACINE_REELLE))
     if _RACINE_CREEE_ICI:
         shutil.rmtree(RACINE_ISOLEE, ignore_errors=True)
@@ -509,3 +680,33 @@ def aucun_listener_sur_le_port_de_production(request):
             "serveur de test doit prendre un port éphémère et être arrêté par "
             "une garantie de nettoyage."
         )
+
+
+# ---------- GARDE DE PAUSE (chantier 006, tranche H) : aucun test ne dort pour de vrai ----------
+#
+# Le moteur des fournisseurs nommés attend jusqu'à 60 s (300 s en tout) avant de réessayer un 429. Plusieurs suites envoient
+# des 429 sans `Retry-After` (20 s par défaut) : si un contexte d'attente fuyait jusqu'à elles, elles dormiraient pour de vrai.
+# La pause passe par `core.attente_quota.dormir`, le seul point de remplacement ; ici il REFUSE, et le témoin relit la
+# tentative après le test (un `except` du moteur ne peut pas l'avaler). Un test qui exerce l'attente remplace `dormir`
+# lui-même (`monkeypatch.setattr`), ce qui l'emporte sur cette garde.
+
+@pytest.fixture(autouse=True)
+def aucune_pause_reelle():
+    # Sans le fixture `monkeypatch` : le demander ici le monterait avant les gardes propres à d'autres fichiers (par exemple
+    # celle des seuils de `test_semantic.py`), qui verraient alors l'état AVANT sa restauration et accuseraient à tort le test.
+    from core import attente_quota
+
+    tentatives: list[float] = []
+
+    def interdit(secondes: float) -> None:
+        tentatives.append(secondes)
+        raise AssertionError(f"garde de pause : un test ne dort pas pour de vrai ({secondes:g} s demandées) ; "
+                             "remplacer `core.attente_quota.dormir` dans ce test")
+    origine = attente_quota.dormir
+    attente_quota.dormir = interdit
+    try:
+        yield
+    finally:
+        attente_quota.dormir = origine
+    if tentatives:
+        pytest.fail(f"garde de pause : ce test a demandé à dormir {tentatives} s sans remplacer `dormir`", pytrace=False)

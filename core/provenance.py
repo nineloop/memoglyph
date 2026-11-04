@@ -43,7 +43,7 @@ AUDIO_NORMALIZATION_VERSION = 1
 DIARIZATION_MERGE_VERSION = 1
 PROFILING_PROMPT_VERSION = 1
 REPORT_PROMPT_VERSION = 4
-GENRE_CLASSIFIER_VERSION = 1
+GENRE_CLASSIFIER_VERSION = 2
 # v2 : `analyse_sportive` passe de 5 à 8 rubriques (contexte,
 # personnes, choix/affaires, méthode/style, héritage ajoutés ; « désaccord »
 # retiré au profit des jugements). Le `questions_sha256` change de toute façon —

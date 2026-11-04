@@ -21,7 +21,8 @@ avant. Sans résolveur, ou s'il échoue, la réponse est non.
 La sensibilité est relue de même à chaque envoi vers le cloud, par un second
 résolveur que la bibliothèque enregistre (`enregistrer_resolveur_sensibilite`) : un
 document passé en ultra-confidentiel pendant un compte rendu arrête l'appel suivant
-(T3). Une relecture en échec ferme l'envoi cloud.
+(T3). Une relecture en échec ferme l'envoi cloud. La relecture relève aussi vers « confidentiel » : aucune règle ne lit ce niveau
+aujourd'hui (la règle des modèles gratuits, `core/modeles_gratuits.py`, ne ferme plus que l'ultra) ; ce relèvement est gardé.
 
 Le partage a sa propre règle (`library.reunion_ultra_confidentielle`), que le
 réglage ne change pas. Rien ici ne classe automatiquement : le niveau reste
@@ -70,6 +71,25 @@ class EnvoiRefuse(Exception):
     """
 
     def __init__(self, message: str = REFUS_CLOUD) -> None:
+        super().__init__(message)
+
+
+REFUS_MODELE_GRATUIT = ("Un modèle gratuit ne reçoit pas de document ultra-confidentiel : choisissez un modèle payant "
+                        "ou un autre fournisseur.")
+
+
+class ModeleGratuitRefuse(EnvoiRefuse):
+    """Un document « ultra-confidentiel » destiné à un modèle que le service marque gratuit.
+
+    Règle PLUS STRICTE que celle du nuage (`core/modeles_gratuits.py`) : elle ne regarde pas l'autorisation du compte (un ultra
+    autorisé au cloud est refusé quand même). Une
+    sous-classe d'`EnvoiRefuse` : tous les `except` qui laissent traverser un refus du cœur la laissent traverser aussi, et
+    l'API la rend en 403 à corps plat avec son propre code (`code`), jamais avec la phrase de l'ultra-confidentiel.
+    """
+
+    code = "model.free.restricted"
+
+    def __init__(self, message: str = REFUS_MODELE_GRATUIT) -> None:
         super().__init__(message)
 
 
@@ -159,12 +179,13 @@ def enregistrer_resolveur_sensibilite(resolveur: Optional[ResolveurSensibilite])
 
 
 def sensibilite_actuelle(envoi: Envoi) -> object:
-    """La sensibilité de cet envoi MAINTENANT : celle qu'il porte, élevée par celle relue (T3).
+    """La sensibilité de cet envoi MAINTENANT : celle qu'il porte, RELEVÉE par celle relue (T3).
 
     Appelée pour un envoi CLOUD seulement (`_controler`) : en local, rien n'est relu.
-    `Envoi` est figé au début d'un travail ; le document peut passer en ultra-confidentiel
-    pendant. La relecture ne fait que RELEVER : un document qui ne serait plus
-    ultra-confidentiel garde ce que porte l'envoi, contrôlé par la route au départ.
+    `Envoi` est figé au début d'un travail ; le document peut devenir plus sensible pendant. La relecture ne fait que RELEVER
+    (ultra-confidentiel > confidentiel > public · normal) : un document qui le serait devenu moins garde ce que porte l'envoi,
+    contrôlé par la route au départ. Le niveau « confidentiel » relu n'est lu par aucune règle
+    aujourd'hui (le nuage et les modèles gratuits ne ferment que l'ultra-confidentiel) ; le relèvement est gardé, il est testé.
 
     - Résolveur qui LÈVE (index illisible…) : `EnvoiRefuse`. Fermé en cas de doute,
       comme l'autorisation du compte : on ne sait pas ce que le document est devenu.
@@ -177,10 +198,11 @@ def sensibilite_actuelle(envoi: Envoi) -> object:
     if not isinstance(envoi.document_id, str) or not envoi.document_id:
         return envoi.sensibilite
     try:
-        relue = _resolveur_sensibilite(envoi.document_id)
+        relue = normaliser(_resolveur_sensibilite(envoi.document_id))
     except Exception as exc:  # noqa: BLE001 — fermé en cas de doute
         raise EnvoiRefuse() from exc
-    return ULTRA_CONFIDENTIEL if normaliser(relue) == ULTRA_CONFIDENTIEL else envoi.sensibilite
+    plus_sensible = SENSIBILITES.index(relue) < SENSIBILITES.index(normaliser(envoi.sensibilite))   # du plus sensible au plus ouvert
+    return relue if plus_sensible else envoi.sensibilite
 
 
 def _envois(envoi: Envois) -> tuple[Envoi, ...]:
@@ -242,9 +264,17 @@ def tracer(envoi: Envois, *, fournisseur: str) -> None:
                          e.proprietaire, fournisseur, e.document_id or "-")
 
 
-def autoriser_envoi(envoi: Envois, *, local: bool, fournisseur: str) -> bool:
-    """`controler`, puis `tracer` si un ultra-confidentiel part ; rend ce que rend `controler`."""
+def autoriser_envoi(envoi: Envois, *, local: bool, fournisseur: str,
+                    avant_trace: Optional[Callable[[tuple[Envoi, ...]], None]] = None) -> bool:
+    """`controler`, puis `tracer` si un ultra-confidentiel part ; rend ce que rend `controler`.
+
+    `avant_trace` : une règle SUPPLÉMENTAIRE de l'appelant (celle des modèles gratuits), appliquée aux envois avec leur
+    sensibilité ACTUELLE, après le refus du nuage et AVANT la trace : un envoi refusé ne laisse jamais la ligne « envoyé avec
+    autorisation ». Un rappel et non un import : ce module ignore tout des modèles, et `controler` (que `rag.py` filtre) n'en
+    porte aucune."""
     ultra, actuels = _controler(envoi, local=local)
+    if avant_trace is not None:
+        avant_trace(actuels)
     if ultra:
         tracer(actuels, fournisseur=fournisseur)
     return ultra

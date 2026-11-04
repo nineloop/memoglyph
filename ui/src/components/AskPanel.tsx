@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { RagAnswer, RagSource } from '../api'
 import { usePartage } from '../lib/partage'
-import { PORTEE_PARTAGES, ask, porteeDocument } from '../api'
+import { ErreurAvecCode, ModeleGratuitError, PORTEE_PARTAGES, ask, porteeDocument } from '../api'
 import { TranscriptReader } from './TranscriptReader'
 import { Icon } from './Icon'
 import { Badge } from '../design/primitives'
@@ -10,6 +10,7 @@ import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
 import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
+import { traduireEtape } from '../lib/i18n'
 import { pluralKey } from '../lib/i18n'
 import type { MessageKey } from '../lib/messages'
 
@@ -45,7 +46,7 @@ const AMORCES: MessageKey[] = [
 export function AskPanel({
   viewScope, scopeLabel, scopeCount, scopeCountAll, scopeLabelAll, llmAvailable, onChangerPortee,
 }: Props) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [q, setQ] = useState('')
   const [res, setRes] = useState<RagAnswer | null>(null)
   const [loading, setLoading] = useState(false)
@@ -92,7 +93,11 @@ export function AskPanel({
       )
       if (isCurrentAsk(request)) setRes(value)
     } catch (e) {
-      if (isCurrentAsk(request)) setError(String(e))
+      if (isCurrentAsk(request)) setError(
+        e instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted')
+          // Un code connu se traduit ; inconnu, la phrase du serveur reste (jamais la clé brute).
+          : e instanceof ErreurAvecCode ? traduireEtape(lang, { code: e.code, params: {}, message: e.message })
+            : e instanceof Error ? e.message : String(e))
     } finally {
       if (isCurrentAsk(request)) setLoading(false)
     }

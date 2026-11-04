@@ -107,6 +107,8 @@ _DDL = [
         stage         TEXT,
         provider      TEXT,
         model         TEXT,
+        model_servi   TEXT,                       -- le modèle qui a RÉPONDU (NULL : non dit) ; `model` reste le demandé
+        error_code    TEXT,                       -- le CODE seul d'un appel refusé ou inutilisable (jamais le corps)
         started_at    TEXT,
         latency_s     REAL,
         status        TEXT,
@@ -250,6 +252,7 @@ _ADDED_COLUMNS = {
     "model_call": [
         ("cost", "REAL"), ("cost_currency", "TEXT"), ("cost_basis", "TEXT"),
         ("pricing_snapshot_id", "TEXT"), ("cost_computed_at", "TEXT"),
+        ("model_servi", "TEXT"), ("error_code", "TEXT"),
     ],
     "pricing_snapshot": [
         ("unit", "TEXT NOT NULL DEFAULT 'token'"), ("version", "INTEGER NOT NULL DEFAULT 1"),
@@ -600,8 +603,8 @@ _EXEC_PUBLIC = ("execution_id", "kind", "status", "document_id", "meeting_id", "
                 "produced_artifact_id", "provider_primary", "model_primary", "started_at",
                 "ended_at", "wall_clock_s", "n_calls", "in_tok", "out_tok", "audio_seconds",
                 "cost", "cost_currency", "cost_basis", "pricing_snapshot_id")
-_CALL_PUBLIC = ("seq", "stage", "provider", "model", "started_at", "latency_s", "status",
-                "usage_source", "in_tok", "out_tok", "cached_tok", "reasoning_tok",
+_CALL_PUBLIC = ("seq", "stage", "provider", "model", "model_servi", "started_at", "latency_s", "status",
+                "error_code", "usage_source", "in_tok", "out_tok", "cached_tok", "reasoning_tok",
                 "cost", "cost_currency", "cost_basis", "pricing_snapshot_id")
 
 # Sentinelle « aucun filtre projet » (vue globale/opérateur). À distinguer de `project_id=None`
@@ -1160,13 +1163,14 @@ def persist_execution(buffer, *, path: Optional[Path | str] = None) -> bool:
             conn.execute(
                 "INSERT OR REPLACE INTO model_call ("
                 "call_id, execution_id, seq, stage, provider, model, started_at, latency_s, "
-                "status, usage_source, in_tok, out_tok, cached_tok, reasoning_tok, created_at"
-                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "status, usage_source, in_tok, out_tok, cached_tok, reasoning_tok, created_at, model_servi, error_code"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     call["call_id"], call["execution_id"], call["seq"], call["stage"],
                     call["provider"], call["model"], call["started_at"], call["latency_s"],
                     call["status"], call["usage_source"], call["in_tok"], call["out_tok"],
-                    call["cached_tok"], call["reasoning_tok"], call["created_at"],
+                    call["cached_tok"], call["reasoning_tok"], call["created_at"], call.get("model_servi"),
+                    call.get("error_code"),
                 ),
             )
         # Coût DÉRIVÉ, filet séparé : jamais laisser un barème casser la persistance des faits.
