@@ -13,7 +13,7 @@ const P = (id: string, name: string, kind: Project['kind'] = 'regular'): Project
   ({ id, project: name, name, kind, owner: 'moi', count: 1 })
 const PROJETS = [P('inbox', 'Non classé', 'inbox'), P('a', 'Réunions AMI')]
 
-describe('« Non classé » est un libellé du système, traduit (FR-029)', () => {
+describe('« Non classé » est un libellé du système, traduit', () => {
   it('libelleProjet : traduit la réception, jamais un projet nommé', () => {
     const en = (k: Parameters<typeof translate>[1]) => translate('en', k)
     const fr = (k: Parameters<typeof translate>[1]) => translate('fr', k)

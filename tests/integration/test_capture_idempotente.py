@@ -1,4 +1,4 @@
-"""Une capture renvoyée ne crée ni seconde réunion ni second traitement (chantier 003, tranche D).
+"""Une capture renvoyée ne crée ni seconde réunion ni second traitement.
 
 Le compagnon renvoie seul une capture refusée faute de place, et aussi celle dont la réponse
 s'est perdue. Chaque capture porte un `capture_id` (un UUID) : le serveur le range dans la

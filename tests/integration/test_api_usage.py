@@ -1,4 +1,4 @@
-"""FinOps phase 3A — endpoint de LECTURE d'agrégat `/api/usage/rollup` (dark, lecture seule).
+"""FinOps — endpoint de LECTURE d'agrégat `/api/usage/rollup` (dark, lecture seule).
 
 Séries agrégées lues depuis `usage_daily`, BORNÉES PAR PROJET : une portée projet ne renvoie que
 ce projet ; `view_scope=all` explicite = tous les projets du compte, jamais ceux d'un

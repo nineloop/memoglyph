@@ -60,7 +60,7 @@ beforeEach(() => {
 
 /**
  * « L'application est prête » : la configuration est reçue. Ce signal était le sélecteur de
- * portée de la barre haute, retiré au chantier 003 ; l'état des services n'apparaît qu'une fois la
+ * portée de la barre haute, retiré depuis ; l'état des services n'apparaît qu'une fois la
  * configuration là, et le panneau des projets, lui, n'existe que dans la Bibliothèque.
  */
 const prete = () => screen.findByLabelText('État des services')
@@ -98,7 +98,7 @@ it('borne la portée initiale au projet système plutôt qu’à tout le corpus'
     .toHaveAttribute('aria-current', 'page'))
   expect(within(panneau).getByRole('link', { name: /Tous mes projets/ })).not.toHaveAttribute('aria-current')
   expect(new URLSearchParams(location.search).get('projet')).toBe('01KY243SVP5GA31F6KSBYXEAHR')
-  // Le menu natif « Portée consultée » n'existe plus (SC-002).
+  // Le menu natif « Portée consultée » n'existe plus.
   expect(screen.queryByRole('combobox', { name: /Projet courant/ })).toBeNull()
 })
 
@@ -186,8 +186,8 @@ it('expose les espaces de navigation dans le dock et navigue au clic', async () 
 
 
 it('transmet la recherche de la barre haute à la vue Recherche, sur TOUTES les réunions', async () => {
-  // Avant le chantier 003 elle gardait le projet consulté ; la barre est désormais globale
-  // (« toutes les réunions », comme la maquette) et le projet reste un bouton de l'écran.
+  // Auparavant elle gardait le projet consulté ; la barre est désormais globale
+  // (« toutes les réunions ») et le projet reste un bouton de l'écran.
   const user = userEvent.setup()
   render(<App />)
 
@@ -212,7 +212,7 @@ it('transmet la recherche de la barre haute à la vue Recherche, sur TOUTES les 
  * verrouillent les décisions elles-mêmes.
  */
 describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
-  it('plus aucun contrôle ne change de sens selon l’écran (SC-002)', async () => {
+  it('plus aucun contrôle ne change de sens selon l’écran', async () => {
     // Le menu natif « Portée consultée » changeait de SENS sans changer de nom : destination dans
     // Transcrire, consultation dans la Bibliothèque, périmètre d'action dans la Corbeille. Il a
     // disparu : la destination se choisit dans Transcrire, la consultation dans le panneau.
@@ -986,13 +986,13 @@ it('un administrateur voit la maintenance et les projets sans propriétaire sign
 
 
 /**
- * SC-002 — « plus aucun contrôle ne change de sens selon l'écran ».
+ * « plus aucun contrôle ne change de sens selon l'écran ».
  *
  * `RangerDans.test` ne prouve que la structure du champ. La preuve est ici, au niveau de
  * l'application : la destination (Transcrire) et la consultation (panneau) sont deux états, et
  * changer l'un ne touche JAMAIS l'autre.
  */
-describe('destination et consultation sont indépendantes (SC-002)', () => {
+describe('destination et consultation sont indépendantes', () => {
   const DEFAUT = '01KY243SVP5GA31F6KSBYXEAHR'
   const CLIMAT = '01KY243SVQMK79ZY6TVJW2Q3Y0'
 
@@ -1033,7 +1033,7 @@ describe('destination et consultation sont indépendantes (SC-002)', () => {
 
     await user.click(within(screen.getByRole('navigation', { name: 'Navigation principale' }))
       .getByRole('button', { name: 'Transcrire' }))
-    // Avant le chantier, la destination SUIVAIT le projet consulté.
+    // Auparavant, la destination SUIVAIT le projet consulté.
     expect(await screen.findByRole('combobox', { name: 'Ranger dans' })).toHaveValue('Non classé')
   })
 
@@ -1082,7 +1082,7 @@ describe('destination et consultation sont indépendantes (SC-002)', () => {
 })
 
 
-describe('les six autres écrans affichent la portée en lecture (retour 15)', () => {
+describe('les six autres écrans affichent la portée en lecture', () => {
   it.each(['Recherche', 'Assistant', 'Voix', 'Usage', 'Corbeille', 'Doublons'])(
     '%s : la portée se lit, sans sélecteur, avec « Changer dans la Bibliothèque »', async (ecran) => {
       const user = userEvent.setup()
@@ -1119,7 +1119,7 @@ describe('les six autres écrans affichent la portée en lecture (retour 15)', (
 })
 
 
-describe('mobile : tiroir des projets et dock (US4)', () => {
+describe('mobile : tiroir des projets et dock', () => {
   it('le bouton menu ouvre le tiroir ; choisir un projet le ferme et rend le focus au bouton', async () => {
     const user = userEvent.setup()
     history.replaceState(null, '', '/?vue=library')
@@ -1179,7 +1179,7 @@ describe('le panneau des projets se souvient de son état (par compte)', () => {
 
 
 /**
- * Les traitements visibles depuis n'importe quel écran (chantier 003, tranche B, US5).
+ * Les traitements visibles depuis n'importe quel écran.
  */
 describe('les traitements, depuis n\'importe quel écran', () => {
   const T = (extra: Partial<Traitement> = {}): Traitement => ({
@@ -1293,7 +1293,7 @@ describe('les traitements, depuis n\'importe quel écran', () => {
 })
 
 
-describe('la largeur de la page (tranche C)', () => {
+describe('la largeur de la page', () => {
   it('seules la Bibliothèque et ses réunions sortent de la largeur de 1240 px', async () => {
     const user = userEvent.setup()
     history.replaceState(null, '', '/?vue=library')

@@ -29,7 +29,7 @@ type Props = {
   onTabChange?: (onglet: string) => void
   onVoirDoublons?: () => void
   onChanged?: () => void
-  /** Fil d'Ariane et flèches précédente/suivante, fournis par la Bibliothèque (retour 15). */
+  /** Fil d'Ariane et flèches précédente/suivante, fournis par la Bibliothèque. */
   ariane?: ReactNode
   navigation?: ReactNode
 }
@@ -399,7 +399,7 @@ export function MeetingView({
     <section className="meeting-workspace">
       <header className={lecture ? 'meeting-hero compact' : 'meeting-hero'}>
         <div className="meeting-hero-top">
-          {/* Le fil d'Ariane est sur la même ligne que les flèches et « Partager » (comme la maquette). */}
+          {/* Le fil d'Ariane est sur la même ligne que les flèches et « Partager ». */}
           {ariane}
           {/* Avec le fil d'Ariane, « Bibliothèque » y est déjà : le bouton ferait doublon. */}
           {!ariane && <button type="button" className="btn" onClick={onBack}><Icon name="arrow-left" /> {t('meeting.back')}</button>}

@@ -14,7 +14,7 @@ const projets = [P('inbox', 'Non classé', 'inbox', 0), P('a', 'Réunions AMI', 
 beforeEach(() => localStorage.clear())
 afterEach(() => vi.unstubAllGlobals())
 
-describe('le projet consulté et la destination sont deux états distincts (SC-002)', () => {
+describe('le projet consulté et la destination sont deux états distincts', () => {
   const depart: EtatNavigation = { consulte: 'a', destination: 'b' }
 
   it('changer la destination ne modifie JAMAIS le projet consulté', () => {

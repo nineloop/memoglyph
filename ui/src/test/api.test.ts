@@ -414,7 +414,7 @@ describe('Usage dashboard API — scope + filtres + bornes', () => {
 })
 
 
-describe('annulerTraitement (chantier 005, tranche D)', () => {
+describe('annulerTraitement', () => {
   it('POST /api/jobs/{id}/cancel ; un 200 se résout', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ statut: 'annule', job_id: 'j 1' }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -446,7 +446,7 @@ describe('annulerTraitement (chantier 005, tranche D)', () => {
   })
 })
 
-describe('refus « modèle gratuit » (chantier 006)', () => {
+describe('refus « modèle gratuit »', () => {
     const corps = { detail: 'Un modèle gratuit ne reçoit pas de document ultra-confidentiel : …', code: 'model.free.restricted' }
     const refus = () => vi.stubGlobal('fetch', vi.fn().mockImplementation(
       () => Promise.resolve(new Response(JSON.stringify(corps), { status: 403 }))))
@@ -479,7 +479,7 @@ describe('refus « modèle gratuit » (chantier 006)', () => {
     })
   })
 
-describe('Assistant : la phrase du serveur, sans l’enveloppe HTTP (chantier 006, tranche E)', () => {
+describe('Assistant : la phrase du serveur, sans l’enveloppe HTTP', () => {
   const repondre = (statut: number, corps: unknown) => vi.stubGlobal('fetch', vi.fn().mockImplementation(
     () => Promise.resolve(new Response(typeof corps === 'string' ? corps : JSON.stringify(corps), { status: statut }))))
 

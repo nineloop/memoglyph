@@ -9,7 +9,7 @@
 
 *English · [Français](README.fr.md)*
 
-**Meeting transcripts and reports, local by default, with citations that can be checked against the audio.**
+**Meeting transcripts and reports for Apple Silicon Macs, open source and local by default, with citations that can be checked against the audio.**
 
 {{capture:bibliotheque}}
 

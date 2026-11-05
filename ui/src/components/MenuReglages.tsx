@@ -9,7 +9,7 @@ import { BoutonConfidentialite } from './ConfidentialitePanel'
 import { LangSelector } from './LangProvider'
 
 /**
- * Le menu « Réglages » de la barre haute (retour 15, US3) : tout ce qui n'est pas de la
+ * Le menu « Réglages » de la barre haute : tout ce qui n'est pas de la
  * navigation y est regroupé (Appareils, Confidentialité, Comptes, langue, thème, Se déconnecter).
  *
  * Patron « divulgation » : un bouton `aria-expanded` et un groupe, plutôt qu'un `role="menu"`

@@ -1,4 +1,4 @@
-"""FinOps phase 2 — lecture seule pour l'affichage (résumé + détail forensique).
+"""FinOps — lecture seule pour l'affichage (résumé + détail forensique).
 
 Invariants : liaison par ID STABLE (CR via ULID, transcript via document_id), versions
 historiques distinctes, lecture qui n'ÉCRIT jamais, champs SÛRS uniquement (aucun texte ni

@@ -1,4 +1,4 @@
-"""Les pannes et les refus des fournisseurs nommés, vus de bout en bout (chantier 006, tranche C).
+"""Les pannes et les refus des fournisseurs nommés, vus de bout en bout.
 
 - la clé et le corps brut d'une réponse du service n'apparaissent dans AUCUN suivi, en réussite comme en échec (500, 429, délai) ;
 - deux comportements de la revérification du cœur, vérifiés dans le code et non supposés :
@@ -97,14 +97,14 @@ def _tout_ce_qui_se_voit(client, job_id: str, usage) -> str:
 
 @pytest.fixture
 def dormeur(monkeypatch):
-    """Tranche H : un 429 est attendu puis réessayé une fois dans un traitement ; la pause est remplacée (rien ne dort)."""
+    """Un 429 est attendu puis réessayé une fois dans un traitement ; la pause est remplacée (rien ne dort)."""
     from core import attente_quota
     durees: list = []
     monkeypatch.setattr(attente_quota, "dormir", durees.append)
     return durees
 
 
-# ---------- T046 : la clé et le corps brut ne sont dans aucun suivi ----------
+# ---------- la clé et le corps brut ne sont dans aucun suivi ----------
 
 @pytest.mark.parametrize("nom", NOMS)
 @pytest.mark.parametrize("scenario", ["reussite", "500", "429", "delai"])
@@ -122,13 +122,13 @@ def test_la_cle_et_le_corps_brut_ne_figurent_dans_aucun_suivi(nom, scenario, com
     job = lancer(alice, document, llm_provider=nom).json()["job_id"]
     etat = attendre(alice, job)
     assert etat["status"] == ("done" if scenario == "reussite" else "error")
-    # Un 429 est réessayé jusqu'à deux fois (tranches H et H2) : trois requêtes ; tout autre scénario n'en fait qu'une.
+    # Un 429 est réessayé jusqu'à deux fois : trois requêtes ; tout autre scénario n'en fait qu'une.
     assert len(t.requetes) == (3 if scenario == "429" else 1), "ancre : le service simulé a bien été joint"
     visible = _tout_ce_qui_se_voit(alice, job, tmp_path / "usage.db")
     assert CLE not in visible and CORPS_BRUT not in visible
 
 
-# ---------- T043 (a) : le traitement échoue avec son code ----------
+# ---------- le traitement échoue avec son code ----------
 
 @pytest.mark.parametrize("nom", NOMS)
 def test_un_quota_atteint_fait_echouer_la_regeneration_avec_son_code(nom, comptes, appelant, nomme, monkeypatch, dormeur) -> None:
@@ -145,7 +145,7 @@ def test_un_quota_atteint_fait_echouer_la_regeneration_avec_son_code(nom, compte
 
 def test_un_document_passe_en_ultra_autorise_pendant_le_travail_arrete_la_regeneration_avec_son_code(
         comptes, appelant, nomme, monkeypatch) -> None:
-    """La revérification du cœur, comportement (a) : le refus TRAVERSE les `except` de la chaîne et le traitement échoue."""
+    """La revérification du cœur : le refus TRAVERSE les `except` de la chaîne et le traitement échoue."""
     _prets(monkeypatch, nomme, GRATUIT, ["openrouter"])
     t = Transport()
     monkeypatch.setattr(nomme, "client_sans_fuite", t.fabrique)
@@ -158,7 +158,7 @@ def test_un_document_passe_en_ultra_autorise_pendant_le_travail_arrete_la_regene
     assert t.requetes == [], "rien n'est parti"
 
 
-# ---------- T043 (b) : la transcription écrit le transcript et dit la cause comme AVERTISSEMENT ----------
+# ---------- la transcription écrit le transcript et dit la cause comme AVERTISSEMENT ----------
 
 def test_le_profil_refuse_par_la_regle_des_gratuits_est_un_avertissement_et_rien_ne_part(nomme, monkeypatch, tmp_path) -> None:
     from core import profiling
@@ -217,7 +217,7 @@ def test_un_quota_atteint_pendant_la_transcription_est_dit_dans_l_avertissement(
     assert CLE not in contenu and CORPS_BRUT not in contenu
 
 
-# ---------- T047 : le coût d'un modèle sans barème est inconnu, jamais zéro ----------
+# ---------- le coût d'un modèle sans barème est inconnu, jamais zéro ----------
 
 def _enregistrer_un_appel(nom, nomme, monkeypatch, base, modele):
     monkeypatch.setenv("MEMOGLYPH_USAGE_DB", str(base))

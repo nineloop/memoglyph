@@ -1,4 +1,4 @@
-"""Barème + dérivation de coût (FinOps phase 1A) — auditable, jamais de coût fabriqué.
+"""Barème + dérivation de coût (FinOps) — auditable, jamais de coût fabriqué.
 
 Invariants protégés :
 - barèmes IMMUABLES et VERSIONNÉS ;

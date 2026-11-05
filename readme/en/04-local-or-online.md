@@ -1,6 +1,6 @@
 ## Local or online, as chosen
 
-By default, everything runs on the Mac: Whisper for transcription, and a local MLX language model for reports and the assistant. Semantic search also uses a local embedding model by default.
+By default, everything runs on the Mac: Whisper for transcription, and a local MLX language model for reports and the assistant. Semantic search always uses a local embedding model.
 
 An online model can be added when needed: Mistral, OpenAI, Anthropic, OpenRouter or Groq, or any other service in the OpenAI format through the `compatible` provider. Mistral can also transcribe, with Voxtral.
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import css from '../App.css?raw'
 
-// jsdom ne calcule pas la mise en page : ces tests gardent les RÈGLES du transcript pleine largeur (SC-007,
-// FR-018) ; les largeurs réelles sont mesurées sur la démo par `tools/mesure_ui.mjs` et vues sur captures.
+// jsdom ne calcule pas la mise en page : ces tests gardent les RÈGLES du transcript pleine largeur ;
+// les largeurs réelles sont mesurées sur la démo par `tools/mesure_ui.mjs` et vues sur captures.
 
 /** Le bloc d'une règle @media (de son ouverture à son accolade fermante). */
 function bloc(media: string): string {
@@ -78,7 +78,7 @@ describe('cibles de la vue d\'une réunion', () => {
 
 describe('les éléments collants de la vue d\'une réunion s\'empilent sans se recouvrir', () => {
   // Les onglets (44 px de bouton, 5 px de marge de chaque côté, 1 px de bordure) mesurent 56 px : le lecteur audio
-  // se colle SOUS eux, le panneau des locuteurs sous le lecteur. Onglets de 34 px avant le chantier : 46 px.
+  // se colle SOUS eux, le panneau des locuteurs sous le lecteur. Onglets de 34 px auparavant : 46 px.
   const px = (re: RegExp, source = css): number => Number(re.exec(source)?.[1])
   const hauteurOnglets = px(/\.meeting-tabs button\s*\{[^}]*min-height:\s*(\d+)px/) + 2 * 5 + 2
   const hauteurLecteur = 56   // marge 10 + ligne de contrôle ≈ 36 + bordures ; mesuré sur la démo

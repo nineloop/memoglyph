@@ -1,4 +1,4 @@
-"""La revérification du cœur traverse les absorbeurs réels (chantier 006, tranche C, comportement (a)).
+"""La revérification du cœur traverse les absorbeurs réels.
 
 Un document devenu « ultra-confidentiel » (cloud autorisé) PENDANT un travail arrête l'appel suivant d'un modèle gratuit. Les chemins de la chaîne qui
 absorbent une panne de moteur (tranche perdue, classifieur en repli) ne doivent pas absorber ce refus : il traverse (`raise` nu),

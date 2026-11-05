@@ -5,3 +5,5 @@
 - Diarization needs a separate installation and a Hugging Face token.
 - Memoglyph is designed for, and tested on, a Mac with Apple Silicon.
 - The companion is in beta.
+- Memoglyph works on a recording, after the meeting, with no live transcript during the call.
+- It runs from a clone of the repository, with no packaged installer.

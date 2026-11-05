@@ -1,4 +1,4 @@
-"""GET /api/jobs : les traitements du compte connecté, et rien d'un autre (chantier 003, tranche B)."""
+"""GET /api/jobs : les traitements du compte connecté, et rien d'un autre."""
 from __future__ import annotations
 
 import pytest

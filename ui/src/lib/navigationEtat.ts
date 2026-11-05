@@ -5,7 +5,7 @@
  * - **destination** : le projet où se range la prochaine transcription (jamais dans l'URL) ;
  * - **panneau replié** : l'état du panneau des projets (jamais dans l'URL).
  *
- * L'invariant qui justifie ce module (SC-002) : changer l'un ne modifie jamais l'autre.
+ * L'invariant qui justifie ce module : changer l'un ne modifie jamais l'autre.
  * Le menu natif « Portée consultée » changeait de SENS selon l'écran ; ici la destination
  * se choisit dans Transcrire, la consultation dans le panneau ou le fil d'Ariane.
  *

@@ -1,4 +1,4 @@
-"""Télémétrie d'usage IA (FinOps, phase 0) — faits durables, jamais de casse produit.
+"""Télémétrie d'usage IA (FinOps) — faits durables, jamais de casse produit.
 
 Ces tests protègent les invariants de la fondation dark :
 
@@ -211,7 +211,7 @@ def test_record_n_accepte_pas_de_texte_de_prompt(usage_db):
         assert interdit not in params
 
 
-# --- Coût NON fabriqué : colonnes présentes (phase 1A) mais NULL sans barème ---
+# --- Coût NON fabriqué : colonnes présentes mais NULL sans barème ---
 def test_pricing_snapshot_vide_par_defaut_et_cout_null(usage_db):
     with telemetry.execution(kind="report", provider="mlx", model="qwen"):
         telemetry.record_model_call(provider="mlx", model="qwen", latency_s=0.1,
@@ -222,7 +222,7 @@ def test_pricing_snapshot_vide_par_defaut_et_cout_null(usage_db):
     assert {"execution", "model_call", "pricing_snapshot", "usage_meta"} <= tables
     # Barème VIDE par défaut : aucun coût n'est fabriqué sans barème saisi.
     assert conn.execute("SELECT COUNT(*) FROM pricing_snapshot").fetchone()[0] == 0
-    # La phase 1A AJOUTE des colonnes de coût — mais elles restent NULL (jamais un
+    # Le barème AJOUTE des colonnes de coût — mais elles restent NULL (jamais un
     # faux zéro) tant qu'aucun barème ne s'applique.
     call = conn.execute("SELECT cost, cost_basis, pricing_snapshot_id FROM model_call").fetchone()
     assert call["cost"] is None and call["cost_basis"] is None and call["pricing_snapshot_id"] is None

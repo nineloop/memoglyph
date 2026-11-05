@@ -10,7 +10,7 @@ function regle(selecteur: string): string {
   return css.slice(i, css.indexOf('}', i) + 1)
 }
 
-describe('le dock (retour 4, SC-010)', () => {
+describe('le dock', () => {
   it('prend son fond et son texte dans les jetons dédiés, plus foncés que la page', () => {
     expect(regle('.dock')).toMatch(/background:\s*var\(--dock-bg\)/)
     expect(regle('.dock-item')).toMatch(/color:\s*var\(--dock-muted\)/)

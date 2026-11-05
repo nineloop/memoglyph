@@ -1,10 +1,11 @@
-# Compagnon de capture : phase 0
+# Compagnon de capture
 
-Outil en ligne de commande, macOS seulement, qui enregistre **le son d'une application**
-(Zoom, Teams, un navigateur, un lecteur) et **le micro**, dans un WAV à deux canaux. C'est
-la phase 0 de [la spécification](../docs/compagnon-capture.md) : un essai technique qui
-confirme ou corrige les choix C1 à C4 avant d'écrire l'application de barre de menus.
-Il n'envoie rien à Memoglyph : on dépose le fichier dans l'interface, comme un autre média.
+macOS seulement, en bêta. Deux produits dans ce dossier : un outil en ligne de commande, `memoglyph-capture`,
+qui enregistre **le son d'une application** (Zoom, Teams, un navigateur, un lecteur) et **le micro** dans un WAV à
+deux canaux, et une application de barre de menus, qui envoie ces captures à Memoglyph (voir
+[Application de barre de menus](#application-de-barre-de-menus)). La spécification d'origine, avec les choix
+C1 à C14, est dans [docs/compagnon-capture.md](../docs/compagnon-capture.md).
+L'outil en ligne de commande n'envoie rien à Memoglyph : le fichier se dépose dans l'interface, comme un autre média.
 
 ## Construire et tester
 

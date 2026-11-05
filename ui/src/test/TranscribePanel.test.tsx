@@ -845,9 +845,9 @@ describe('encart du compagnon de capture', () => {
 })
 
 
-// ---------- Chantier 003, tranche B : la confirmation « Rangé dans… » et « Suivre » (T044) ----------
+// ---------- la confirmation « Rangé dans… » et « Suivre » ----------
 
-describe('confirmation d\'un envoi accepté (SC-003)', () => {
+describe('confirmation d\'un envoi accepté', () => {
   const projets = [
     { id: 'inbox', project: 'Non classé', name: 'Non classé', kind: 'inbox' as const, owner: 'moi', count: 0 },
     { id: 'p1', project: 'Réunions AMI', name: 'Réunions AMI', kind: 'regular' as const, owner: 'moi', count: 2 },
@@ -882,7 +882,7 @@ describe('confirmation d\'un envoi accepté (SC-003)', () => {
     expect(await screen.findByRole('status', { name: /upload accepted/i })).toHaveTextContent('Saved to Unclassified.')
   })
 
-  it('le formulaire reste PRÊT pour un autre envoi dès que le premier est accepté (spec US5, scénario 6)', async () => {
+  it('le formulaire reste PRÊT pour un autre envoi dès que le premier est accepté', async () => {
     const arret1 = vi.fn()
     vi.mocked(submitTranscribe).mockResolvedValueOnce('job-1').mockResolvedValueOnce('job-2')
     vi.mocked(streamJob).mockReset()
@@ -973,9 +973,9 @@ it('sans code (serveur plus ancien), le texte du serveur reste affiché', async 
 })
 
 
-// ---------- Chantier 005, tranche A : « Transcrire un autre enregistrement » demande un autre fichier ----------
+// ---------- « Transcrire un autre enregistrement » demande un autre fichier ----------
 
-describe('après un envoi accepté (chantier 005, tranche A)', () => {
+describe('après un envoi accepté', () => {
   const AUTRE = 'Transcrire un autre enregistrement'
 
   async function apresUnEnvoiAccepte(arreter = vi.fn()) {
@@ -1106,9 +1106,9 @@ it('la première utilisation reste ce qu’elle est : sans fichier, il n’y a p
 })
 
 
-// ---------- Chantier 005, tranche B : le refus d'un doublon se dit clairement ----------
+// ---------- le refus d'un doublon se dit clairement ----------
 
-describe('un fichier déjà en cours de traitement (chantier 005, tranche B)', () => {
+describe('un fichier déjà en cours de traitement', () => {
   it('dit une phrase claire, nomme le traitement existant, propose « Suivre » et GARDE le fichier choisi', async () => {
     const ouvrir = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
     try {
@@ -1137,9 +1137,9 @@ describe('un fichier déjà en cours de traitement (chantier 005, tranche B)', (
 })
 
 
-// ---------- Chantier 005, tranche D : suivi conservé, attente dite, annulation neutre ----------
+// ---------- suivi conservé, attente dite, annulation neutre ----------
 
-describe('le suivi du traitement lancé (chantier 005, tranche D)', () => {
+describe('le suivi du traitement lancé', () => {
   const AUTRE = 'Transcrire un autre enregistrement'
   type Gestionnaires = {
     onProgress?: (p: number, m: string, etape?: unknown) => void

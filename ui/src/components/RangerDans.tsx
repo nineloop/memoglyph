@@ -7,10 +7,10 @@ import { libelleProjet } from '../lib/libelleProjet'
 import { Icon } from './Icon'
 
 /**
- * « Ranger dans » : la DESTINATION de la prochaine transcription (retour 15, US2).
+ * « Ranger dans » : la DESTINATION de la prochaine transcription.
  *
  * Un combobox (champ + liste) : on tape pour filtrer, on choisit un projet ou on en crée un.
- * Ce choix ne change JAMAIS ce que la Bibliothèque consulte (SC-002) : le composant ne reçoit que
+ * Ce choix ne change JAMAIS ce que la Bibliothèque consulte : le composant ne reçoit que
  * la destination et ne connaît pas le projet consulté. Seuls les projets du compte y figurent :
  * un projet reçu en lecture seule (ou sans identifiant) ne peut pas recevoir une réunion.
  */

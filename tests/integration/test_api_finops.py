@@ -1,4 +1,4 @@
-"""FinOps phase 2 — endpoints de LECTURE (résumé + détail), scoping et dégradation gracieuse.
+"""FinOps — endpoints de LECTURE (résumé + détail), scoping et dégradation gracieuse.
 
 Le catalogue s'initialise au démarrage (lifespan) ; les endpoints ne font que LIRE (jamais
 d'écriture usage.db depuis l'API). Liaison CR↔exécution par ULID, transcript↔STT par document_id.
@@ -58,7 +58,7 @@ def finops_client(isolated_stores, monkeypatch, tmp_path):
                 usage=_U(100, 100), usage_source="provider_reported")
         telemetry.set_produced_artifact(rid)
 
-    # Catalogue + tarification explicites (le démarrage zéro-touche est couvert en phase 1D ;
+    # Catalogue + tarification explicites (le démarrage zéro-touche est couvert par ses propres tests ;
     # ici on teste les endpoints de LECTURE, on veut donc un état tarifé déterministe).
     usage_store.initialize_catalogue()
     usage_store.reprice()

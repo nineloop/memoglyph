@@ -9,7 +9,7 @@
 
 *[English](README.md) · Français*
 
-**Transcripts et comptes rendus de réunion, en local par défaut, avec des citations vérifiables dans l'audio.**
+**Transcripts et comptes rendus de réunion open source pour Mac Apple Silicon, en local par défaut, avec des citations vérifiables dans l'audio.**
 
 {{capture:bibliotheque}}
 

@@ -36,9 +36,9 @@ const projets: Project[] = [
 ]
 const recus: Partage[] = [
   { id: 'S-P', proprietaire: 'bruno', invite: 'alice', type: 'projet', cible: 'P-BRUNO',
-    cree_le: '', nom: 'Chantier' },
+    cree_le: '', nom: 'Atelier' },
   { id: 'S-R', proprietaire: 'bruno', invite: 'alice', type: 'reunion', cible: 'M-BRUNO',
-    cree_le: '', nom: 'Revue de chantier' },
+    cree_le: '', nom: 'Revue d’atelier' },
 ]
 
 beforeEach(() => {
@@ -152,9 +152,9 @@ it('le panneau propose ce qui est partagé, avec le nom de qui le partage', asyn
   history.replaceState(null, '', '/?vue=library')
   render(<App />)
 
-  const nav = await panneau(/Chantier/)
+  const nav = await panneau(/Atelier/)
   expect(within(nav).getByRole('heading', { name: 'Partagés avec moi' })).toBeInTheDocument()
-  expect(within(nav).getByRole('link', { name: /Chantier.*bruno/ })).toBeInTheDocument()
+  expect(within(nav).getByRole('link', { name: /Atelier.*bruno/ })).toBeInTheDocument()
   // Les réunions reçues une à une se retrouvent dans « tout ce qui est partagé avec moi ».
   await user.click(within(nav).getByRole('link', { name: 'Tout ce qui est partagé avec moi' }))
   await waitFor(() => expect(getMeetings).toHaveBeenCalledWith(
@@ -172,7 +172,7 @@ it('en lecture seule, les vues du propriétaire quittent la navigation', async (
   render(<App />)
 
   history.replaceState(null, '', '/?vue=library')
-  await consulter(user, /Chantier/)
+  await consulter(user, /Atelier/)
 
   for (const vue of ['Corbeille', 'Doublons', 'Usage', 'Maintenance']) {
     expect(within(dock()).queryByRole('button', { name: new RegExp(vue) })).not.toBeInTheDocument()
@@ -195,7 +195,7 @@ function item(name: string, type: string | null = null): LibraryItem {
   return {
     name, id: `${name}-id`, meeting_id: 'M-BRUNO', project_id: 'P-BRUNO', title: 'Revue',
     date: '2026-07-21', duration: '00:42:00', language: 'fr', engine: 'whisper', source: 'revue.mp4',
-    project: 'Chantier', diarization: true, profiled: true, n_speakers: 2, type,
+    project: 'Atelier', diarization: true, profiled: true, n_speakers: 2, type,
     source_transcript: type === 'report' ? 'revue.md' : null,
     source_document_id: type === 'report' ? 'revue.md-id' : null, warnings: 0, size: 1, modified: 1,
   }
@@ -203,7 +203,7 @@ function item(name: string, type: string | null = null): LibraryItem {
 
 const reunion: Reunion = {
   cle: 'M-BRUNO', source: 'revue.mp4', titre: 'Revue', date: '2026-07-21', duree: '00:42:00',
-  langue: 'fr', projet: 'Chantier', nSpeakers: 2, avertissements: 0,
+  langue: 'fr', projet: 'Atelier', nSpeakers: 2, avertissements: 0,
   transcripts: [item('revue.md')], comptesRendus: [item('revue-cr.md', 'report')], retenu: item('revue.md'),
 }
 
@@ -242,7 +242,7 @@ it('les voix partagées se lisent sans être renommées ni fusionnées', async (
   const voix: Voice[] = [1, 2].map((id) => ({
     id, label: `Voix nommée ${id}`, label_source: 'manual', suggestion: null, display: `Voix nommée ${id}`,
     n_members: 1, occurrences: [{ name: 'revue.md', document_id: 'd', title: 'Revue',
-                                  speaker_local: `Speaker ${id}`, project_id: 'P-BRUNO', project: 'Chantier' }],
+                                  speaker_local: `Speaker ${id}`, project_id: 'P-BRUNO', project: 'Atelier' }],
   }))
   vi.mocked(getVoices).mockResolvedValue(voix)
   render(enLectureSeule(<VoicesPanel viewScope="shared" scopeLabel="Partagés avec moi" />))

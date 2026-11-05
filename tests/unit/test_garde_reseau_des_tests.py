@@ -1,4 +1,4 @@
-"""Aucun test ne peut joindre un hôte hors de la machine (chantier 006, tranche A).
+"""Aucun test ne peut joindre un hôte hors de la machine.
 
 Les fournisseurs en ligne nommés multiplient les endroits où un appel réel pourrait partir. Comme la garde de port
 (`test_garde_port_des_tests.py`), la garde réseau est posée par la suite elle-même, avant tout import de `core`.

@@ -326,7 +326,7 @@ def _modele_attendu(fournisseur: str) -> str:
         "openai": config.OPENAI_CHAT_MODEL or "gpt-5.6-luna",
         "anthropic": config.ANTHROPIC_CHAT_MODEL or "claude-haiku-5-5",
         "compatible": config.COMPATIBLE_MODEL or "serveur-compatible-non-configure",
-        # Fournisseurs en ligne nommés (chantier 006) : le modèle vient de la configuration, sans défaut.
+        # Fournisseurs en ligne nommés : le modèle vient de la configuration, sans défaut.
         "openrouter": config.getenv_compat("OPENROUTER_MODEL") or "openrouter-non-configure",
         "groq": config.getenv_compat("GROQ_MODEL") or "groq-non-configure",
     }

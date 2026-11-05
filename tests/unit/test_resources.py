@@ -164,7 +164,7 @@ def test_backfill_fidele_passe_par_le_verrou_global(tmp_path):
     assert isinstance(result[0], resources.ResourcesBusy)
 
 
-# ---------- Chantier 003, tranche B : l'attente se voit ----------
+# ---------- l'attente se voit ----------
 
 def test_on_wait_n_est_appele_que_si_le_creneau_est_occupe():
     appels: list[str] = []

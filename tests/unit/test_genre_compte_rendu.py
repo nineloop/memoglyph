@@ -1,4 +1,4 @@
-"""Le genre du compte rendu (chantier 007) : le type du profil d'abord, des définitions, un garde-fou, la réponse brute gardée.
+"""Le genre du compte rendu : le type du profil d'abord, des définitions, un garde-fou, la réponse brute gardée.
 
 Le constat : le compte rendu d'IS1009c (réunion de conception d'une télécommande ; corpus AMI, CC BY 4.0) a été classé
 `analyse_sportive` alors que son profil disait « Type: meeting » : il a été rédigé avec les questions d'un gabarit sportif.
@@ -237,7 +237,7 @@ def test_le_compte_rendu_garde_le_detail_dans_son_diagnostic_et_pas_dans_le_docu
 
 
 def test_un_profil_de_type_workshop_donne_projet_sans_interroger_le_modele(modele) -> None:
-    """24 des 44 profils AMI mesurés disent « workshop » : ce sont des réunions de conception (décision du 4/11)."""
+    """24 des 44 profils AMI mesurés disent « workshop » : ce sont des réunions de conception."""
     modele["reponse"] = "analyse_sportive"
     corps = PROFIL_IS1009C.replace("**Type:** meeting", "**Type:** workshop")
     assert report.classify_genre(corps, "en", provider="mlx", envoi=None) == "projet"

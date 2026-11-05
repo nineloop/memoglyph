@@ -1,4 +1,4 @@
-// Chantier 006, tranche D : OpenRouter et Groq dans l'interface.
+// OpenRouter et Groq dans l'interface.
 // - ils apparaissent SOUS LEUR NOM (jamais « Cloud privé ») partout où les fournisseurs prêts apparaissent, en français et en
 //   anglais ; non prêts, ils sont absents ;
 // - un refus « modèle gratuit » (403 à corps plat) se dit par sa phrase, dans la langue de l'interface, pour la régénération,

@@ -457,9 +457,8 @@ def _generer_sous_contrat(
         # 417 et 461 s. Rejouer aurait triplé l'attente pour le même mur.
         #
         # La troncature ne se répare pas en redemandant la même chose : elle se
-        # répare en demandant MOINS à la fois. Voir l'entrée « génération par
-        # section » de la feuille de route — c'est le vrai correctif, et il
-        # change la forme de l'appel, pas son nombre.
+        # répare en demandant MOINS à la fois. Le vrai correctif est la génération
+        # par section, qui change la forme de l'appel, pas son nombre.
         except (report_citations.StructuredReportError,
                 llm.LLMMalformedOutputError) as exc:
             derniere = exc
@@ -671,7 +670,7 @@ def classify_genre(
 ) -> str:
     """Genre du gabarit. Toute défaillance retombe sur le gabarit sobre.
 
-    Chantier 007 : (1) le « Type » du profil, quand il désigne une réunion, décide SANS appeler le modèle ; (2) sinon le message
+    (1) le « Type » du profil, quand il désigne une réunion, décide SANS appeler le modèle ; (2) sinon le message
     porte une définition par catégorie, le sport en dernier ; (3) `analyse_sportive` n'est gardé que si le texte contient des mots
     du sport (`templates.domaine_present`) ; (4) `detail`, s'il est donné, reçoit `{"source", "brut"}` : d'où vient le genre
     (`profil`, `modele`, `garde`, `repli`, `vide`) et la réponse BRUTE du modèle, bornée à 200 caractères (jamais écrite dans le

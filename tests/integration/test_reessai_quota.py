@@ -1,5 +1,5 @@
-"""Tranche H du chantier 006 : un quota atteint (429) d'un fournisseur nommé est attendu puis réessayé (jusqu'à deux fois) ; tout appel
-refusé laisse une trace (le code seulement). Décision du 4/11.
+"""Un quota atteint (429) d'un fournisseur nommé est attendu puis réessayé (jusqu'à deux fois) ; tout appel
+refusé laisse une trace (le code seulement).
 
 Aucune attente réelle : la pause passe par `core.attente_quota.dormir` (un point de remplacement) que les tests remplacent par
 un enregistreur ; la garde de `tests/conftest.py` fait échouer tout test qui dormirait pour de vrai. Aucun appel réel : un
@@ -126,7 +126,7 @@ def test_l_attente_est_annoncee_avant_de_dormir(nomme, quota, dormeur, monkeypat
                                       {"retry-after": "-3"}, {"retry-after": ""}, {"retry-after": "inf"}, {"retry-after": "nan"}],
                          ids=["absent", "date", "texte", "negatif", "vide", "infini", "nan"])
 def test_sans_delai_lisible_en_secondes_on_attend_vingt_secondes(entetes, nomme, quota, dormeur, monkeypatch) -> None:
-    """Aucune des pages lues (`research.md` O8 et G5) ne donne un délai par défaut : 20 s est le repli choisi, pas une valeur
+    """Aucune des pages de documentation lues (OpenRouter, Groq) ne donne un délai par défaut : 20 s est le repli choisi, pas une valeur
     documentée. Une date HTTP, un texte ou un négatif comptent comme un en-tête absent."""
     _pret(monkeypatch, nomme, Suite((429, entetes), OK))
     with quota.ouvrir():
@@ -167,7 +167,7 @@ def test_soixante_secondes_s_attendent_soixante_et_une_non(nomme, quota, dormeur
 
 
 def test_jusqu_a_deux_reessais_un_second_429_est_encore_attendu(nomme, quota, dormeur, monkeypatch) -> None:
-    """Retouche H2 (décision du 4/11 18:10) : une limite par minute ne se vide pas en quelques secondes ; l'essai réel a perdu une
+    """Deux réessais : une limite par minute ne se vide pas en quelques secondes ; l'essai réel a perdu une
     tranche sur un second 429 après 8 s."""
     suite = Suite(RA(5), RA(5), OK)
     _pret(monkeypatch, nomme, suite)
@@ -242,7 +242,7 @@ def test_chat_json_avec_graine_ne_fait_qu_un_reessai_en_tout(nomme, quota, dorme
 
 
 def test_le_vrai_client_de_production_ne_reessaie_pas_tout_seul() -> None:
-    """Le SDK réessaie deux fois par défaut et honore `Retry-After` : empilé sur le réessai de la tranche H, il casserait « un seul
+    """Le SDK réessaie deux fois par défaut et honore `Retry-After` : empilé sur le réessai du moteur, il casserait « un seul
     réessai » et ses tentatives ne laisseraient aucune trace. Lu sur le VRAI constructeur, pas sur un client de test."""
     from core.llm_client_openai import client_sans_fuite
     assert client_sans_fuite("https://exemple.invalide/v1", api_key="x").max_retries == 0
@@ -342,15 +342,24 @@ def test_un_contexte_emboite_dit_ses_pauses_a_sa_propre_progression(nomme, quota
     assert dehors == [] and dedans == ["step.provider.quota.pause"]
 
 
+def _fonctions_de_api_main(nom: str) -> list[str]:
+    """Le texte source de chaque fonction (même imbriquée) appelée `nom` dans `api/main.py`, lu par l'arbre syntaxique : une
+    réécriture de commentaires ne peut pas décaler la recherche, ce que faisait une fenêtre de caractères."""
+    import ast
+    from pathlib import Path
+    texte = (Path(__file__).resolve().parents[2] / "api" / "main.py").read_text(encoding="utf-8")
+    return [ast.get_source_segment(texte, n) for n in ast.walk(ast.parse(texte))
+            if isinstance(n, ast.FunctionDef) and n.name == nom]
+
+
 def test_la_transcription_ouvre_le_contexte_autour_du_profilage_et_du_compte_rendu() -> None:
     """Le profilage de la transcription appelle le fournisseur (écran Transcrire, le seul qui affiche la pause) : le contexte est
     ouvert UNE fois autour de `pipeline.run`, donc autour du profilage et du compte rendu automatique."""
-    from pathlib import Path
-    texte = (Path(__file__).resolve().parents[2] / "api" / "main.py").read_text(encoding="utf-8")
-    debut = texte.index("def target_locked(cb):")
-    assert "attente_quota.suivre(cb)" in texte[debut:debut + 400]
-    assert "pipeline.run(" in texte[debut:debut + 800]
-    assert "progress=progression," in texte[debut:debut + 1400], "la progression ENVELOPPÉE est celle que reçoit le traitement"
+    corps = _fonctions_de_api_main("target_locked")
+    assert len(corps) == 1
+    assert "attente_quota.suivre(cb)" in corps[0]
+    assert "pipeline.run(" in corps[0]
+    assert "progress=progression," in corps[0], "la progression ENVELOPPÉE est celle que reçoit le traitement"
 
 
 # ---------- Le message dit dans la progression ----------
@@ -402,16 +411,15 @@ def test_make_local_report_dit_l_attente_dans_la_progression_sans_reculer_la_bar
 
 def test_la_relance_des_faits_ouvre_aussi_le_contexte_d_attente() -> None:
     """Le traitement « faits » appelle un fournisseur nommé : sans contexte, son 429 n'attendrait jamais."""
-    from pathlib import Path
-    texte = (Path(__file__).resolve().parents[2] / "api" / "main.py").read_text(encoding="utf-8")
-    debut = texte.index('nature="faits"')
-    assert "attente_quota.suivre(cb)" in texte[debut:debut + 600]
+    faits = [c for c in _fonctions_de_api_main("target") if "ecl.extraire(" in c]
+    assert len(faits) == 1
+    assert "attente_quota.suivre(cb)" in faits[0]
 
 
-# ---------- L'annulation reste ce qu'elle était (chantier 005) ----------
+# ---------- L'annulation reste ce qu'elle était ----------
 
 def test_un_traitement_qui_attend_son_quota_n_est_pas_annulable_et_un_traitement_en_file_l_est(nomme, quota, monkeypatch) -> None:
-    """Lecture simple : « en attente » du chantier 005 = en file pour le créneau. Le traitement qui dort sur un 429 tient le
+    """Lecture simple : « en attente » = en file pour le créneau. Le traitement qui dort sur un 429 tient le
     créneau : il est « en cours » et refuse l'annulation comme avant. Un traitement encore en file reste annulable PENDANT
     cette pause."""
     from api import jobs as jobs_mod
@@ -489,8 +497,8 @@ def test_une_reponse_inutilisable_laisse_son_code(corps, code, statut, nomme, mo
 
 
 def test_une_usage_db_d_avant_la_tranche_h_est_mise_a_niveau_et_garde_ses_lignes(nomme, monkeypatch, usage_db) -> None:
-    """Comme pour `model_servi` (tranche G) : une base installée n'a pas la colonne `error_code`. Écrit APRÈS le code : sa preuve
-    est le mutant « colonne retirée de `_ADDED_COLUMNS` »."""
+    """Comme pour `model_servi` : une base installée n'a pas la colonne `error_code`. Le test échoue si la colonne
+    n'est pas rattrapée sur une base existante."""
     conn = usage_store.connect(usage_db)
     conn.execute("ALTER TABLE model_call DROP COLUMN error_code")
     conn.commit()

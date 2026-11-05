@@ -1287,7 +1287,7 @@ def test_le_statut_json_publie_aussi_le_code(client) -> None:
     assert corps["message"] == "Identifying speakers…"
 
 
-# ---------- Chantier 003, tranche B : un traitement se voit, y compris quand il attend ----------
+# ---------- un traitement se voit, y compris quand il attend ----------
 
 def test_transcribe_renseigne_le_suivi_et_rend_visible_l_attente_du_creneau(
     client, isolated_stores, monkeypatch,

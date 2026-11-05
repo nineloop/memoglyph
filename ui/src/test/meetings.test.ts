@@ -161,7 +161,7 @@ describe('displayDocumentTitle', () => {
   })
 })
 
-describe('voisines (retour 15 : réunion précédente et suivante)', () => {
+describe('voisines (réunion précédente et suivante)', () => {
   const reunion = (cle: string, date: string, projet: string | null) =>
     grouperParReunion([doc({ name: `${cle}.md`, meeting_id: cle, date, project_id: projet })])[0]
 

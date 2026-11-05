@@ -78,7 +78,7 @@ describe('garde sur l’instrument', () => {
   })
 })
 
-it("« traitements » n'est pas une vue : elle n'entre jamais dans la vue d'ouverture mémorisée (chantier 003)", () => {
+it("« traitements » n'est pas une vue : elle n'entre jamais dans la vue d'ouverture mémorisée", () => {
   memoriserVue('traitements')
   expect(lireVueMemorisee()).toBeNull()
 })

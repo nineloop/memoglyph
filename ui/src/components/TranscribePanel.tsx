@@ -201,7 +201,7 @@ export function TranscribePanel({
   const [error, setError] = useState('')
   // Un envoi REFUSÉ pendant qu'un autre traitement est suivi : l'alerte se dit sans toucher à la frise du traitement suivi.
   const [erreurEnvoi, setErreurEnvoi] = useState('')
-  // Le traitement suivi a été ANNULÉ (avant d'avoir commencé) : la frise s'arrête, sans style d'erreur (chantier 005).
+  // Le traitement suivi a été ANNULÉ (avant d'avoir commencé) : la frise s'arrête, sans style d'erreur.
   const [annule, setAnnule] = useState(false)
   const [confirmation, setConfirmation] = useState<{ jobId: string; projet: string } | null>(null)
   // Le fichier est déjà en attente ou en cours pour ce compte (409) : nommé, sans texte brut.
@@ -371,7 +371,7 @@ export function TranscribePanel({
     [t, sttDetail, diarisationDetail, llmNom, diarize, profile, reportOn],
   )
   // Le traitement suivi attend sa place (un autre calcul lourd occupe la machine) : il n'a pas commencé, donc ni
-  // « envoi sécurisé » ni étape active à montrer (chantier 005). La liste partagée des traitements le dit.
+  // « envoi sécurisé » ni étape active à montrer. La liste partagée des traitements le dit.
   const suiviEnAttente = Boolean(running && confirmation && traitements?.traitements.some(
     (x) => x.id === confirmation.jobId && (x.statut === 'pending' || x.en_attente)))
   const started = (running || Boolean(result) || Boolean(error) || progress > 0) && !annule && !suiviEnAttente
@@ -428,7 +428,7 @@ export function TranscribePanel({
     if (!file) return
     const runDestination = destinationProjectId
     // Un traitement déjà lancé reste SUIVI ici tant que le nouvel envoi n'est pas ACCEPTÉ : un refus (doublon, plus de
-    // place, panne) ne doit ni couper sa frise ni effacer sa confirmation (chantier 005).
+    // place, panne) ne doit ni couper sa frise ni effacer sa confirmation.
     const suivi = stopStream.current !== null
     setEnvoi(true)
     setError('')
@@ -477,7 +477,7 @@ export function TranscribePanel({
         projet: libelleProjet(rangeDans?.name ?? config.default_project, t, rangeDans?.kind),
       })
       // Le choix est VIDÉ : le bouton « Transcrire un autre enregistrement » ne doit jamais renvoyer le même fichier
-      // (chantier 005). Contrairement à `clearFile`, le suivi du traitement lancé n'est PAS coupé.
+      //. Contrairement à `clearFile`, le suivi du traitement lancé n'est PAS coupé.
       setFile(null)
       setFileProblem(null)
       if (inputRef.current) inputRef.current.value = ''
@@ -500,7 +500,7 @@ export function TranscribePanel({
         onError: (streamError, etape) => {
           setRunning(false)
           stopStream.current = null
-          // Annulé avant d'avoir commencé : un choix, pas une panne. La frise s'arrête, sans alerte (chantier 005).
+          // Annulé avant d'avoir commencé : un choix, pas une panne. La frise s'arrête, sans alerte.
           // La confirmation « Rangé dans… » ne dit plus vrai : rien n'est enregistré, l'écran redevient prêt à l'envoi.
           if (etape?.code === CODE_ANNULE) { setAnnule(true); setConfirmation(null); return }
           // Le code de l'échec se traduit ; le texte brut du serveur n'est montré que sans code.

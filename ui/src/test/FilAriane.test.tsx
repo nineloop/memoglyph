@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FilAriane } from '../components/FilAriane'
 import { LangProvider } from '../components/LangProvider'
 
-describe('le fil d\'Ariane (US1)', () => {
+describe('le fil d\'Ariane', () => {
   it('Bibliothèque > projet > réunion : chaque niveau ramène à son écran en UN clic', async () => {
     const biblio = vi.fn()
     const projet = vi.fn()

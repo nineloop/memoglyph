@@ -608,7 +608,7 @@ const fr = {
   'finops.detail.status': 'Statut',
   'finops.detail.cost': 'Coût',
   'finops.detail.cached': 'en cache',
-  // Tableau de bord Usage (phase 3B)
+  // Tableau de bord Usage
   'usage.title': 'Usage & coût IA',
   'usage.loading': 'Chargement…',
   'usage.unavailable': 'Télémétrie indisponible',
@@ -1009,7 +1009,7 @@ const fr = {
   // ---------- Rendu Markdown (MarkdownView) ----------
   'md.sourceMissing': 'source absente',
   'md.openSource.aria': 'Ouvrir la source à {ts}',
-  // ---------- Chantier 003 ----------
+  // ---------- Navigation, barre haute et traitements ----------
   'nav.panel.aria': 'Projets de la bibliothèque',
   'nav.panel.title': 'Bibliothèque',
   'nav.panel.collapse': 'Replier le panneau',
@@ -1105,7 +1105,7 @@ const fr = {
   'traitements.confirm.aria': 'Envoi accepté',
   'job.step.error.waitTooLong': 'Trop d’attente : un autre traitement a occupé la machine trop longtemps.',
   'job.step.error.cancelled': 'Traitement annulé.',
-  // ---------- Régénérer un compte rendu (tranche E) ----------
+  // ---------- Régénérer un compte rendu ----------
   'regenerer.open': 'Régénérer',
   'regenerer.close': 'Fermer',
   'regenerer.legend': 'Régénérer avec le modèle',
@@ -1664,7 +1664,7 @@ const en: Record<MessageKey, string> = {
   'finops.detail.status': 'Status',
   'finops.detail.cost': 'Cost',
   'finops.detail.cached': 'cached',
-  // Usage dashboard (Phase 3B)
+  // Usage dashboard
   'usage.title': 'AI usage & cost',
   'usage.loading': 'Loading…',
   'usage.unavailable': 'Telemetry unavailable',
@@ -2065,7 +2065,7 @@ const en: Record<MessageKey, string> = {
   'md.sourceMissing': 'source missing',
   'md.openSource.aria': 'Open the source at {ts}',
 
-  // ---------- Chantier 003 ----------
+  // ---------- Navigation, barre haute et traitements ----------
   'nav.panel.aria': 'Library projects',
   'nav.panel.title': 'Library',
   'nav.panel.collapse': 'Collapse the panel',

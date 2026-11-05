@@ -335,7 +335,7 @@ def _voix_de(doc: str, speaker: str = "Speaker 1"):
 def test_une_reconstruction_complete_rend_son_nom_a_la_voix(
     isolated_stores, monkeypatch,
 ) -> None:
-    """LE scénario que tout ce chantier existe pour garantir.
+    """LE scénario que cette suite existe pour garantir.
 
     Vider le registre puis le reconstruire redonnait des voix anonymes : les
     noms restaient dans le magasin sans que rien ne sache à qui les appliquer.

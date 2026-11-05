@@ -19,7 +19,7 @@ function monter(admin = false, deconnexion = vi.fn(async () => {})) {
 
 beforeEach(() => { localStorage.clear(); localStorage.setItem('memoglyph.lang', 'fr') })
 
-describe('le menu « Réglages » (US3)', () => {
+describe('le menu « Réglages »', () => {
   it('porte l\'initiale du compte et reste fermé au départ', () => {
     monter()
     const bouton = screen.getByRole('button', { name: /réglages/i })

@@ -5,7 +5,7 @@ import { Icon } from './Icon'
 import { MenuReglages } from './MenuReglages'
 
 /**
- * La barre haute allégée (retour 15, US3) : logo, recherche, état des services, indicateur des
+ * La barre haute allégée : logo, recherche, état des services, indicateur des
  * traitements, Réglages — et rien d'autre. Elle ne porte plus le menu natif « Portée consultée »
  * (la consultation se choisit dans le panneau des projets) ni le partage (dans l'en-tête de projet).
  */
@@ -21,7 +21,7 @@ type Props = {
   surAccueil: () => void
   /** Vrai sur l'écran Recherche : son champ est meilleur que celui-ci, qui ferait doublon. */
   masquerRecherche?: boolean
-  /** Emplacement de l'indicateur des traitements (tranche B). */
+  /** Emplacement de l'indicateur des traitements. */
   indicateur?: ReactNode
 }
 

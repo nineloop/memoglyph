@@ -1,4 +1,4 @@
-"""L'icône du compagnon (chantier 003, finition) : dessinée à la compilation depuis le symbole de la marque.
+"""L'icône du compagnon : dessinée à la compilation depuis le symbole de la marque.
 
 Rien de binaire n'est versionné (le contrôle de publication refuse une image hors manifeste) : un script Swift dessine
 le `.iconset` avec les seuls outils de macOS, `make companion` le convertit en `.icns` et le range dans le paquet,

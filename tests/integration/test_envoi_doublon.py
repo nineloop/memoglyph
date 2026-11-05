@@ -1,4 +1,4 @@
-"""Un second envoi du même fichier est refusé tant que le premier attend ou tourne (chantier 005, tranche B).
+"""Un second envoi du même fichier est refusé tant que le premier attend ou tourne.
 
 `POST /api/transcribe` répond 409 quand le MÊME compte a déjà un traitement non final (en attente ou en cours)
 pour le MÊME contenu (SHA-256), sauf pour un envoi qui porte un identifiant de capture ou qui vient d'un jeton d'appareil (le compagnon :

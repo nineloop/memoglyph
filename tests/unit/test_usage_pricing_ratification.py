@@ -1,4 +1,4 @@
-"""Ratification de tarifs (FinOps phase 1B) — provenance, bootstrap explicite, aucun tarif inventé.
+"""Ratification de tarifs (FinOps) — provenance, bootstrap explicite, aucun tarif inventé.
 
 Invariants protégés :
 - provenance structurée (`rate_source` + `source_url`/`retrieved_at` pour l'officiel) ;
@@ -338,7 +338,7 @@ def test_voxtral_2602_ratifie_prix_a_la_minute(usage_db):
 
 
 def test_config_identifiants_inchanges(usage_db):
-    """Sécurité historique : aucun identifiant configuré n'est modifié en phase 1C.
+    """Sécurité historique : aucun identifiant configuré n'est modifié.
     voxtral était DÉJÀ épinglé (rien à changer). Le chat est passé de l'alias
     mistral-small-latest, refusé au palier par défaut (plafond nul), à l'id épinglé
     ministral-14b-2512 : un changement de produit délibéré, qui ne réécrit aucune

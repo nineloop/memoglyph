@@ -175,7 +175,7 @@ def test_l_api_tient_son_releve_a_cote_des_fichiers_pid() -> None:
     assert api_main.jobs._releve == api_main.TRAITEMENTS_PATH
 
 
-# ---------- Chantier 003, tranche B : traitements visibles partout ----------
+# ---------- traitements visibles partout ----------
 
 def _attendre_statut(job, statut: str) -> None:
     import time
@@ -323,7 +323,7 @@ def test_un_traitement_en_echec_puis_renvoye_cree_un_nouveau_traitement() -> Non
     assert cree and cree2 and second.id != premier.id
 
 
-# ---------- Annulation d'un traitement en attente de place (chantier 005, tranche C) ----------
+# ---------- Annulation d'un traitement en attente de place ----------
 #
 # Le créneau lourd (`resources._SEM`) est GLOBAL à toute la session de tests : chaque tenue est dans un
 # `try/finally`, chaque attente a un délai, et chaque tentative attend la FIN du fil de traitement avant la suivante

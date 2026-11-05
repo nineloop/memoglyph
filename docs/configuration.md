@@ -30,7 +30,7 @@ Les réglages se lisent sous le préfixe `MEMOGLYPH_*`. Les clés et modèles cl
 | `MEMOGLYPH_ATTENTE_S` | attente maximale du démarrage par `start.sh`, `900` s par défaut |
 | `MEMOGLYPH_UI_HOST` | écoute UI, `127.0.0.1` par défaut ; préférer `--lan` pour `0.0.0.0` |
 | `MEMOGLYPH_ALLOWED_HOSTS` | mode LAN : noms d'hôte autorisés en plus de l'IP et de `.local` (CSV) |
-| `MEMOGLYPH_USAGE_DB` | chemin du magasin de télémétrie FinOps `usage.db` (tests / emplacement alternatif) |
+| `MEMOGLYPH_USAGE_DB` | chemin du magasin de suivi FinOps `usage.db` (tests / emplacement alternatif) |
 | `MEMOGLYPH_EMBED_LOCAL_MODEL` | modèle d'embeddings local, `intfloat/multilingual-e5-large` par défaut |
 | `MEMOGLYPH_KEEP_FAITHFUL` | conserve le FLAC fidèle, activé par défaut |
 

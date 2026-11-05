@@ -3,7 +3,7 @@
 # (anglais) et README.fr.md (français) ; les modifier à la main n'a aucun effet durable.
 # `version` égale la première entrée de CHANGELOG.md (un test le vérifie) et s'affiche par {{version}}.
 # `regles_strictes: true` : coupe d'un paragraphe par ligne, ton, longueur et attribution sont imposés.
-version: v1.2.0
+version: v1.2.1
 regles_strictes: true
 langues:
 - en
@@ -29,6 +29,10 @@ rubriques:
   fichier:
     en: 05-quick-start.md
     fr: 05-demarrer.md
+- id: en-bref
+  fichier:
+    en: 02a-at-a-glance.md
+    fr: 02a-en-bref.md
 - id: aller-plus-loin
   fichier:
     en: 06-learn-more.md

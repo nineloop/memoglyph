@@ -36,7 +36,7 @@ describe('CSS des traitements', () => {
     expect(css.slice(i)).toMatch(/\.indicateur-signal \.icon[^{]*\{[^}]*animation:\s*none/)
   })
 
-  it('chantier 005 : le bouton « Annuler » a une cible d\'au moins 44 px et la pastille « Annulé » est NEUTRE', () => {
+  it('le bouton « Annuler » a une cible d\'au moins 44 px et la pastille « Annulé » est NEUTRE', () => {
     expect(css).toMatch(/\.traitement-annuler\s*\{[^}]*min-height:\s*44px/)
     // Compact : la carte est une colonne qui étire ses enfants ; le bouton s'aligne à gauche et prend la
     // largeur de son texte, sans perdre sa hauteur tactile.

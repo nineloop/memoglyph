@@ -1,4 +1,4 @@
-"""FinOps phase 1D — le VRAI seam de démarrage app initialise le catalogue (zéro-touche).
+"""FinOps — le VRAI seam de démarrage app initialise le catalogue (zéro-touche).
 
 Exerce `api.main._startup_finops` — la fonction que le `lifespan` FastAPI appelle au démarrage
 normal (`uvicorn api.main:app`, via `./start.sh`). Prouve : ensemencement automatique sans

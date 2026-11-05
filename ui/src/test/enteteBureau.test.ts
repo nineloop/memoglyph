@@ -28,7 +28,7 @@ describe('barre haute allégée au bureau étroit', () => {
     expect(css).toMatch(/position:\s*sticky;\s*top:\s*76px/)
   })
 
-  it('ne garde aucune règle des contrôles retirés de la barre (SC-002, SC-004)', () => {
+  it('ne garde aucune règle des contrôles retirés de la barre', () => {
     // Le conteneur du menu natif de portée, son libellé de rôle et l'en-tête de contexte n'existent
     // plus (`.project-select` reste : la fusion de voix s'en sert).
     expect(css).not.toMatch(/\.scope-picker\s*\{/)

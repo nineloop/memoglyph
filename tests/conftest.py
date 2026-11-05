@@ -87,7 +87,7 @@ if not getattr(subprocess.Popen, "_garde_lancement", False):
     subprocess.Popen = _PopenSansServeurDeProduction  # type: ignore[misc]
 
 
-# ---------- GARDE RÉSEAU (chantier 006) : un test ne joint aucun hôte hors de la machine ----------
+# ---------- GARDE RÉSEAU : un test ne joint aucun hôte hors de la machine ----------
 #
 # Les fournisseurs en ligne nommés multiplient les endroits où un appel réel pourrait partir. Comme la garde de port,
 # elle est posée ICI, avant tout import de `core`, pour toute la session.
@@ -682,7 +682,7 @@ def aucun_listener_sur_le_port_de_production(request):
         )
 
 
-# ---------- GARDE DE PAUSE (chantier 006, tranche H) : aucun test ne dort pour de vrai ----------
+# ---------- GARDE DE PAUSE : aucun test ne dort pour de vrai ----------
 #
 # Le moteur des fournisseurs nommés attend jusqu'à 60 s (300 s en tout) avant de réessayer un 429. Plusieurs suites envoient
 # des 429 sans `Retry-After` (20 s par défaut) : si un contexte d'attente fuyait jusqu'à elles, elles dormiraient pour de vrai.

@@ -158,7 +158,7 @@ export function grouperParReunion(items: LibraryItem[]): Reunion[] {
 }
 
 /**
- * Les réunions voisines d'une réunion, dans SON projet (retour 15).
+ * Les réunions voisines d'une réunion, dans SON projet.
  *
  * « Précédente » est la plus ancienne qui la précède, « suivante » la plus récente qui la suit :
  * l'ordre est chronologique (date, puis clé pour départager), quel que soit le tri de la liste

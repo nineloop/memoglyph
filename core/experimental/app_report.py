@@ -86,7 +86,7 @@ def make_local_report(
         # Il ne lève jamais (retombe sur « generique ») — import paresseux pour ne
         # pas charger `core.report` sur le chemin par défaut.
         from core import report as _report  # noqa: PLC0415
-        # `detail` : d'où vient le genre et la réponse BRUTE du classifieur (chantier 007) ; gardés dans le diagnostic et dans le
+        # `detail` : d'où vient le genre et la réponse BRUTE du classifieur ; gardés dans le diagnostic et dans le
         # résultat, jamais dans le front matter (un modèle peut répéter du transcript).
         detail_genre: dict = {}
         with telemetry.stage("genre"):
@@ -235,7 +235,7 @@ def _assemble_app_report(name: str, meta: dict, genre: str, out: dict,
         "genre": genre,
         "report_engine": "local_hybrid_v1",
         # Les modèles qui ont RÉELLEMENT répondu quand le fournisseur en choisit un par appel (un routeur) : `model` ne dit alors
-        # que le nom demandé (chantier 006, G2). Absent pour un fournisseur qui n'en dit rien.
+        # que le nom demandé. Absent pour un fournisseur qui n'en dit rien.
         "models_served": list(modeles_servis) if modeles_servis else None,
         # Réserves surfacées par l'aside qualité (tableaux) — jamais de perte
         # silencieuse : les tranches d'extraction en échec sont déclarées.

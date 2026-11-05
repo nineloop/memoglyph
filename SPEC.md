@@ -41,13 +41,12 @@ L'historique des décisions est tenu dans un journal interne, non publié.
   fichiers plutôt que la latence.
 
 **Non-objectifs**
-- Pas de micro / temps réel.
-- Pas de multi-utilisateur.
+- Pas de transcription en temps réel. La capture d'un appel passe par le compagnon, en bêta.
 - Pas de dépendance OBLIGATOIRE à un service distant : tout le produit doit
   rester utilisable hors ligne. Le mode cloud Mistral est un choix explicite de
   l'utilisateur, jamais un prérequis — et aucune fonction ne doit devenir
-  inaccessible sans lui (cf. « North Star » dans la roadmap).
-- Pas de traduction du corpus (piste).
+  inaccessible sans lui.
+- Pas de traduction du corpus.
 
 ---
 
@@ -833,7 +832,7 @@ Détail, livré et envisagé : [docs/ecl.md](docs/ecl.md).
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `MEMOGLYPH_EMBED_BACKEND` | `local` | `local` = modèle embarqué (recherche + RAG sans réseau). `ollama` = legacy |
+| `MEMOGLYPH_EMBED_BACKEND` | `local` | `local` = modèle embarqué (recherche + RAG sans réseau), seule valeur prise en charge ; l'ancien moteur Ollama est retiré |
 | `MEMOGLYPH_EMBED_LOCAL_MODEL` | `intfloat/multilingual-e5-large` | modèle d'embeddings local (dim 1024). Changer impose une réindexation |
 
 **Audio / STT / ressources**

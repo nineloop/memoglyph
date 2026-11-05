@@ -1,4 +1,4 @@
-"""FinOps phase 3A — agrégat DÉRIVÉ `usage_daily` + lecture de séries.
+"""FinOps — agrégat DÉRIVÉ `usage_daily` + lecture de séries.
 
 Invariants prouvés : grain exact, idempotence incrémentale, équivalence rebuild complet,
 faits bruts intacts, séparation devise/base, non tarifé distinct (jamais faux zéro), filtres

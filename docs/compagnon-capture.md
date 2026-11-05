@@ -1,9 +1,8 @@
 # Compagnon de capture : spécification
 
-> **Statut : proposition, rien n'est implémenté.** Ce document fixe le périmètre,
-> les prérequis et les choix à arbitrer avant la première ligne de code. Chaque
-> choix tranché reçoit un identifiant de décision et passe de la section 5 à la
-> section 4.5.
+> **Statut : livré en bêta, macOS seulement.** Ce document est la spécification
+> d'origine : il fixe le périmètre, les prérequis et les choix (C1 à C14). Le mode
+> d'emploi est dans [compagnon/README.md](../compagnon/README.md).
 
 ## 1. Objet
 
@@ -50,17 +49,17 @@ Rien ne démarre seul : le compagnon **propose**, l'utilisateur **confirme**.
 │                                   ▼                               │
 │        Memoglyph local : http://127.0.0.1:<port>/api/transcribe   │
 └───────────────────────────────────┼───────────────────────────────┘
-                                    └── ou Memoglyph distant (§6, phase 4)
+                                    └── ou un autre Memoglyph (réglage « Un serveur »)
 ```
 
 - **Destination** : un réglage, « Ce Mac » ou « Un serveur » (adresse et jeton), toujours
-  affiché (section 4.5). Par défaut, le Memoglyph local, port lu dans
+  affiché (section 4.4). Par défaut, le Memoglyph local, port lu dans
   `.memoglyph-ports`.
 - **Enregistrement toujours local d'abord.** L'envoi est un second temps, avec une
   file qui réessaie : rien n'est perdu si Memoglyph est arrêté, si le réseau coupe ou
   si le Mac se met en veille.
 - **Jeton d'appareil** : rangé dans le trousseau macOS. La connexion est
-  obligatoire partout, local compris : le compagnon envoie toujours son jeton (section 4.4).
+  obligatoire partout, local compris : le compagnon envoie toujours son jeton (section 4.3).
 
 ## 4. Prérequis
 
@@ -79,23 +78,13 @@ Rien ne démarre seul : le compagnon **propose**, l'utilisateur **confirme**.
 |---|---|
 | `/api/transcribe` accepte un fichier (jusqu'à 2 Go), avec projet, diarisation et compte-rendu | présent |
 | Genre de compte-rendu `webinar` | présent |
-| Jetons d'appareil : créés et retirés par le compte dans « Appareils », section 4.4 | présent |
+| Jetons d'appareil : créés et retirés par le compte dans « Appareils », section 4.3 | présent |
 | Provenance de la capture : `capture_application` (80 caractères au plus) et `capture_mode` (`visio` ou `replay`), écrites dans le front-matter (`capture`) et affichées dans l'onglet Information | présent |
 | Accepter **deux pistes** (micro, système) : un WAV à deux canaux se transcrit, les deux canaux mêlés en mono avant le STT | présent |
-| Exploiter les deux pistes : annulation d'écho, voir C4 ; piste « propriétaire », voir C14. L'archive audio reste mono | à faire, après la phase 1 |
-| Erreurs de traitement lisibles, pour que le compagnon affiche la raison d'un échec (NOW n° 2 de la feuille de route) | à faire, en version réduite |
+| Exploiter les deux pistes : annulation d'écho, voir C4 ; piste « propriétaire », voir C14. L'archive audio reste mono | à faire |
+| Erreurs de traitement lisibles, pour que le compagnon affiche la raison d'un échec | à faire, en version réduite |
 
-### 4.3 Memoglyph, côté distant (phase 4 seulement)
-
-| Prérequis | État |
-|---|---|
-| Authentification | présente, jetons d'appareil compris (section 4.4) ; prérequis dur de tout hébergement |
-| Cloisonnement multi-utilisateurs par espaces de travail | absent ; décidé, spécification à part à écrire |
-| HTTPS | à mettre en place |
-| Pipeline sur Linux, sans MLX ni puce Apple | non commencé (piste « hébergement souverain », PARKED) |
-| Routage selon la sensibilité (une réunion confidentielle reste locale) | NEXT de la feuille de route |
-
-### 4.4 Authentification
+### 4.3 Authentification
 
 La connexion est obligatoire partout, en local comme à distance, par un
 seul chemin de code. Le compagnon n'a pas de navigateur : il s'authentifie par un **jeton
@@ -119,7 +108,7 @@ recherche, RAG, voix, télémétrie) et fera l'objet d'une spécification à par
 prérequis du distant, pas du compagnon : le compagnon n'envoie qu'au projet que son
 jeton autorise.
 
-### 4.5 Décisions prises
+### 4.4 Décisions prises
 
 **Surveiller partout, piloter seulement ce Mac.**
 
@@ -238,15 +227,15 @@ captures et le réglage du projet d'envoi suivent ce nom (`CaptureCore/Espace.sw
 
 ## 5. Choix à arbitrer
 
-Chaque ligne est un choix ouvert, avec une recommandation.
+Chaque ligne est un choix, avec sa recommandation d'origine.
 
 | # | Question | Options | Recommandation |
 |---|---|---|---|
 | C1 | Version minimale de macOS | 13 (ScreenCaptureKit seul) · 14.4 (process taps) · 15 | **14.4** : capture par application sans pilote virtuel |
 | C2 | API de capture du son | process taps de Core Audio · ScreenCaptureKit | **process taps** : son d'une application précise, permission audio seule ; ScreenCaptureKit demande l'autorisation d'enregistrement de l'écran |
 | C3 | Pistes | un fichier mono mixé · un fichier à deux canaux (micro, système) · deux fichiers | **deux canaux dans un fichier** : un seul envoi, et l'écho comme la piste « propriétaire » restent exploitables |
-| C4 | Écho sans casque | casque recommandé seulement · annulation d'Apple (VPIO) · annulation par Memoglyph, avec la piste système comme référence · mode « micro seul » | **casque recommandé en phase 1, puis annulation par Memoglyph** ; l'annulation d'Apple ne traite que le son joué par l'application elle-même, pas celui de Zoom (à confirmer pendant l'essai) |
-| C5 | Détection d'une visio | manuelle seulement · micro en usage (indicateur orange) · application qui utilise le micro (par processus) · calendrier | **phase 1 manuelle ; phase 2 « micro en usage », puis identification de l'application** |
+| C4 | Écho sans casque | casque recommandé seulement · annulation d'Apple (VPIO) · annulation par Memoglyph, avec la piste système comme référence · mode « micro seul » | **casque recommandé** ; l'annulation d'Apple ne traite que le son joué par l'application elle-même, pas celui de Zoom (à confirmer pendant l'essai) |
+| C5 | Détection d'une visio | manuelle seulement · micro en usage (indicateur orange) · application qui utilise le micro (par processus) · calendrier | **manuelle** |
 | C6 | Consentement | rappel à chaque démarrage · indicateur seul · message prêt à coller dans la conversation de la visio | **rappel au démarrage et indicateur permanent** |
 | C7 | Format d'enregistrement | WAV · FLAC · AAC (M4A) | **WAV écrit par tranches** pendant la capture (robuste au plantage), compressé à l'envoi |
 | C8 | Envoi | à la fin · en continu, par tranches | **à la fin**, avec la file d'attente |
@@ -254,17 +243,14 @@ Chaque ligne est un choix ouvert, avec une recommandation.
 | C11 | Emplacement du code | dossier `compagnon/` du dépôt · dépôt séparé | **dossier du dépôt**, versionné avec le reste ; tests Swift en local, car la CI macOS coûte dix fois plus de minutes |
 | C12 | Signature | compte gratuit (usage personnel) · Developer ID, 99 $ par an (distribution) | **compte gratuit** tant que l'usage est personnel ; le Developer ID est une dépense à décider pour distribuer |
 | C13 | Cible distante | VPS complet (audio envoyé) · hybride : traitement local, résultats synchronisés | **hybride d'abord** : l'audio ne quitte pas le Mac |
-| C14 | Piste « propriétaire » | ignorée · indice pour la diarisation (« cette voix est le propriétaire ») | **indice**, après la phase 1 ; son effet reste à évaluer |
+| C14 | Piste « propriétaire » | ignorée · indice pour la diarisation (« cette voix est le propriétaire ») | **indice** ; son effet reste à évaluer |
 
-## 6. Phasage
+## 6. Ce qui est livré
 
-| Phase | Contenu | Sortie attendue |
+| Étape | Contenu | Sortie |
 |---|---|---|
-| 0. Essai technique, ~1 jour | **outil livré** : [`compagnon/`](../compagnon/README.md), `memoglyph-capture` ; son d'une application (process tap) et micro sur deux canaux, écrits par tranches. Vérifié sous macOS 27 sur `afplay`. **Premier essai sur une vraie visio réussi** (Zoom, avec casque, installé par `make companion`) ; restent à essayer Teams, Meet et l'écho sans casque | C1, C2, C3 et C4 confirmés ou corrigés |
-| 1. Version minimale, 3 à 5 jours | barre de menus, modes visio et replay, démarrer et arrêter l'enregistrement, écriture par tranches, destination affichée, état de Memoglyph, envoi au Memoglyph local, lien vers la réunion, indicateur et rappel de consentement | U1 et U2 en manuel |
-| 2. Détection, 3 à 5 jours | micro en usage, puis application identifiée (Zoom, Teams, navigateur pour Meet) ; proposition d'enregistrer | U1 proposé automatiquement |
-| 3. Robustesse et pilotage local, 3 à 5 jours | longues sessions, veille, changement de casque, reprise ; pilotage de « Ce Mac » ; annulation d'écho par Memoglyph (C4) | usage quotidien |
-| 4. Distant | après l'authentification, le cloisonnement par espaces de travail et le HTTPS de Memoglyph ; d'abord l'hybride (C13) ; le compagnon n'a que la destination « Un serveur » à activer | Memoglyph sur un serveur |
+| Essai technique | **outil livré** : [`compagnon/`](../compagnon/README.md), `memoglyph-capture` ; son d'une application (process tap) et micro sur deux canaux, écrits par tranches. Vérifié sous macOS 27 sur `afplay`. **Premier essai sur une vraie visio réussi** (Zoom, avec casque, installé par `make companion`) ; restent à essayer Teams, Meet et l'écho sans casque | C1, C2, C3 et C4 confirmés ou corrigés |
+| Version minimale | barre de menus, modes visio et replay, démarrer et arrêter l'enregistrement, écriture par tranches, destination affichée, état de Memoglyph, envoi au Memoglyph local, lien vers la réunion, indicateur et rappel de consentement | U1 et U2 en manuel |
 
 ## 7. Risques et inconnues
 

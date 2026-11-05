@@ -241,7 +241,7 @@ it('ne montre pas la galerie de projets dans un projet précis', async () => {
 })
 
 
-// ---------- Chantier 003 : en-tête de projet, Rafraîchir, fil d'Ariane (T018) ----------
+// ---------- en-tête de projet, Rafraîchir, fil d'Ariane ----------
 
 it('Rafraîchir recharge la liste SANS recharger la page', async () => {
   const user = userEvent.setup()

@@ -131,7 +131,7 @@ describe('garde sur l’instrument', () => {
 })
 
 
-describe("le panneau des traitements dans l'URL (chantier 003)", () => {
+describe("le panneau des traitements dans l'URL", () => {
   it("lit et écrit `traitements=1`, et rien d'autre ne change", () => {
     expect(lireUrl('?traitements=1').traitements).toBe(true)
     expect(lireUrl('?vue=library&projet=01P&traitements=1')).toEqual({ vue: 'library', projet: '01P', traitements: true })
@@ -144,7 +144,7 @@ describe("le panneau des traitements dans l'URL (chantier 003)", () => {
     expect(ecrireUrl({ vue: 'library', traitements: false })).toBe('?vue=library')
   })
 
-  it("les anciens liens donnent les mêmes états qu'avant (FR-007)", () => {
+  it("les anciens liens donnent les mêmes états qu'avant", () => {
     expect(lireUrl('?vue=library&projet=01P&reunion=01M&onglet=transcript'))
       .toEqual({ vue: 'library', projet: '01P', reunion: '01M', onglet: 'transcript' })
     expect(lireUrl('?vue=search&q=climat')).toEqual({ vue: 'search', q: 'climat' })

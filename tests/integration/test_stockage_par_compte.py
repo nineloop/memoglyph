@@ -142,7 +142,7 @@ def test_hors_de_la_portee_c_est_404_jamais_403(bibliotheque) -> None:
 # ---------- (3) Bibliothèque d'avant les comptes ----------
 
 def _bibliotheque_ancienne(racine) -> None:
-    """Un corpus d'avant ce chantier : manifestes en version 1, sans propriétaire."""
+    """Un corpus d'une version antérieure : manifestes en version 1, sans propriétaire."""
     (racine / "Ancien").mkdir(parents=True)
     projects.initialize(racine, simulation=False)
     for dossier in (racine, racine / "Ancien"):

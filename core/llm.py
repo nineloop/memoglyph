@@ -64,7 +64,7 @@ MOTEURS: dict[str, LLMEngine] = {
     "openai": llm_openai.OpenAIEngine(),
     "anthropic": llm_anthropic.AnthropicEngine(),
     "compatible": llm_compatible.CompatibleEngine(),
-    # Fournisseurs en ligne NOMMÉS (chantier 006) : deux préréglages d'un même moteur, un par profil. Jamais locaux, jamais
+    # Fournisseurs en ligne NOMMÉS : deux préréglages d'un même moteur, un par profil. Jamais locaux, jamais
     # « auto-hébergés » : leur identité dit « en ligne », pas leur adresse (`llm_nomme.py`).
     "openrouter": llm_nomme.MoteurNomme(llm_nomme.PROFILS["openrouter"]),
     "groq": llm_nomme.MoteurNomme(llm_nomme.PROFILS["groq"]),

@@ -28,7 +28,7 @@ function Cadre(props: { replie?: boolean; surConsulter?: (id: string) => void; s
 
 beforeEach(() => localStorage.clear())
 
-describe('le panneau des projets (US1)', () => {
+describe('le panneau des projets', () => {
   it('montre les groupes : Tous mes projets, Non classé, Projets, Partagés avec moi', () => {
     render(<Cadre />)
     const nav = screen.getByRole('navigation', { name: /projets de la bibliothèque|library projects/i })

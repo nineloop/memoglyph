@@ -1,7 +1,7 @@
-"""La règle des modèles gratuits (chantier 006, tranche C) : la règle seule, puis son passage par la façade.
+"""La règle des modèles gratuits : la règle seule, puis son passage par la façade.
 
-Un modèle que le SERVICE marque comme gratuit ne reçoit jamais un document « ultra-confidentiel » (décision du 4/11, 13:55 :
-« public · normal » et « confidentiel » passent) : plus strict que la règle du nuage, qui accepte l'ultra autorisé par le compte,
+Un modèle que le SERVICE marque comme gratuit ne reçoit jamais un document « ultra-confidentiel » (« public · normal » et
+« confidentiel » passent) : plus strict que la règle du nuage, qui accepte l'ultra autorisé par le compte,
 qui laisse passer le « confidentiel » et accepte l'« ultra-confidentiel » autorisé par le compte. La règle ne regarde NI le
 nuage NI l'autorisation. Elle vit en UN endroit (`core/modeles_gratuits.py`, constante `SENSIBILITES_PERMISES`) : l'assouplir ou
 la retirer est un changement d'une ligne.
@@ -50,7 +50,7 @@ def test_openrouter_reconnait_le_suffixe_et_le_routeur_gratuits(modele, attendu,
 
 @pytest.mark.parametrize("modele", [GRATUIT, ROUTEUR, PAYANT, "llama-3.3-70b-versatile"])
 def test_groq_n_a_aucun_modele_gratuit_marque_par_le_service(modele, mg) -> None:
-    """Chez Groq la gratuité est un palier de COMPTE, sans marqueur par modèle (research.md D4) : jamais gratuit, même si
+    """Chez Groq la gratuité est un palier de COMPTE, sans marqueur par modèle : jamais gratuit, même si
     l'identifiant ressemble à celui d'OpenRouter."""
     assert mg.est_gratuit("groq", modele) is False
 

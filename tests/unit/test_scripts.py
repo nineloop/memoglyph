@@ -536,8 +536,8 @@ def test_le_balayage_arrete_un_orphelin_de_sa_racine(tmp_path: Path, api_factice
 
 
 def test_le_releve_de_stop_garde_son_format_malgre_les_champs_ajoutes_au_job(tmp_path: Path) -> None:
-    """`stop.sh` lit `pid` et `traitements[id, nature, statut, progression, depuis]` : le chantier 003
-    ajoute des champs au `Job` (titre, projet, jeton…) qui ne doivent JAMAIS entrer dans ce fichier."""
+    """`stop.sh` lit `pid` et `traitements[id, nature, statut, progression, depuis]` : les
+    champs ajoutés au `Job` (titre, projet, jeton…) ne doivent JAMAIS entrer dans ce fichier."""
     import json
 
     from api.jobs import JobManager

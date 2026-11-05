@@ -94,6 +94,13 @@
     },
     {
       "compact": false,
+      "longueur": 8,
+      "mot_entier": true,
+      "sha256": "db135567d58fcccf8c319f00494ed17c38fa001c326e92c51b8d6db195a2322b",
+      "terme": "db135567d58fcccf8c319f00494ed17c38fa001c326e92c51b8d6db195a2322b"
+    },
+    {
+      "compact": false,
       "longueur": 9,
       "mot_entier": false,
       "sha256": "0e89820860c342f2c7ec694d144023b10301c2accdd078cb5167a06d0c3d5bcc",
@@ -112,6 +119,13 @@
       "mot_entier": true,
       "sha256": "631c29ada4a6c3794c926b44e88cd18c81dc731bbf1f153010d085b6d929ad52",
       "terme": "631c29ada4a6c3794c926b44e88cd18c81dc731bbf1f153010d085b6d929ad52"
+    },
+    {
+      "compact": false,
+      "longueur": 9,
+      "mot_entier": true,
+      "sha256": "b23c03469bd184576176a48d04e05dbb51edf931e8a073d78ece17b55ba490d9",
+      "terme": "b23c03469bd184576176a48d04e05dbb51edf931e8a073d78ece17b55ba490d9"
     },
     {
       "compact": false,

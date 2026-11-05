@@ -1,4 +1,4 @@
-"""Régénérer un compte rendu comme un traitement (chantier 003, tranche E).
+"""Régénérer un compte rendu comme un traitement.
 
 `POST /api/transcript/{name}/report/jobs` fait ce que `POST …/report` fait, avec les mêmes contrôles AVANT
 toute création, mais en traitement suivi (vue des traitements, indicateur). La chaîne de génération est la
@@ -256,7 +256,7 @@ def test_la_cle_en_ligne_ne_figure_dans_aucun_suivi(comptes, modele) -> None:
 
 
 def test_une_regeneration_en_attente_annulee_n_ecrit_aucun_compte_rendu(comptes, modele) -> None:
-    """Chantier 005 : la régénération passe par le MÊME assistant de créneau que la transcription (FR-008)."""
+    """La régénération passe par le MÊME assistant de créneau que la transcription."""
     from tests.integration.test_annulation_job import creneau_tenu, _fils_de_traitement
     alice = connecte("alice")
     nom = reunion(comptes, "alice")

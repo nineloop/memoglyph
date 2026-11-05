@@ -1,4 +1,4 @@
-"""Tranche G du chantier 006 : l'essai réel a montré (1) une réponse au contenu nul et au motif « length » lue comme « sans contenu
+"""L'essai réel a montré (1) une réponse au contenu nul et au motif « length » lue comme « sans contenu
 textuel », (2) un compte rendu qui ne dit que « openrouter/free » (le routeur) sans dire quel modèle a répondu, (3) un budget de
 sortie mangé par le raisonnement. Ce fichier prouve les trois correctifs ; aucun appel réel, un transport simulé.
 """
@@ -199,7 +199,7 @@ def test_le_compte_rendu_ecrit_dit_le_modele_qui_a_repondu(monkeypatch, tmp_path
 def test_une_usage_db_d_avant_la_tranche_g_est_mise_a_niveau_et_garde_ses_lignes(nomme, monkeypatch, usage_db) -> None:
     """Une base déjà installée n'a pas la colonne `model_servi` (le `CREATE` ne la rattrape pas) : la migration additive doit
     l'ajouter, sans perdre les lignes existantes, sinon chaque enregistrement d'appel échouerait sans bruit (la télémétrie ne
-    lève jamais). Écrit APRÈS le code ; sa preuve est le mutant « colonne retirée de `_ADDED_COLUMNS` »."""
+    lève jamais). Il échoue si la colonne n'est pas rattrapée sur une base existante."""
     conn = usage_store.connect(usage_db)
     conn.execute("ALTER TABLE model_call DROP COLUMN model_servi")     # l'état d'une base d'avant G
     conn.commit()

@@ -1,7 +1,7 @@
-"""La documentation d'OpenRouter et de Groq (chantier 006, tranche D) : variables, phrase de redémarrage, politiques de données.
+"""La documentation d'OpenRouter et de Groq : variables, phrase de redémarrage, politiques de données.
 
 Les liens de politique de données sont ceux des pages LUES pendant la recherche, cités sans jugement ; pour ce que les pages lues
-ne précisent pas, la documentation le dit et ne l'affirme pas. (Ce fichier a été écrit après les textes, et prouvé par des mutants.)
+ne précisent pas, la documentation le dit et ne l'affirme pas.
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_ce_que_les_pages_lues_ne_precisent_pas_est_dit_et_non_affirme() -> None
 
 
 def test_les_modeles_gratuits_sont_dits_fermes_a_l_ultra_confidentiel_meme_autorise() -> None:
-    """Décision du 4/11 : un modèle gratuit reçoit « public · normal » et « confidentiel », jamais l'ultra-confidentiel,
+    """Un modèle gratuit reçoit « public · normal » et « confidentiel », jamais l'ultra-confidentiel,
     même autorisé au nuage ; la règle est dite changeable, avec la page qui en donne la raison."""
     section = _lire("docs/local-et-en-ligne.md").split("## OpenRouter et Groq")[1].split("## Ce qui ne part pas")[0]
     assert "public · normal" in section and "confidentiel" in section

@@ -1,4 +1,4 @@
-"""ECL, phase 1 : les faits d'une réunion, extraits et ancrés sur la parole.
+"""ECL : les faits d'une réunion, extraits et ancrés sur la parole.
 
 Une extraction dédiée par réunion, par le modèle configuré, de faits typés :
 décision, action (avec son porteur nommé et son locuteur), problème ouvert,

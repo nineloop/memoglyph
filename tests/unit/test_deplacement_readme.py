@@ -1,4 +1,4 @@
-"""Le détail technique de l'ancien README français se retrouve dans `docs/`, sans perte (chantier 004, tranche D).
+"""Le détail technique de l'ancien README français se retrouve dans `docs/`, sans perte.
 
 Les extraits ci-dessous ont été tirés mécaniquement des sections déplacées (quelques-uns ont été corrigés ensuite à la main : pyannote, le titre « auto-hébergé » et la recherche sémantique « par défaut » locale, trois corrections de texte public) : chaque code en ligne, chaque
 ligne d'un bloc de code, chaque phrase en gras ou en citation (les avertissements), et le début de chaque
@@ -35,13 +35,12 @@ EXTRAITS = {
         "l'intégrité est vérifiée déterministiquement, et un clic sur `[source]`",
         "positionne la lecture audio à l'instant cité. Une citation est un repère pour",
         "vérifier, pas une preuve : la transcription elle-même peut se tromper, et une",
-        "citation n'*implique* pas forcément l'affirmation (l'étude P0–P5 a explicitement",
-        "refusé d'intégrer les juges LLM/NLI actuels). Une étiquette de sensibilité à trois",
+        "citation n'*implique* pas forcément l'affirmation : les juges automatiques actuels",
+        "n'ont pas été retenus pour le vérifier. Une étiquette de sensibilité à trois",
         "niveaux est portée par chaque document ; par défaut, un document ultra-confidentiel",
         "ne part vers aucun fournisseur cloud (transcription, compte-rendu, faits, Assistant),",
         "sauf si son propriétaire l'autorise pour ses propres documents. Voir",
-        "[SPEC.md](SPEC.md) pour la conception. L'historique des décisions mesurées est",
-        "tenu dans un journal interne, non publié.",
+        "[SPEC.md](SPEC.md) pour la conception.",
         "[source]",
         "large-v3-turbo",
         "report.generate_report",
@@ -110,7 +109,7 @@ EXTRAITS = {
         "Comptes-rendus Markdown via MLX local, Mistral, OpenAI, Anthr",
         "**Étiquette de sensibilité** par réunion (`standard` / `conf",
         "**Cloud privé** : un serveur de modèle que vous hébergez (ML",
-        "**Suivi d'usage & coût IA (FinOps)** : télémétrie par exécut",
+        "**Suivi d'usage & coût IA (FinOps)** : suivi local par exécut",
         "**Serveur MCP en lecture seule** pour les agents (`./memogly",
         "**Interface bilingue FR/EN** : détection de la langue du nav",
         "Détection des doublons, Corbeille restaurable, purge vérifié",
@@ -146,7 +145,7 @@ EXTRAITS = {
         "Niveaux de confidentialité",
         "Prêt pour les agents",
         "Aucune télémétrie",
-        "**Vérifiable** : chaque affirmation cite son horodatage, et",
+        "**Vérifiable** : chaque affirmation cite son horodatage ;",
         "**Local par défaut** : Whisper et un modèle local sur Apple",
         "**Pour vous, ou pour une petite équipe, auto-hébergé** : des",
         "**Niveaux de confidentialité** : une réunion ultra-confident",
@@ -444,7 +443,7 @@ EXTRAITS = {
         "adresse de bouclage",
         "modèle d'embeddings local",
         "diarisation (pyannote) est facultative et demande une installation à part",
-        "Par défaut, la recherche sémantique utilise un modèle d'embeddings local",
+        "La recherche sémantique utilise toujours un modèle d'embeddings local",
         "## Un serveur de modèle auto-hébergé",
     ],
 }
@@ -476,6 +475,15 @@ def test_les_documents_deplaces_sont_dans_l_arbre_exporte_et_dans_l_index() -> N
     for document in NOUVEAUX:
         assert document in arbre, f"{document} ne part pas avec l'export"
         assert f"({document.removeprefix('docs/')})" in index, f"{document} n'est pas dans docs/README.md"
+
+
+def test_toute_page_de_docs_est_dans_l_index() -> None:
+    """Une page ajoutée à `docs/` (la page d'aperçu en anglais, par exemple) figure dans `docs/README.md`."""
+    index = (RACINE / "docs/README.md").read_text(encoding="utf-8")
+    pages = sorted(p.name for p in (RACINE / "docs").glob("*.md") if p.name != "README.md")
+    assert len(pages) >= 15 and "overview.md" in pages, "ancre : les pages de docs/ sont listées, la page d'aperçu comprise"
+    absentes = [nom for nom in pages if f"({nom})" not in index]
+    assert absentes == [], f"pages absentes de docs/README.md : {absentes}"
 
 
 @pytest.mark.parametrize("document", NOUVEAUX)

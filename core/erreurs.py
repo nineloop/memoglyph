@@ -2,7 +2,7 @@
 
 Un traitement qui échoue garde son texte brut (`job.error`, pour les clients existants et le journal), mais
 ce texte est celui d'une exception : français ou anglais selon l'endroit, avec des noms de modèle, de
-fichier ou de fonction. L'interface, elle, doit parler une seule langue (FR-029) : elle lit donc un CODE
+fichier ou de fonction. L'interface, elle, doit parler une seule langue : elle lit donc un CODE
 (`job.error_code`), comme pour les étapes (`core/messages.py`, `core/etapes.py`).
 
 Ce module est à part de `messages.py` : celui-ci ne contient que des constructeurs de messages, et un test
@@ -25,7 +25,7 @@ PAR_CLASSE: dict[str, str] = {
     "TranscriptNonCitable": "step.error.notCitable",
     "ExtractionVide": "step.error.emptyExtraction",
     "EnvoiRefuse": "step.error.sendRefused",
-    # Chantier 006 : deux sous-classes, trouvées par leur nom AVANT celui de leur famille (`EnvoiRefuse`, `LLMError`).
+    # Deux sous-classes, trouvées par leur nom AVANT celui de leur famille (`EnvoiRefuse`, `LLMError`).
     "ModeleGratuitRefuse": "step.error.freeModelRestricted",
     "LimiteDeDemandes": "step.error.rateLimited",
     "LLMError": "step.error.modelUnavailable",

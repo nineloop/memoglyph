@@ -158,7 +158,7 @@ function AppShell() {
   // transversale. Toute autre valeur est un ULID de manifeste projet.
   const [viewScope, setViewScope] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
-  // Trois responsabilités que `viewScope` mélangeait (retour 15) : ce qu'on CONSULTE (`viewScope`),
+  // Trois responsabilités que `viewScope` mélangeait : ce qu'on CONSULTE (`viewScope`),
   // où se range la prochaine transcription (`destinationChoisie`) et l'état du panneau. Changer
   // l'un ne modifie jamais l'autre : la destination ne dépend plus du projet consulté.
   const [panneauReplie, setPanneauReplie] = useState(() => lirePanneauReplie(moi ?? ''))

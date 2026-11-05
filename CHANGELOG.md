@@ -2,6 +2,18 @@
 
 All notable changes to Memoglyph are documented in this file. Versions are listed from the most recent to the oldest; dates use the ISO 8601 format.
 
+## v1.2.1 (2026-11-05)
+
+Documentation, comments and repository files only; the behavior of Memoglyph does not change. The README opens with a more precise line and gains an "At a glance" section, an English overview page answers common questions in short form, and several pages are corrected where they disagreed with the code.
+
+### Changes
+- README: a more precise opening line (open source, Apple Silicon Macs, local by default), a new "At a glance" section, and two more lines in the limits (Memoglyph works on a recording after the meeting, and runs from a clone of the repository).
+- New English overview page, `docs/overview.md`, with short answers on privacy, citations, the menu-bar companion, speakers, teams, online providers and installation.
+- Documentation corrected: the menu-bar companion is described as a beta for macOS, with its specification reduced to what is delivered; semantic search is stated to always use a local embedding model; a unit of a report whose figure is absent from the speech within 30 seconds of its timestamp is stated to be dropped.
+- Wording: local usage tracking is no longer called telemetry in the French pages (nothing leaves the machine), and the English FinOps pages are reworded around what each mechanism does.
+- `docs/REPORT_TEMPLATES.md` describes how the report type is chosen: the meeting type written in the profile first, one definition per type, and the sports type kept only when the text contains at least two distinct sports words.
+- Comments and docstrings reworded; no change in behavior.
+
 ## v1.2.0 (2026-11-04)
 
 Two named online providers, OpenRouter and Groq, can be added next to the existing ones. Each appears under its own name wherever the ready providers appear; the key and the model are set in `.env`, and nothing is sent without the rules that already protect your documents.

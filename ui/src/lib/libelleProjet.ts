@@ -7,7 +7,7 @@ export const NOM_RECEPTION = 'Non classé'
  * Le nom d'un projet tel qu'on l'AFFICHE.
  *
  * « Non classé » est un libellé du système, pas un nom choisi : en anglais on lit « Unclassified »
- * (FR-029 interdit le mélange des langues). Le nom stocké reste inchangé ; seule l'affichage passe
+ * (le mélange des langues est interdit). Le nom stocké reste inchangé ; seule l'affichage passe
  * par ici. Un projet nommé par l'utilisateur n'est jamais touché.
  */
 export function libelleProjet(nom: string, t: Traduire, kind?: string): string {

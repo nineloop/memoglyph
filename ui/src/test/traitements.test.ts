@@ -145,7 +145,7 @@ describe('la relève : 3 s quand quelque chose tourne, 15 s au repos, suspendue 
   })
 })
 
-describe('un traitement annulé (chantier 005, tranche D)', () => {
+describe('un traitement annulé', () => {
   const annule = (extra: Partial<Traitement> = {}) => T({
     statut: 'error', erreur: 'Traitement annulé.', erreur_code: 'step.error.cancelled', ...extra })
 

@@ -184,7 +184,7 @@ def test_les_routes_du_compagnon_existent_et_restent_peu_nombreuses() -> None:
     assert api_main.ROUTES_DU_COMPAGNON == {
         ("POST", "/api/transcribe"), ("GET", "/api/jobs/{job_id}"),
         ("GET", "/api/jobs/{job_id}/events"), ("GET", "/api/projects"),
-        # Chantier 003 : les comptes (« en attente : N traitements ») et SES captures seulement.
+        # les comptes (« en attente : N traitements ») et SES captures seulement.
         ("GET", "/api/jobs")}
     assert ("GET", "/api/health") in api_main.ROUTES_PUBLIQUES
 
@@ -377,7 +377,7 @@ def test_l_echec_de_la_diarisation_remonte_dans_les_avertissements_du_travail(co
 
 
 def test_un_jeton_d_appareil_ne_peut_pas_annuler_meme_sa_propre_capture(comptes, monkeypatch) -> None:
-    """Chantier 005 : l'annulation est réservée à la session ; la route n'est pas dans `ROUTES_DU_COMPAGNON`."""
+    """L'annulation est réservée à la session ; la route n'est pas dans `ROUTES_DU_COMPAGNON`."""
     alice = connecte("alice")
     _jeton, secret = creer_jeton(alice)
     compagnon = porteur(secret)

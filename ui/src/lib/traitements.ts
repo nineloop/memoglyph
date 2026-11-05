@@ -1,5 +1,5 @@
 /**
- * Les traitements du compte, vus de n'importe quel écran (chantier 003, tranche B).
+ * Les traitements du compte, vus de n'importe quel écran.
  *
  * Tout ce qui se calcule vit ici, SANS React : états affichés, comptes, durée « depuis 4 min », et la
  * relève de `GET /api/jobs` (3 s quand quelque chose tourne, 15 s au repos, suspendue onglet masqué).
@@ -12,7 +12,7 @@ export const INTERVALLE_REPOS_MS = 15000
 /** Combien de traitements terminés le panneau montre avant « Tout voir ». */
 export const TERMINES_VISIBLES = 5
 
-/** Le code d'un traitement annulé avant d'avoir commencé : un échec à cause codée, sans nouvel état serveur (chantier 005). */
+/** Le code d'un traitement annulé avant d'avoir commencé : un échec à cause codée, sans nouvel état serveur. */
 export const CODE_ANNULE = 'step.error.cancelled'
 
 export type EtatAffiche = 'en_attente' | 'en_cours' | 'termine' | 'echec' | 'annule'

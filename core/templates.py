@@ -430,7 +430,7 @@ _QUESTIONS: dict[str, dict[str, list[str]]] = {
 
 
 # Les types de profil qui désignent une RÉUNION : les alias de `projet` (une seule source, la table ci-dessus), `projet` lui-même
-# et son libellé. Le « Type » écrit par le profilage décide alors du genre sans interroger le classifieur (chantier 007).
+# et son libellé. Le « Type » écrit par le profilage décide alors du genre sans interroger le classifieur.
 TYPES_REUNION = frozenset(
     {alias for alias, genre in _ALIASES.items() if genre == "projet"} | {"projet", LABELS["projet"].lower()}
 )

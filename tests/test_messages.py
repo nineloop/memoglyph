@@ -220,7 +220,7 @@ def test_aucun_constructeur_n_echappe_a_la_table():
 
 
 def test_le_message_d_annulation_existe_avec_son_code_et_sa_phrase():
-    """Chantier 005 : un traitement annulé est un échec à cause codée, sans nouvel état (le compagnon lit le texte brut)."""
+    """Un traitement annulé est un échec à cause codée, sans nouvel état (le compagnon lit le texte brut)."""
     msg = messages.traitement_annule()
     assert msg.code == "step.error.cancelled" and str(msg) == "Traitement annulé."
 

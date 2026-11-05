@@ -850,7 +850,7 @@ def test_le_contrat_ne_demande_AUCUN_compteur_global() -> None:
 def test_le_plafond_total_reste_APPLIQUE_apres_coup() -> None:
     """Retirer la consigne ne retire pas la borne : c'est tout l'argument.
 
-    Si ce témoin tombait, la phase 2 aurait cessé d'être gratuite — elle
+    Si ce témoin tombait, l'allègement de la consigne aurait cessé d'être gratuit — il
     changerait le document rendu au lieu de n'alléger que la charge du modèle.
     """
     rendu = report_citations.render_structured(

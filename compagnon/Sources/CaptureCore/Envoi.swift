@@ -52,7 +52,7 @@ public struct Capture: Equatable, Codable, Sendable {
 
     public static func nouvelIdentifiant() -> String { UUID().uuidString.lowercased() }
 
-    /// Une file écrite avant ce chantier n'a pas de `captureId` : en lui en donnant un à la lecture,
+    /// Une file écrite par une version antérieure n'a pas de `captureId` : en lui en donnant un à la lecture,
     /// la file se relit entière au lieu d'être jetée (ce qui perdrait des captures en attente).
     public init(from decodeur: Decoder) throws {
         let c = try decodeur.container(keyedBy: Cles.self)

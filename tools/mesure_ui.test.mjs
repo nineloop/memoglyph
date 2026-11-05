@@ -27,7 +27,7 @@ test('un défilement horizontal se détecte, avec 1 px de tolérance', () => {
   assert.equal(mesurer({ elements: [], largeurDocument: 420, largeurFenetre: 390 }).defilementHorizontal, true)
 })
 
-test('transcript : le ratio compare le texte à l\'espace libre, et SC-007 exige 90 % à 1440 px', () => {
+test('transcript : le ratio compare le texte à l\'espace libre, et le transcript exige 90 % à 1440 px', () => {
   const base = { ligneMax: 700, largeurCaractere: 7, largeurDocument: 1440 }
   assert.equal(mesurerTranscript({ ...base, texte: 440, libre: 584, largeurFenetre: 1440 }).conforme1440, false)   // l'état d'avant
   const apres = mesurerTranscript({ ...base, texte: 782, libre: 782, largeurFenetre: 1440 })

@@ -1,9 +1,9 @@
-"""Manifeste de tarifs OFFICIELS ratifiés (FinOps phase 1B) — données, provenancées.
+"""Manifeste de tarifs OFFICIELS ratifiés (FinOps) — données, provenancées.
 
 Ce module ne fait RIEN au chargement : c'est un manifeste. `usage_store.bootstrap_official_pricing`
 l'importe EXPLICITEMENT (jamais automatiquement). Une `usage.db` neuve reste donc vide.
 
-## Règle dure (phase 1B)
+## Règle dure
 
 Un tarif n'entre ici QUE si le modèle CONFIGURÉ par Memoglyph se rattache SANS AMBIGUÏTÉ à un
 tarif officiel publié. Un nom fictif, un alias flottant (`-latest`), ou un nom qui ne se mappe
@@ -146,7 +146,7 @@ RATES_TO_CONFIRM = [
 ]
 
 # --- Alias AUDITÉS : modèle OBSERVÉ -> identité de TARIFICATION ----------------
-# DÉCISION PRODUIT (suivi Phase 1C) : pour la comptabilité, l'alias `mistral-small-latest` est
+# DÉCISION PRODUIT : pour la comptabilité, l'alias `mistral-small-latest` est
 # résolu vers l'identité datée `mistral-small-2603`. La télémétrie continue d'enregistrer l'alias
 # tel quel ; SEULE la tarification résout. Mapping EXACT — aucun autre modèle n'est concerné.
 OFFICIAL_ALIASES = [
@@ -219,7 +219,7 @@ RATIFICATION = {
     "mistral/mistral-small-latest": {
         "ratified": True,
         "via": "alias",
-        "reason": ("DÉCISION PRODUIT (suivi Phase 1C) : l'alias est résolu — par un mapping AUDITÉ "
+        "reason": ("DÉCISION PRODUIT : l'alias est résolu — par un mapping AUDITÉ "
                    "et versionné (OFFICIAL_ALIASES) — vers l'identité tarifée `mistral-small-2603` "
                    "(Mistral Small 4). La télémétrie garde `mistral-small-latest` ; seule la "
                    "tarification résout. Pas de config ni de comportement moteur modifiés."),

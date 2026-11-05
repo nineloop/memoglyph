@@ -1,6 +1,6 @@
 ## Local ou en ligne, au choix
 
-Par défaut, tout tourne sur le Mac : Whisper pour la transcription et un modèle de langage MLX local pour les comptes rendus et l'Assistant. La recherche sémantique utilise aussi, par défaut, un modèle d'embeddings local.
+Par défaut, tout tourne sur le Mac : Whisper pour la transcription et un modèle de langage MLX local pour les comptes rendus et l'Assistant. La recherche sémantique utilise toujours un modèle d'embeddings local.
 
 Un modèle en ligne peut s'ajouter au besoin : Mistral, OpenAI, Anthropic, OpenRouter ou Groq, ou tout autre service au format OpenAI par le fournisseur `compatible`. Mistral peut aussi transcrire, avec Voxtral.
 

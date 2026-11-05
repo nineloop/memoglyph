@@ -1,7 +1,7 @@
-"""Les modèles gratuits vus par l'API (chantier 006, tranche F) : un refus par route, à corps plat, avant toute réservation.
+"""Les modèles gratuits vus par l'API : un refus par route, à corps plat, avant toute réservation.
 
-Un modèle que le service marque gratuit ne reçoit JAMAIS un document « ultra-confidentiel » (décision du 4/11, 13:55 :
-« public · normal » et « confidentiel » passent). Pour chaque route qui envoie le texte d'un document à un modèle de langage :
+Un modèle que le service marque gratuit ne reçoit JAMAIS un document « ultra-confidentiel » (« public · normal » et
+« confidentiel » passent). Pour chaque route qui envoie le texte d'un document à un modèle de langage :
 
 - un document « ultra-confidentiel » AUTORISÉ au nuage avec un modèle gratuit : 403 `{detail, code: "model.free.restricted"}`, rien de
   créé, rien reçu ;
@@ -424,7 +424,7 @@ def test_une_autre_panne_du_moteur_reste_un_503_sans_code(statut, client, inbox,
 
 def test_constat_la_relance_des_faits_sur_un_quota_total_echoue_en_erreur_inattendue_sans_la_phrase(
         client, isolated_stores, inbox, transport, monkeypatch) -> None:
-    from core import attente_quota                     # tranche H : le 429 est attendu puis réessayé ; la pause est remplacée
+    from core import attente_quota                     # le 429 est attendu puis réessayé ; la pause est remplacée
     monkeypatch.setattr(attente_quota, "dormir", lambda secondes: None)
     """CONSTAT (chemin réel de la relance des faits, vrai moteur, vraie façade, tous les appels refusés par un 429) :
     `ecl._extraire` absorbe chaque tranche puis lève `ExtractionEnPanne`, qui n'est pas au tableau des codes : le traitement

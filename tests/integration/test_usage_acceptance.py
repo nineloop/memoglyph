@@ -1,4 +1,4 @@
-"""FinOps phase 3B — recette adversariale : réconciliation, portée, pagination, panne/vie privée.
+"""FinOps — recette adversariale : réconciliation, portée, pagination, panne/vie privée.
 
 Prouve que le tableau de bord réconcilie EXACTEMENT (rollup == faits bruts), que deux projets à
 fournisseurs/étapes qui SE CHEVAUCHENT ne fuient jamais, que la pagination est stable (ni doublon

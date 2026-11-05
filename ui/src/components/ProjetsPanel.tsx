@@ -9,7 +9,7 @@ import { ecrireUrl } from '../lib/urlState'
 import { Icon } from './Icon'
 
 /**
- * Le panneau des projets de la Bibliothèque (retour 15, approche B).
+ * Le panneau des projets de la Bibliothèque.
  *
  * C'est le SEUL endroit, avec le fil d'Ariane, où l'on choisit ce qu'on consulte : le menu natif
  * « Portée consultée » a disparu. Chaque projet est un vrai LIEN (adresse copiable, clic du

@@ -1,11 +1,11 @@
-# FinOps — Pricing provenance & ratification (Phase 1B)
+# FinOps — Pricing provenance & ratification
 
-> Backend policy only. No dashboard/UI, no user-facing API, no `usage_daily`, no budgets/alerts,
+> Pricing policy only. The dashboard is described in [finops-usage-daily.md](finops-usage-daily.md). No budgets/alerts,
 > no FX, no invoice reconciliation. Cost stays `cloud_derived` / `local_imputed` / **NULL**.
 
-Phase 1A gave a generic, versioned pricing mechanism. Phase 1B turns it into an **auditable
-policy grounded in real evidence** — and, crucially, refuses to price anything it cannot
-establish from an authoritative source.
+The pricing mechanism is generic and versioned. The policy is **auditable and grounded in real
+evidence** — and, crucially, refuses to price anything it cannot establish from an authoritative
+source.
 
 ## Cost-basis vocabulary (unchanged, reaffirmed)
 
@@ -37,9 +37,9 @@ Exact models Memoglyph uses, and whether their price could be established:
 | OpenAI reports | `gpt-5.6-luna` | **ratified** | Official: $0.20/1M in, $1.20/1M out, $0.02/1M cached — USD. [developers.openai.com](https://developers.openai.com/api/docs/models/gpt-5.6-luna) |
 | Anthropic reports | `claude-haiku-5-5` (default) | **ratified** (retrieved 2026-10-25) | Official: $0.10/1M in, $0.50/1M out, $0.01/1M cached, for prompts up to 100,000 tokens (above: $0.50/$2.50/$0.05 for the whole request, not modelled — cost of such a request is underestimated). [platform.claude.com](https://platform.claude.com/docs/en/about-claude/pricing) |
 | Anthropic meeting facts | `claude-sonnet-5-5` | **ratified** (retrieved 2026-10-25) | Official: $2/1M in, $10/1M out, $0.10/1M cached, same rate across the 1M window. [platform.claude.com](https://platform.claude.com/docs/en/about-claude/pricing) |
-| Mistral reports | `mistral-small-latest` | **ratified via alias** | Product decision: the alias resolves — through an **audited, versioned alias mapping** — to the priced identity `mistral-small-2603` ("Mistral Small 4", $0.15/$0.60 /1M USD). Telemetry keeps the alias; only pricing resolves. [docs.mistral.ai](https://docs.mistral.ai/models/model-cards/mistral-small-4-0-26-03) |
+| Mistral reports | `mistral-small-latest` | **ratified via alias** | Product decision: the alias resolves — through an **audited, versioned alias mapping** — to the priced identity `mistral-small-2603` ("Mistral Small 4", $0.15/$0.60 /1M USD). Local usage tracking keeps the alias; only pricing resolves. [docs.mistral.ai](https://docs.mistral.ai/models/model-cards/mistral-small-4-0-26-03) |
 | — pricing identity | `mistral-small-2603` | **ratified** | Mistral Small 4 (v26.03), $0.15/1M in, $0.60/1M out, USD, no cached rate, no separate reasoning billing. |
-| Mistral STT | `voxtral-mini-2602` | **ratified (Phase 1C)** | Id is **already version-pinned** = official "Voxtral Mini Transcribe 2" (same id), **$0.003/min** USD, distinct from the Realtime variant. [docs.mistral.ai](https://docs.mistral.ai/models/voxtral-mini-transcribe-26-02) |
+| Mistral STT | `voxtral-mini-2602` | **ratified** | Id is **already version-pinned** = official "Voxtral Mini Transcribe 2" (same id), **$0.003/min** USD, distinct from the Realtime variant. [docs.mistral.ai](https://docs.mistral.ai/models/voxtral-mini-transcribe-26-02) |
 | MLX reports | `mlx-community/Qwen3-4B-Instruct-2507-4bit` | **local** | No provider price → `local_imputed`, no default rate. |
 | Whisper STT | `mlx-community/whisper-large-v3-turbo` | **local** | Local STT → `local_imputed` (unit `audio_second`), no default rate. |
 
@@ -50,7 +50,7 @@ Nothing is inferred or fuzzy-substituted.
 
 ### Model-alias mapping (observed → pricing identity)
 
-Some telemetry records a **configured alias** (`mistral-small-latest`) that is not itself a priced
+Some local usage records hold a **configured alias** (`mistral-small-latest`) that is not itself a priced
 identity. An explicit, **audited, versioned** `model_alias` mapping (in `usage.db`, provenance-
 rich, imported only via `bootstrap_official_pricing`) resolves it to a priced identity for
 **costing only**:
@@ -79,9 +79,9 @@ so history stays reproducible. Without the mapping (or its target rate), cost st
   reconciled: any provider-side minute rounding is not confirmed by the docs and is not modelled.
 - **Mistral reports (mistral-small-latest → mistral-small-2603):** measured prompt/completion
   tokens only (Mistral usage doesn't split reasoning), billed at $0.15/$0.60 per 1M, USD, no
-  cached rate. Priced via the audited alias; the observed model id is preserved in telemetry.
+  cached rate. Priced via the audited alias; the observed model id is preserved in the usage records.
 
-## Local costing policy (Phase 1D — conventional assumptions)
+## Local costing policy (conventional assumptions)
 
 MLX/Whisper have no official provider price, so Memoglyph ships **conventional local
 assumptions** (`core/pricing_official.py::LOCAL_ASSUMPTIONS`, kept **separate** from
@@ -96,9 +96,9 @@ Provenance is `configured_manual` — **never `local_benchmark`** (which would c
 measured local cost) and never "actual". These are immutable/versioned snapshots with an explicit
 `effective_from`. Measured facts remain available (MLX in/out/cached tokens + wall-clock;
 Whisper `audio_seconds` + wall-clock); machine/runtime metadata is **not** captured (PII/surface).
-A real hosted-equivalent local rate (`local_benchmark`) is later-roadmap.
+A real hosted-equivalent local rate (`local_benchmark`) is not provided.
 
-## Zero-touch initialization (Phase 1D)
+## Zero-touch initialization
 
 The embedded catalogue (official OpenAI/Anthropic/Mistral-Small/Voxtral rates + the audited Mistral alias
 + the two local assumptions) initializes **automatically on normal startup** — no bootstrap
@@ -120,8 +120,8 @@ runs. Currencies stay native; USD and EUR are never summed; there is no FX. Star
 
 ## Reconciliation
 
-`gpt-5.6-luna` reconciles: a representative **real measured** usage record from the Phase-1A
-soak (547 in / 452 out / 68 reasoning) computes to `(547·0.20 + 452·1.20)/1e6 = $0.0006518`
+`gpt-5.6-luna` reconciles: a representative **real measured** usage record from an early
+soak run (547 in / 452 out / 68 reasoning) computes to `(547·0.20 + 452·1.20)/1e6 = $0.0006518`
 under the ratified formula — exactly the stored cost (test `test_reconciliation_officielle_gpt56luna`).
 No paid API calls were spent; existing measured usage was reused. Mistral/local can't be
 reconciled because they aren't ratified — stated, not faked.

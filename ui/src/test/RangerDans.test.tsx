@@ -17,7 +17,7 @@ function monter(props: Partial<React.ComponentProps<typeof RangerDans>> = {}) {
   return { surChoisir, surCreer }
 }
 
-describe('« Ranger dans » (US2)', () => {
+describe('« Ranger dans »', () => {
   it('est un combobox qui affiche la destination courante et son aide', () => {
     monter()
     const champ = screen.getByRole('combobox', { name: /ranger dans|save to/i })

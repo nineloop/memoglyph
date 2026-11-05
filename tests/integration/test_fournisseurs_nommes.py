@@ -1,4 +1,4 @@
-"""Les fournisseurs nommés vus par l'API (chantier 006, tranche B) : `/api/config`, plusieurs à la fois, la régénération.
+"""Les fournisseurs nommés vus par l'API : `/api/config`, plusieurs à la fois, la régénération.
 
 Aucun appel réel : tout passe par un transport simulé ou par le niveau de simulation de `test_regeneration_job.py`
 (`run_stages`, comme pour Mistral). La garde réseau de la suite vérifie qu'aucune de ces routes ne sort de la machine.

@@ -5,20 +5,32 @@ quelqu'un qui ne connaît pas le code. Il répond à quatre questions : comment
 Memoglyph choisit un gabarit, ce que le modèle reçoit, ce qu'il doit produire,
 et comment le résultat est validé puis rendu.
 
-Toutes les valeurs citées ici ont été **relevées dans le code avant le pipeline
-riche par strates**, pas recopiées d'une intention. Les fichiers sources sont nommés à chaque fois.
+Les valeurs citées ici sont relevées dans le code ; les fichiers sources sont nommés à chaque fois.
 
 ---
 
 ## 1. Comment un gabarit est choisi
 
-Le choix se fait en trois temps, et le code garde le dernier mot.
+Le choix se fait en quatre temps, et le code garde le dernier mot.
 
-**Le modèle propose.** `classify_genre` ([`core/report.py`](../core/report.py))
-envoie au LLM un extrait du profil du document — pas le transcript entier — avec
-une liste **fermée** de genres et la consigne de répondre par un seul mot.
+**Le type du profil décide en premier.** Quand le document a un bloc de profil,
+`type_du_profil` ([`core/report.py`](../core/report.py)) lit la ligne « Type »
+que le profilage y a écrite. Seul le bloc de profil est lu : une ligne
+« Type : » prononcée dans le transcript ne décide de rien. Si ce type est
+**exactement** un alias de `projet` (`templates.est_type_reunion` : « workshop »,
+« team meeting », « réunion de travail », « atelier »…), le genre est `projet`
+**sans appel au modèle**. L'égalité est exacte : « sports meeting » n'est pas
+un type de réunion.
+
+**Sinon, le modèle propose.** `classify_genre` envoie au LLM un extrait de
+1 400 caractères au plus — le bloc de profil, ou à défaut le début du texte
+prononcé (`profile_excerpt`), jamais le transcript entier — avec **une ligne de définition
+par genre** (`templates.genre_definitions`, dans la langue du document,
+`analyse_sportive` en dernier) et la consigne de répondre par un seul mot.
 Choisir dans un menu est bien plus fiable, pour un modèle, que d'inventer un
-libellé.
+libellé, et des clés nues ne disent pas à un petit modèle ce qu'est « projet »
+ou « interview ». Un document sans profil ne reçoit ni `projet` ni `steerco` dans
+la liste.
 
 **Le code vérifie.** `templates.normalize`
 ([`core/templates.py`](../core/templates.py)) ramène la réponse à un genre
@@ -27,14 +39,28 @@ connu : correspondance exacte, puis alias, puis recherche d'un libellé de genre
 pilotage » l'emporte sur « comité ». **Tout écart retombe sur `generique`**, le
 gabarit le plus sobre.
 
-**Une seconde barrière protège les genres à engagement.** `projet` et `steerco`
-réclament décisions, responsables et échéances. Un document **sans profil**
-n'apporte qu'une preuve trop faible pour les engager : dans ce cas le code
-force `generique`, quelle que soit la réponse du modèle.
+**Deux barrières protègent les genres étroits.**
+
+- `projet` et `steerco` réclament décisions, responsables et échéances. Un
+  document **sans profil** n'apporte qu'une preuve trop faible pour les engager :
+  dans ce cas le code force `generique`, quelle que soit la réponse du modèle.
+- `analyse_sportive` n'est gardé que si l'extrait contient **au moins deux mots
+  distincts** du domaine du sport (`templates.domaine_present`,
+  `MINIMUM_MOTS_DOMAINE = 2`). Les mots de toute réunion (« team », « score »,
+  « game », « goal », « player ») n'y figurent pas. Sinon : `generique`.
 
 Enfin, si le classifieur échoue — panne, délai — le compte-rendu reste possible
 et retombe sur `generique`. La classification ne peut pas faire échouer un
-document.
+document. Seul un refus de la règle d'envoi (document ultra-confidentiel, voir
+[local-et-en-ligne.md](local-et-en-ligne.md)) n'est pas absorbé.
+
+**Ce qui est gardé.** `classify_genre` peut remplir un dictionnaire de diagnostic :
+la **source** du genre (`profil`, `modele`, `garde`, `repli`, `vide`) et la
+réponse **brute** du modèle, bornée à 200 caractères. Ces deux valeurs restent
+dans le diagnostic de l'exécution et dans son résultat ; elles ne sont jamais
+écrites dans le document, car un modèle peut y avoir répété du transcript. La
+version du classifieur (`GENRE_CLASSIFIER_VERSION`, actuellement 2) est inscrite
+dans la provenance du compte-rendu (`core/provenance.py`).
 
 ---
 

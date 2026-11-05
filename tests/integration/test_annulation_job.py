@@ -1,4 +1,4 @@
-"""Annuler un traitement en attente de place (chantier 005, tranche C).
+"""Annuler un traitement en attente de place.
 
 Un traitement « en attente » est un traitement dont le fil attend le créneau de calcul lourd (`running` +
 `en_attente`). Ce fichier éprouve, sur la chaîne réelle de l'API, ce qui touche au fichier reçu et à la route
@@ -141,7 +141,7 @@ def dossiers_d_envoi(racine) -> list[str]:
     return sorted(p.name for p in envois.iterdir()) if envois.exists() else []
 
 
-# ---------- T040 : la fuite existante, prouvée d'abord ----------
+# ---------- la fuite existante, prouvée d'abord ----------
 
 def test_apres_trop_d_attente_le_fichier_recu_est_efface(comptes, pipeline, monkeypatch) -> None:
     alice = connecte("alice")
@@ -157,7 +157,7 @@ def test_apres_trop_d_attente_le_fichier_recu_est_efface(comptes, pipeline, monk
     assert dossiers_d_envoi(comptes) == [], "le fichier reçu et son dossier doivent être effacés"
 
 
-# ---------- T041 : la route d'annulation ----------
+# ---------- la route d'annulation ----------
 
 def _id_du_compte(identifiant: str) -> str:
     return auth.utilisateur_actif(identifiant).id
@@ -299,7 +299,7 @@ def test_le_flux_d_evenements_se_termine_par_une_erreur_annule(comptes, pipeline
 
 
 def test_une_capture_annulee_peut_etre_renvoyee_avec_le_meme_identifiant(comptes, pipeline) -> None:
-    """FR-011 : un traitement annulé ne compte pas comme « capture reçue »."""
+    """Un traitement annulé ne compte pas comme « capture reçue »."""
     alice = connecte("alice")
     secret = alice.post("/api/jetons", json={"nom": "MacBook de test"}).json()["secret"]
     compagnon = TestClient(api_main.app, headers={"Authorization": f"Bearer {secret}"})

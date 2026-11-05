@@ -4,7 +4,7 @@ import { Icon } from './Icon'
 import type { IconName } from './Icon'
 
 /**
- * Le bouton « Plus » du dock mobile (retour 15, US4).
+ * Le bouton « Plus » du dock mobile.
  *
  * Le dock garde QUATRE entrées (Transcrire, Bibliothèque, Recherche, Assistant) ; les autres
  * écrans (Voix, Usage, Corbeille, Doublons, Maintenance) s'ouvrent dans la feuille de « Plus » :

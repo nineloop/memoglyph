@@ -224,7 +224,7 @@ export interface TranscribeOptions {
   sensitivity?: string
 }
 
-// ---------- Traitements (chantier 003, tranche B) ----------
+// ---------- Traitements ----------
 
 export type StatutTraitement = 'pending' | 'running' | 'done' | 'error'
 
@@ -687,7 +687,7 @@ export const getFinopsExecution = (name: string, executionId: string, viewScope:
     `/api/transcript/${encodeURIComponent(name)}/finops/execution/${encodeURIComponent(executionId)}`,
     viewScope))
     .then(j<FinopsExecutionDetail>)
-// ---------- Usage (tableau de bord FinOps, phase 3B — lecture seule, borné projet) ----------
+// ---------- Usage (tableau de bord FinOps — lecture seule, borné projet) ----------
 
 export interface UsageRollupRow {
   group_by: string
@@ -986,7 +986,7 @@ export class AnnulationError extends Error {
   }
 }
 
-/** Annule un traitement EN ATTENTE de place (chantier 005). Résolu = annulé (ou déjà annulé). */
+/** Annule un traitement EN ATTENTE de place. Résolu = annulé (ou déjà annulé). */
 export async function annulerTraitement(jobId: string): Promise<void> {
   const reponse = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
   if (reponse.status === 404) throw new AnnulationError('introuvable', '')

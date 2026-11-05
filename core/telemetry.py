@@ -1,4 +1,4 @@
-"""Puits de télémétrie d'usage IA — contexte + capture, provider-agnostique (phase 0).
+"""Puits de télémétrie d'usage IA — contexte + capture, provider-agnostique.
 
 Généralise le précédent `llm_openai.USAGE` (liste-globale d'usage réel) en un puits
 partagé, sûr en concurrence (`contextvars`), sans coupler la logique de pipeline à un
@@ -21,7 +21,7 @@ Rien ici ne doit altérer la génération. `record_model_call`, `stage` et le fl
 d'un `with execution(...)` (la génération elle-même) propage ses exceptions NORMALEMENT :
 on marque l'exécution `failed` et on relève — on n'avale que la télémétrie, jamais le métier.
 
-Hors contexte d'exécution, `record_model_call` est un no-op : la phase 0 n'instrumente que
+Hors contexte d'exécution, `record_model_call` est un no-op : l'instrumentation n'atteint que
 les seams report/STT explicitement ouverts, et un appel isolé (mesure, CLI expérimental) ne
 persiste rien.
 """

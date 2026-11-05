@@ -1,4 +1,4 @@
-"""FinOps phase 3A — échelle : le tableau de bord lit `usage_daily`, jamais un scan du journal.
+"""FinOps — échelle : le tableau de bord lit `usage_daily`, jamais un scan du journal.
 
 Marqué `slow` : exclu de `make check` (`-m "not slow and not ml"`), lancé explicitement pour
 la preuve d'échelle. Génère ~100k exécutions / ~250k appels par insertion en masse, reconstruit

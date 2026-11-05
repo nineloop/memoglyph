@@ -1,8 +1,8 @@
-# FinOps — `usage_daily` aggregation (Phase 3A)
+# FinOps — `usage_daily` aggregation
 
-> Backend-only. The **derived, rebuildable** rollup the future Usage dashboard reads. No UI,
-> no budgets/alerts, no privacy routing. `execution` / `model_call` remain the source of truth;
-> `usage_daily` can be deleted and rebuilt from raw telemetry at any time.
+> The **derived, rebuildable** rollup the Usage dashboard reads. No budgets/alerts,
+> no privacy routing. `execution` / `model_call` remain the source of truth;
+> `usage_daily` can be deleted and rebuilt from the raw usage records at any time.
 
 ## Grain (primary key)
 
@@ -81,13 +81,14 @@ targeted `day`, `(project_id,day)`, `(exec_kind,day)`, `(provider,model)`, `(sta
 executions / 250k calls across 12 projects the rollup reads **~300 daily rows** in **< 1 ms**
 (global **0.6 ms**, project-scoped **0.4 ms**), vs the 250k-row call journal it never scans.
 
-## Accounting (unchanged from Phase 1)
+## Accounting
 
 `cloud_derived` / `local_imputed` / `mixed` / NULL vocabulary is reaffirmed, currencies stay
 native (no FX), and there is **no automatic historical reprice** — `usage_daily` only ever
 re-derives from stored facts + snapshots. Pricing/bootstrap behaviour is untouched.
 
-## Deferred to Phase 3B
+## Dashboard and drill-down
 
-The Usage dashboard/charts UI, and any explicit paginated execution drill-down list. (The
-project-scoped grain and scope-bounded read API landed in Phase 3A.)
+The Usage dashboard reads this rollup, scoped to a project, and offers a bounded list of executions
+with a forensic detail view (`/api/usage/rollup`, and the execution list and detail routes in
+`api/main.py`).

@@ -1,8 +1,8 @@
-"""La règle des modèles gratuits (chantier 006) : UN seul endroit.
+"""La règle des modèles gratuits : UN seul endroit.
 
 Un modèle que le SERVICE marque comme gratuit ne reçoit pas de document « ultra-confidentiel », même si le compte a autorisé le
-cloud ; « public · normal » et « confidentiel » passent (décision du 4/11, 13:55 ; elle assouplit la règle du début du
-chantier, qui réservait ces modèles au « public · normal »). La règle du nuage (`sensitivity.verifier_envoi`), elle, accepte
+cloud ; « public · normal » et « confidentiel » passent (la règle d'origine réservait ces modèles au
+« public · normal » ; elle a été assouplie). La règle du nuage (`sensitivity.verifier_envoi`), elle, accepte
 l'ultra autorisé par le compte : ici l'autorisation du compte n'est pas consultée, et ni le nuage ni l'adresse ne comptent. La
 raison est celle des services eux-mêmes : les réglages d'entraînement ne sont pas les mêmes pour un modèle gratuit et pour un
 modèle payant (à lire sur leur page de politique de données, citée dans `docs/local-et-en-ligne.md`).

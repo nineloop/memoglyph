@@ -1,4 +1,4 @@
-"""FinOps phase 1D — hypothèses locales + initialisation zéro-touche.
+"""FinOps — hypothèses locales + initialisation zéro-touche.
 
 Invariants protégés :
 - hypothèses locales : valeurs exactes, provenance `configured_manual`, `local_imputed`, USD ;

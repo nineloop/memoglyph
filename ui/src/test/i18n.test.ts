@@ -142,11 +142,11 @@ it('aucun message ne reste identique par oubli de traduction', () => {
     'app.nav.usage', 'usage.kpi.audio',
     'app.lang.fr', 'app.lang.en', 'app.status.llmUnknown',
     'app.nav.ask', 'app.nav.maintenance',
-    // Tranche B : « Transcription » et « Archives » s'écrivent à l'identique.
+    // « Transcription » et « Archives » s'écrivent à l'identique.
     'traitements.nature.transcription', 'traitements.nature.archives',
     'app.provider.ollamaLocal', 'app.provider.mlxLocal', 'app.provider.mistralCloud',
     'app.provider.openaiCloud', 'app.provider.anthropicCloud',
-    'app.provider.openrouter', 'app.provider.groq',      // noms propres (chantier 006)
+    'app.provider.openrouter', 'app.provider.groq',      // noms propres
     'spoken.codePlaceholder',
     'diar.engine.cloud', 'diar.engine.local',
     'transcribe.flow.options', 'transcribe.options.title',
@@ -183,9 +183,9 @@ it('aucun message ne reste identique par oubli de traduction', () => {
 })
 
 
-// ---------- Chantier 003 : les nouvelles surfaces existent dans les DEUX langues ----------
+// ---------- les nouvelles surfaces existent dans les DEUX langues ----------
 
-it('chaque nouvelle surface du chantier 003 a des libellés en français ET en anglais', () => {
+it('chaque nouvelle surface a des libellés en français ET en anglais', () => {
   const PREFIXES = ['nav.', 'reglages.', 'destination.', 'barre.', 'projets.', 'traitements.']
   for (const prefixe of PREFIXES) {
     const fr = Object.keys(CATALOGUES.fr).filter((k) => k.startsWith(prefixe))

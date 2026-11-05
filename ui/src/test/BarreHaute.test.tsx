@@ -22,7 +22,7 @@ function monter(props: Partial<React.ComponentProps<typeof BarreHaute>> = {}) {
 
 beforeEach(() => { localStorage.clear(); localStorage.setItem('memoglyph.lang', 'fr') })
 
-describe('la barre haute allégée (US3)', () => {
+describe('la barre haute allégée', () => {
   it('contient le logo, la recherche, l\'état des services, l\'indicateur et Réglages, rien d\'autre', () => {
     monter({ indicateur: <button type="button">Traitements</button> })
     const barre = screen.getByRole('banner')

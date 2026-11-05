@@ -7,7 +7,7 @@ import {
 import { useLang } from '../lib/langContext'
 import { formatCost, formatTokens, formatTime, formatAudio } from '../lib/finopsFormat'
 
-// Tableau de bord Usage (phase 3B) — compact, orienté décision, lecture seule, BORNÉ PROJET.
+// Tableau de bord Usage — compact, orienté décision, lecture seule, BORNÉ PROJET.
 // Règles dures respectées partout : devises jamais mélangées, cloud_derived vs local_imputed
 // jamais additionnés, non tarifé (NULL) visible mais jamais un faux zéro, local marqué « estimé ».
 

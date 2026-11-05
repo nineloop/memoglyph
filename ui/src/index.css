@@ -13,8 +13,7 @@
    ============================================================================ */
 :root {
   /* --- marque « Premium » (martin-pêcheur).
-     Convergence vers la maquette de référence : l'accent
-     devient le TEAL du martin-pêcheur, décliné en un teal PROFOND porteur de
+     L'accent est le TEAL du martin-pêcheur, décliné en un teal PROFOND porteur de
      texte (AA) et un teal VIF réservé aux dégradés et motifs (onde, boutons de
      lecture) — jamais du texte fin. L'orange du poitrail est l'accent chaud
      décoratif (onde lue, horodatages), distinct du rouge d'erreur. --- */
@@ -102,7 +101,7 @@
   --backdrop: rgb(6 20 22 / 58%);
   --bar-bg: rgb(238 246 246 / 82%); /* barres collantes, teintées teal, translucides */
   --panel-glass: rgb(255 255 255 / 92%);
-  /* Dock (retour 4) : plus foncé que la page, ≥ 3:1 (voir test/contraste.test.ts). */
+  /* Dock : plus foncé que la page, ≥ 3:1 (voir test/contraste.test.ts). */
   --dock-bg: #1b3a40;
   --dock-fg: #e8f5f5;
   --dock-muted: #bcd6d8;

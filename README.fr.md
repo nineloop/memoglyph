@@ -10,7 +10,7 @@
 
 *[English](README.md) · Français*
 
-**Transcripts et comptes rendus de réunion, en local par défaut, avec des citations vérifiables dans l'audio.**
+**Transcripts et comptes rendus de réunion open source pour Mac Apple Silicon, en local par défaut, avec des citations vérifiables dans l'audio.**
 
 ![La bibliothèque de Memoglyph : projets et réunions récentes](docs/assets/screenshots/library-fr.png)
 *La bibliothèque : les réunions d'un projet.*
@@ -50,7 +50,7 @@ Le compte rendu liste, selon le type de réunion, des décisions, des actions et
 
 ## Local ou en ligne, au choix
 
-Par défaut, tout tourne sur le Mac : Whisper pour la transcription et un modèle de langage MLX local pour les comptes rendus et l'Assistant. La recherche sémantique utilise aussi, par défaut, un modèle d'embeddings local.
+Par défaut, tout tourne sur le Mac : Whisper pour la transcription et un modèle de langage MLX local pour les comptes rendus et l'Assistant. La recherche sémantique utilise toujours un modèle d'embeddings local.
 
 Un modèle en ligne peut s'ajouter au besoin : Mistral, OpenAI, Anthropic, OpenRouter ou Groq, ou tout autre service au format OpenAI par le fournisseur `compatible`. Mistral peut aussi transcrire, avec Voxtral.
 
@@ -78,6 +78,15 @@ Au premier lancement, `./start.sh` affiche un code d'installation à usage uniqu
 
 Une bibliothèque créée avant les comptes s'attribue à un compte par `./memoglyph attribuer-bibliotheque <identifiant>`, à lancer avant de créer le moindre document avec ce compte. La marche à suivre est dans [docs/comptes-et-partage.md](docs/comptes-et-partage.md).
 
+## En bref
+
+- **Open source et auto-hébergé.** Licence Apache-2.0. Il tourne sur un Mac, pour une personne ou une petite équipe, avec un compte par personne.
+- **Pas de robot dans l'appel.** Un enregistrement se dépose sur l'écran Transcrire, ou le compagnon de barre de menus (bêta, macOS seulement) enregistre un appel Zoom, Teams ou navigateur depuis le Mac.
+- **Des comptes rendus aux citations vérifiées.** Décisions, actions et questions ouvertes, selon le type de réunion. Chaque affirmation gardée porte une citation vérifiée dans le transcript.
+- **Des fichiers simples.** Transcripts et comptes rendus sont des fichiers Markdown. L'index de recherche en est dérivé et se reconstruit.
+- **Chercher et interroger.** Recherche par mots et par le sens dans les réunions, et un Assistant qui répond à partir d'elles.
+- **Prêt pour les agents.** Un serveur MCP en lecture seule, borné à un compte.
+
 ## Aller plus loin
 
 - [Compagnon](docs/compagnon-capture.md) : l'application de barre de menus qui enregistre un appel et l'envoie à Memoglyph, en bêta et pour macOS seulement.
@@ -94,6 +103,8 @@ Une bibliothèque créée avant les comptes s'attribue à un compte par `./memog
 - La diarisation demande une installation séparée et un jeton Hugging Face.
 - Memoglyph est conçu pour un Mac Apple Silicon et testé dessus.
 - Le compagnon est en bêta.
+- Memoglyph travaille sur un enregistrement, après la réunion, sans transcription en direct pendant l'appel.
+- Il se lance depuis un clone du dépôt, sans installeur.
 
 ## Développer et licence
 
@@ -106,4 +117,4 @@ make check
 
 Le code est sous licence Apache-2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). Les modèles gardent leurs propres licences. Le nom et le logo Memoglyph ne sont pas couverts par cette licence ; les fichiers de la marque sont décrits dans [docs/assets/brand/](docs/assets/brand/README.md).
 
-Version v1.2.0.
+Version v1.2.1.

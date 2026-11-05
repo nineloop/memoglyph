@@ -1,4 +1,4 @@
-"""Aucun test ne peut toucher aux ports de production (chantier 005, garde structurelle).
+"""Aucun test ne peut toucher aux ports de production.
 
 Le serveur de modèle local de l'utilisateur écoute sur 8772 (et l'application sur 8770 et 8771). Un traitement de test
 resté vivant après la fin de son test a déjà fini par lancer un vrai `mlx_lm.server` sur ce port : la garde ne doit

@@ -1,4 +1,4 @@
-"""Les fournisseurs en ligne nommés : OpenRouter et Groq (chantier 006, tranche B).
+"""Les fournisseurs en ligne nommés : OpenRouter et Groq.
 
 Deux préréglages d'un moteur partagé, paramétrés par un profil. Aucun appel réel : le client est construit par l'attribut de
 module `llm_nomme.client_sans_fuite`, que ces tests remplacent par un client à `httpx.MockTransport` (aucun socket ; la garde
@@ -79,13 +79,13 @@ def _pret(monkeypatch, nom: str, nomme) -> None:
     monkeypatch.setenv(f"MEMOGLYPH_{profil.variable_modele}", MODELE)
 
 
-# ---------- T020 : l'identité « en ligne » ----------
+# ---------- l'identité « en ligne » ----------
 
 @pytest.mark.parametrize("nom", NOMS)
 def test_ancres_le_fournisseur_est_au_registre_et_dans_la_disponibilite(nom, nomme) -> None:
     """Sans ces ancres, « jamais local » serait vrai trivialement tant que le nom n'existe pas (`est_local` rend déjà faux
     pour tout nom hors `mlx` et `compatible`) : le ROUGE de ce fichier vient de l'ABSENCE du fournisseur ; la PROPRIÉTÉ
-    d'identité est prouvée par les mutants (`auto_heberge` vrai, `host` défini, `est_local` qui lit l'adresse)."""
+    d'identité est prouvée par ces cas (`auto_heberge` vrai, `host` défini, `est_local` qui lit l'adresse)."""
     assert nom in llm.FOURNISSEURS and nom in llm.MOTEURS
     assert llm.moteur(nom).name == nom
     assert nom in llm.disponibilite_declaree()
@@ -116,7 +116,7 @@ def test_le_moteur_nomme_ne_herite_d_aucun_attribut_du_compatible(nom, nomme) ->
     assert moteur.auto_heberge is False and moteur.propose_si_pret is True
 
 
-# ---------- T021 : prêt, clé, modèle ----------
+# ---------- prêt, clé, modèle ----------
 
 @pytest.mark.parametrize("nom", NOMS)
 @pytest.mark.parametrize("cle,modele,attendu", [
@@ -149,7 +149,7 @@ def test_la_cle_et_le_modele_sont_relus_a_chaque_appel(nom, nomme, monkeypatch) 
 def test_le_modele_vient_de_la_configuration_sans_aucune_liste_figee(nom, nomme) -> None:
     assert llm.modele_servi(nom) == nomme.modele_non_configure(nom) == f"{nom}-non-configure"      # aucun défaut, un nom par profil
     # Aucune constante de la forme « auteur/modèle » dans le module : ni identifiant isolé, ni collection. `openrouter/free`,
-    # le routeur qui ne retombe que sur des modèles gratuits (research.md R1 O4), est le seul identifiant que le code peut nommer
+    # le routeur qui ne retombe que sur des modèles gratuits (documentation d'OpenRouter), est le seul identifiant que le code peut nommer
     # (il entre avec la règle des gratuits).
     import ast
     import re
@@ -322,7 +322,7 @@ def test_un_json_invalide_apres_les_reprises_leve_la_sortie_inexploitable(nom, n
 
 
 
-# ---------- T041 : le 429 (quota atteint) ----------
+# ---------- le 429 (quota atteint) ----------
 
 PHRASE_QUOTA = "Quota atteint"
 
@@ -364,7 +364,7 @@ def test_ancre_les_autres_statuts_restent_une_panne_ordinaire(statut, nomme, mon
     assert type(exc.value).__name__ != "LimiteDeDemandes"      # par le nom : l'ancre est verte avant même que la classe existe
 
 
-# ---------- T044 : le raisonnement, la coupure, le vide ----------
+# ---------- le raisonnement, la coupure, le vide ----------
 
 def _reponse(contenu, motif="stop", **message):
     return {"choices": [{"message": {"content": contenu, **message}, "finish_reason": motif}]}
@@ -446,12 +446,12 @@ def test_une_reponse_coupee_par_la_limite_de_jetons_est_une_panne_dite(nom, nomm
     assert len(transport.requetes) == 1
 
 
-# ---------- T045 : les en-têtes ----------
+# ---------- les en-têtes ----------
 
 @pytest.mark.parametrize("nom", NOMS)
 def test_aucun_en_tete_d_attribution_n_est_envoye_et_la_cle_n_est_que_dans_authorization(nom, nomme, monkeypatch, transport) -> None:
     """Rien n'identifie l'instance : ni `HTTP-Referer`, ni `X-Title`, ni `X-OpenRouter-*`, ni organisation ni projet. Les
-    en-têtes `x-stainless-*` du SDK sont GARDÉS (décision prise pour ce chantier) ; la clé n'apparaît que dans `authorization`."""
+    en-têtes `x-stainless-*` du SDK sont GARDÉS ; la clé n'apparaît que dans `authorization`."""
     _pret(monkeypatch, nom, nomme)
     llm.chat("s", "u", provider=nom, envoi=None)
     requete = transport.requetes[0]

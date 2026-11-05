@@ -3,7 +3,7 @@ import css from '../App.css?raw'
 import audio from '../audio/audio.css?raw'
 
 // jsdom ne calcule pas la mise en page : ces tests gardent les RÈGLES de cibles de 44 px posées à la finition
-// (T083) ; les tailles réelles sont mesurées sur la démo par `tools/mesure_ui.mjs`.
+// ; les tailles réelles sont mesurées sur la démo par `tools/mesure_ui.mjs`.
 
 const regle = (source: string, selecteur: string): string => {
   const echappe = selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -11,7 +11,7 @@ const regle = (source: string, selecteur: string): string => {
   return trouve.map((m) => m[2]).join(' ')
 }
 
-describe('cibles de 44 px (finition, T083)', () => {
+describe('cibles de 44 px', () => {
   const tailles44 = (corps: string) => /min-height:\s*44px/.test(corps) || /height:\s*44px/.test(corps)
 
   it.each([
@@ -28,7 +28,7 @@ describe('cibles de 44 px (finition, T083)', () => {
     '.reglages-menu .lang-select',
     '.reglages-menu .kw-seg__item',
   ])('%s a une cible d\'au moins 44 px', (selecteur) => {
-    expect(tailles44(regle(css.slice(css.indexOf('Finition 003 (T083)')), selecteur)), selecteur).toBe(true)
+    expect(tailles44(regle(css.slice(css.indexOf('Finition des cibles tactiles')), selecteur)), selecteur).toBe(true)
   })
 
   it('le mini-lecteur : lecture, curseur et fermeture font 44 px', () => {
@@ -38,7 +38,7 @@ describe('cibles de 44 px (finition, T083)', () => {
   })
 
   it('les repères de source d\'un compte rendu suivent la règle des horodatages : 24 px, 44 px au toucher', () => {
-    const fin = css.slice(css.indexOf('Finition 003 (T083)'))
+    const fin = css.slice(css.indexOf('Finition des cibles tactiles'))
     expect(fin).toMatch(/\.source-chip\s*\{[^}]*min-height:\s*24px/)
     const toucher = fin.slice(fin.indexOf('@media (pointer: coarse), (max-width: 820px)'))
     expect(toucher).toMatch(/\.source-chip\s*\{[^}]*min-height:\s*44px;\s*min-width:\s*44px/)

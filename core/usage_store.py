@@ -18,7 +18,7 @@ un verrou WAL sur `index.db` ne peut jamais bloquer une écriture de télémétr
 - `pricing_snapshot` — barème IMMUABLE et VERSIONNÉ. Vide par défaut : sans barème, le coût
                         reste NULL (jamais un faux zéro).
 
-## Coût (phase 1A)
+## Coût
 
 Le coût n'est jamais une donnée première : `coût = f(usage mesuré, barème)` (voir
 `core/usage_cost.py`, pur). On stocke les FAITS d'usage (jamais réécrits), le
@@ -176,7 +176,7 @@ _DDL = [
         created_at     TEXT NOT NULL
     )
     """,
-    # Agrégat DÉRIVÉ et RECONSTRUCTIBLE que lira le futur tableau de bord Usage (phase 3A).
+    # Agrégat DÉRIVÉ et RECONSTRUCTIBLE que lit le tableau de bord Usage.
     # `execution`/`model_call` restent la SOURCE DE VÉRITÉ ; cette table se supprime et se
     # rebâtit intégralement depuis les faits bruts à tout instant. Grain (clé) :
     #   jour · projet · fournisseur · modèle · étape · genre d'exécution · devise · base de coût
@@ -221,7 +221,7 @@ _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_execution_started ON execution(started_at)",
     "CREATE INDEX IF NOT EXISTS idx_execution_kind ON execution(kind, started_at)",
     "CREATE INDEX IF NOT EXISTS idx_execution_document ON execution(document_id)",
-    # Liste d'exécutions bornée par PROJET du drill-down (phase 3B) : indexée sur (projet, temps).
+    # Liste d'exécutions bornée par PROJET du drill-down : indexée sur (projet, temps).
     "CREATE INDEX IF NOT EXISTS idx_execution_project ON execution(project_id, started_at)",
     "CREATE INDEX IF NOT EXISTS idx_pricing_lookup "
     "ON pricing_snapshot(provider, model, unit, effective_from)",
@@ -891,7 +891,7 @@ def _price_execution(conn: sqlite3.Connection, execution_id: str) -> None:
     séparés. Une exécution n'a en pratique qu'un fournisseur, donc une seule base et une
     seule DEVISE ; par sûreté, si des appels mélangeaient devises ou bases, on REFUSE de les
     additionner (rollup à NULL) plutôt que d'inventer une somme USD+EUR — aucune conversion
-    de change en phase 1A. Cette fonction PEUT lever ; ses appelants l'enveloppent (best-effort).
+    de change. Cette fonction PEUT lever ; ses appelants l'enveloppent (best-effort).
     """
     calls = conn.execute(
         "SELECT * FROM model_call WHERE execution_id=? ORDER BY seq", (execution_id,)

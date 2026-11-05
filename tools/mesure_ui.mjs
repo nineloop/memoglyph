@@ -29,7 +29,7 @@ export function mesurer({ elements, largeurDocument, largeurFenetre }) {
 }
 
 /**
- * La largeur du transcript (SC-007), à partir des boîtes mesurées.
+ * La largeur du transcript, à partir des boîtes mesurées.
  *
  * - `texte` : la colonne des passages (`.tour-passages`) ; `libre` : l'espace à côté du panneau des
  *   locuteurs (`.transcript-texte`) ; `ligneMax` : la plus grande largeur d'une ligne.
@@ -43,7 +43,7 @@ export function mesurerTranscript({ texte, libre, ligneMax, largeurCaractere, la
     texte: Math.round(texte), libre: Math.round(libre), ratio: Math.round(ratio * 1000) / 1000,
     nbCaracteresMax,
     defilementHorizontal: largeurDocument > largeurFenetre + 1,
-    // SC-007 : ≥ 90 % à 1440 px ; limite d'environ 120 caractères (110 à 130) au-delà de 1600 px.
+    // ≥ 90 % à 1440 px ; limite d'environ 120 caractères (110 à 130) au-delà de 1600 px.
     conforme1440: largeurFenetre !== 1440 || ratio >= 0.9,
     limiteAtteinte: largeurFenetre > 1600 ? nbCaracteresMax !== null && nbCaracteresMax <= 130 : null,
   }

@@ -10,7 +10,7 @@
 
 *English · [Français](README.fr.md)*
 
-**Meeting transcripts and reports, local by default, with citations that can be checked against the audio.**
+**Meeting transcripts and reports for Apple Silicon Macs, open source and local by default, with citations that can be checked against the audio.**
 
 ![The Memoglyph library: projects and recent meetings](docs/assets/screenshots/library.png)
 *The library: the meetings of a project.*
@@ -50,7 +50,7 @@ The report lists, according to the type of meeting, decisions, actions and open 
 
 ## Local or online, as chosen
 
-By default, everything runs on the Mac: Whisper for transcription, and a local MLX language model for reports and the assistant. Semantic search also uses a local embedding model by default.
+By default, everything runs on the Mac: Whisper for transcription, and a local MLX language model for reports and the assistant. Semantic search always uses a local embedding model.
 
 An online model can be added when needed: Mistral, OpenAI, Anthropic, OpenRouter or Groq, or any other service in the OpenAI format through the `compatible` provider. Mistral can also transcribe, with Voxtral.
 
@@ -78,6 +78,15 @@ On first launch, `./start.sh` prints a one-time installation code. The app then 
 
 A library created before accounts existed is handed to an account with `./memoglyph attribuer-bibliotheque <username>`, run before creating any new document with that account. The steps are in [docs/comptes-et-partage.md](docs/comptes-et-partage.md), in French.
 
+## At a glance
+
+- **Self-hosted and open source.** Apache-2.0. It runs on a Mac, for one person or a small team, with one account per person.
+- **No bot in the call.** A recording is dropped on the Transcribe screen, or the menu bar companion (beta, macOS only) records a Zoom, Teams or browser call from the Mac.
+- **Reports with checked citations.** Decisions, actions and open questions, according to the type of meeting. Each statement kept carries a citation verified in the transcript.
+- **Plain files.** Transcripts and reports are Markdown files. The search index is derived from them and can be rebuilt.
+- **Search and questions.** Keyword and semantic search across meetings, and an Assistant that answers from them.
+- **Ready for agents.** A read-only MCP server, scoped to one account.
+
 ## Further reading
 
 The documents below are in French, like the codebase and most technical docs.
@@ -96,6 +105,8 @@ The documents below are in French, like the codebase and most technical docs.
 - Diarization needs a separate installation and a Hugging Face token.
 - Memoglyph is designed for, and tested on, a Mac with Apple Silicon.
 - The companion is in beta.
+- Memoglyph works on a recording, after the meeting, with no live transcript during the call.
+- It runs from a clone of the repository, with no packaged installer.
 
 ## Development and license
 
@@ -108,4 +119,4 @@ make check
 
 The code is under the Apache-2.0 license ([LICENSE](LICENSE), [NOTICE](NOTICE)). Models keep their own licenses. The Memoglyph name and logo are not covered by that license; the brand files are described in [docs/assets/brand/](docs/assets/brand/README.md).
 
-Version v1.2.0.
+Version v1.2.1.

@@ -1,4 +1,4 @@
-"""Le code de message d'un traitement en échec (chantier 003, finition) : jamais le texte brut à l'écran."""
+"""Le code de message d'un traitement en échec : jamais le texte brut à l'écran."""
 from __future__ import annotations
 
 import re
@@ -28,7 +28,7 @@ def test_chaque_cause_a_son_code(exc, code) -> None:
 
 
 def test_le_refus_des_gratuits_a_son_code_et_non_celui_de_l_envoi_refuse() -> None:
-    """Chantier 006 : la recherche par la hiérarchie trouve le nom de la sous-classe AVANT celui de sa famille (`EnvoiRefuse`)."""
+    """La recherche par la hiérarchie trouve le nom de la sous-classe AVANT celui de sa famille (`EnvoiRefuse`)."""
     assert erreurs.code_de(sensitivity.ModeleGratuitRefuse())[0] == "step.error.freeModelRestricted"
 
 
@@ -51,7 +51,7 @@ def test_une_sous_classe_garde_le_code_de_sa_famille() -> None:
 
 def test_la_table_nomme_de_vraies_classes() -> None:
     """La table se lit par nom de classe : un renommage la rendrait muette sans ce contrôle."""
-    from core.llm_nomme import LimiteDeDemandes   # chantier 006 : deux entrées de plus, une par cause nouvelle
+    from core.llm_nomme import LimiteDeDemandes   # deux entrées de plus, une par cause nouvelle
     vraies = {c.__name__ for c in (LLMError, LLMMalformedOutputError, ExtractionVide, TranscriptNonCitable,
                                    sensitivity.EnvoiRefuse, LimiteDeDemandes, sensitivity.ModeleGratuitRefuse)}
     assert set(erreurs.PAR_CLASSE) == vraies

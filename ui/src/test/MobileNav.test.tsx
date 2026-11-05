@@ -20,7 +20,7 @@ function monter(courant = 'library', surChoisir = vi.fn()) {
 
 beforeEach(() => { localStorage.clear(); localStorage.setItem('memoglyph.lang', 'fr') })
 
-describe('le bouton « Plus » du dock mobile (US4)', () => {
+describe('le bouton « Plus » du dock mobile', () => {
   it('reste fermé tant qu’on ne le touche pas ; un toucher ouvre les autres écrans', async () => {
     monter()
     const plus = screen.getByRole('button', { name: 'Plus' })
@@ -34,7 +34,7 @@ describe('le bouton « Plus » du dock mobile (US4)', () => {
     }
   })
 
-  it('chaque écran secondaire est à DEUX touches au plus (SC-006) et referme la feuille', async () => {
+  it('chaque écran secondaire est à DEUX touches au plus et referme la feuille', async () => {
     const { surChoisir } = monter()
     await userEvent.click(screen.getByRole('button', { name: 'Plus' }))
     await userEvent.click(screen.getByRole('button', { name: 'Doublons' }))

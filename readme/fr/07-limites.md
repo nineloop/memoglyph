@@ -5,3 +5,5 @@
 - La diarisation demande une installation séparée et un jeton Hugging Face.
 - Memoglyph est conçu pour un Mac Apple Silicon et testé dessus.
 - Le compagnon est en bêta.
+- Memoglyph travaille sur un enregistrement, après la réunion, sans transcription en direct pendant l'appel.
+- Il se lance depuis un clone du dépôt, sans installeur.

@@ -55,7 +55,7 @@ describe.each([['clair', CLAIR], ['sombre', SOMBRE]] as const)('contrastes du th
   })
 })
 
-describe('le dock se détache du fond (retour 4, SC-010)', () => {
+describe('le dock se détache du fond', () => {
   it('thème clair : le dock est au moins 3:1 plus foncé que la page', () => {
     const dock = couleurDuJeton(CLAIR, '--dock-bg')
     expect(dock, 'le jeton --dock-bg manque dans index.css').not.toBeNull()

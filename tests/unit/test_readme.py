@@ -1,4 +1,4 @@
-"""Les README sont générés : `readme/readme.yaml` + une rubrique par langue (chantier 004).
+"""Les README sont générés : `readme/readme.yaml` + une rubrique par langue.
 
 Deux familles de tests.
 - Sur de petits dépôts fabriqués (`tmp_path`) : le générateur et chacune de ses règles, avec le cas qui
@@ -444,12 +444,12 @@ def test_aucun_emplacement_du_gabarit_ne_reste_dans_un_readme(publie) -> None:
     assert len(texte.splitlines()) > 20, "ancre : le README a un contenu"
 
 
-# Règles d'écriture : actives sur les vrais README quand le gabarit les déclare (tranche R).
+# Règles d'écriture : actives sur les vrais README quand le gabarit les déclare.
 
 def test_regles_d_ecriture_des_readme_quand_elles_sont_declarees(gabarit, publie) -> None:
     nom, langue, texte = publie
     if not gabarit.regles_strictes:
-        pytest.skip("portage fidèle : les règles d'écriture s'appliquent aux rubriques réécrites (tranche R)")
+        pytest.skip("portage fidèle : les règles d'écriture s'appliquent aux rubriques réécrites")
     assert readme.phrases_de_prose(texte), f"ancre : {nom} contient de la prose"
     assert readme.fautes_d_ecriture(texte, langue) == []
     assert readme.paragraphes_coupes("\n\n".join(t for _r, t in readme.textes_des_rubriques(gabarit, langue, RACINE))) == []

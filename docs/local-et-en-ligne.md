@@ -4,7 +4,7 @@ Ce qui reste sur le Mac par défaut, ce qui peut partir vers un fournisseur en l
 
 ## Le réglage de départ : tout en local
 
-Le pipeline par défaut n'utilise que des modèles locaux : Whisper et un modèle de langage MLX (`Qwen3-4B-Instruct`) servi sur le Mac. La diarisation (pyannote) est facultative et demande une installation à part (voir [installation.md](installation.md)). Par défaut, la recherche sémantique utilise un modèle d'embeddings local ; `MEMOGLYPH_EMBED_BACKEND=ollama` conserve l'ancien comportement (un serveur Ollama).
+Le pipeline par défaut n'utilise que des modèles locaux : Whisper et un modèle de langage MLX (`Qwen3-4B-Instruct`) servi sur le Mac. La diarisation (pyannote) est facultative et demande une installation à part (voir [installation.md](installation.md)). La recherche sémantique utilise toujours un modèle d'embeddings local : aucun texte n'est envoyé à un fournisseur pour la vectoriser.
 
 ## Les fournisseurs en ligne, facultatifs
 

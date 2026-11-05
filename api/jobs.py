@@ -50,7 +50,7 @@ class Job:
     # faits, voix, archives.
     nature: str = "traitement"
     depuis: str = field(default_factory=lambda: datetime.now().strftime("%H:%M"))
-    # ---- Suivi (chantier 003, tranche B) : de quoi montrer un traitement depuis n'importe quel écran.
+    # ---- Suivi : de quoi montrer un traitement depuis n'importe quel écran.
     titre: str = ""
     projet_id: Optional[str] = None
     projet_nom: str = ""
@@ -68,9 +68,9 @@ class Job:
     meeting: Optional[dict] = None
     # Identifiant PUBLIC du jeton d'appareil qui a lancé le traitement (jamais le secret).
     jeton: Optional[str] = None
-    # Identifiant d'idempotence d'une capture (tranche D).
+    # Identifiant d'idempotence d'une capture.
     capture_id: Optional[str] = None
-    # SHA-256 du contenu reçu (chantier 005) : sert au refus d'un doublon, JAMAIS exposé (ni liste, ni `snapshot`).
+    # SHA-256 du contenu reçu : sert au refus d'un doublon, JAMAIS exposé (ni liste, ni `snapshot`).
     empreinte: Optional[str] = None
     # Code et paramètres de l'erreur, comme pour les messages : le texte seul perdrait la traduction.
     error_code: Optional[str] = None
@@ -99,7 +99,7 @@ class JobsBusy(RuntimeError):
 
 
 class TraitementAnnule(Exception):
-    """Levée quand un traitement annulé obtient enfin le créneau : `resources.heavy` le rend aussitôt (chantier 005)."""
+    """Levée quand un traitement annulé obtient enfin le créneau : `resources.heavy` le rend aussitôt."""
 
 
 @contextmanager
@@ -361,7 +361,7 @@ class JobManager:
                 "error": job.error,
                 "error_code": job.error_code,
                 "error_params": job.error_params,
-                # Suivi (tranche B) : les clés d'avant restent, celles-ci s'y ajoutent.
+                # Suivi : les clés d'avant restent, celles-ci s'y ajoutent.
                 "titre": job.titre,
                 "projet_id": job.projet_id,
                 "projet_nom": job.projet_nom,

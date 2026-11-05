@@ -1,4 +1,4 @@
-"""Où arrive un 429, et ce qui en remonte à la personne (chantier 006, tranche C).
+"""Où arrive un 429, et ce qui en remonte à la personne.
 
 La décision (option a) : un quota atteint dégrade COMME TOUTE PANNE de moteur — la chaîne ne change pas. Ce fichier mesure ce que
 la dégradation montre, chemin par chemin, avec le VRAI moteur nommé sur un transport simulé qui répond 429. Plusieurs tests sont
@@ -78,7 +78,7 @@ def test_la_facade_laisse_passer_le_type_de_la_limite(quota) -> None:
         llm.chat("s", "u", provider="openrouter", envoi=None)
 
 
-# ---------- Le chemin réel du compte rendu, de bout en bout (tranche D) ----------
+# ---------- Le chemin réel du compte rendu, de bout en bout ----------
 
 def test_un_quota_atteint_sur_tous_les_appels_d_extraction_nomme_la_panne_et_garde_le_code_general(quota) -> None:
     """CONSTAT sur le VRAI `run_stages` : si TOUS les appels d'extraction sont refusés, la phrase du quota arrive dans le texte

@@ -1,4 +1,4 @@
-"""Moteur « fournisseur en ligne nommé » : OpenRouter et Groq (chantier 006).
+"""Moteur « fournisseur en ligne nommé » : OpenRouter et Groq.
 
 Deux préréglages d'un même moteur, paramétrés par un PROFIL (nom, libellé, variable de clé, variable de modèle, adresse). Ils
 parlent le protocole OpenAI à un service EN LIGNE connu sous son nom : chacun apparaît à l'écran sous son vrai nom, plusieurs
@@ -69,11 +69,11 @@ class ProfilFournisseur:
     libelle: str              # pour les messages du serveur ; les libellés d'écran vivent dans l'interface (fr et en)
     variable_cle: str         # relue à chaque appel
     variable_modele: str      # suffixe lu par `config.getenv_compat` (préfixe `MEMOGLYPH_`)
-    adresse: str              # FIXE (profil, code) : valeurs lues sur la documentation officielle (research.md R1 O1, R2 G1)
+    adresse: str              # FIXE (profil, code) : valeurs lues sur la documentation officielle des services
     # Capacité du modèle choisi inconnue : profil d'exécution prudent, comme le « compatible ». Sans rapport avec « local ».
     profil_prudent: bool = True
     # Ce que LE SERVICE marque comme gratuit (jamais le prix, jamais l'adresse). Vide : aucun marqueur par modèle (Groq : la
-    # gratuité est un palier de compte, research.md D4).
+    # gratuité est un palier de compte).
     suffixe_gratuit: str = ""
     gratuits_fixes: tuple[str, ...] = ()
     # Champs ajoutés au CORPS de chaque requête de ce service (`extra_body` du SDK). Vide : rien.
@@ -84,7 +84,7 @@ PROFILS: dict[str, ProfilFournisseur] = {
     "openrouter": ProfilFournisseur(
         nom="openrouter", libelle="OpenRouter", variable_cle="OPENROUTER_API_KEY",
         variable_modele="OPENROUTER_MODEL", adresse="https://openrouter.ai/api/v1",
-        # Le suffixe `:free` et le routeur `openrouter/free` : documentation officielle (research.md R1 O3).
+        # Le suffixe `:free` et le routeur `openrouter/free` : documentation officielle d'OpenRouter.
         suffixe_gratuit=":free", gratuits_fixes=("openrouter/free",),
         # Un modèle de raisonnement peut dépenser TOUT le budget de sortie à raisonner et ne rien écrire (`finish_reason: "length"`,
         # contenu vide). À l'essai réel du 4/11, 5 appels d'extraction sur 6 ont usé tout le plafond de sortie (usage.db) : la cause

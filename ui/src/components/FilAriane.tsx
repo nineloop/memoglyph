@@ -3,7 +3,7 @@ import { useLang } from '../lib/langContext'
 import { ecrireUrl } from '../lib/urlState'
 
 /**
- * Le fil d'Ariane : Bibliothèque > projet > réunion (retour 15).
+ * Le fil d'Ariane : Bibliothèque > projet > réunion.
  *
  * Chaque niveau cliquable est un vrai lien (adresse copiable) dont le clic simple navigue sans
  * recharger. Le DERNIER niveau est la page courante : un texte marqué `aria-current`, pas un lien.

@@ -290,7 +290,7 @@ def pause_limite_audio_mistral(delai_s: int) -> Message:
 
 
 def pause_quota_fournisseur(delai_s: int) -> Message:
-    """Un fournisseur en ligne a atteint son quota : on attend le délai annoncé puis on réessaie (chantier 006, H)."""
+    """Un fournisseur en ligne a atteint son quota : on attend le délai annoncé puis on réessaie."""
     return Message(
         "step.provider.quota.pause",
         f"Provider quota reached, resuming in {delai_s} s…",
@@ -356,7 +356,7 @@ def trop_d_attente(label: str) -> Message:
 
 
 def traitement_annule() -> Message:
-    """Un traitement annulé avant d'avoir commencé : un échec à cause codée, sans nouvel état (chantier 005).
+    """Un traitement annulé avant d'avoir commencé : un échec à cause codée, sans nouvel état.
 
     La phrase est courte et propre : le compagnon lit le texte brut de `job.error`.
     """

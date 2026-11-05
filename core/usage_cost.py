@@ -1,10 +1,10 @@
-"""Dérivation de COÛT (FinOps phase 1A) — pur, sans I/O, déterministe.
+"""Dérivation de COÛT (FinOps) — pur, sans I/O, déterministe.
 
 Le coût n'est JAMAIS une donnée première : c'est `f(usage mesuré, barème)`. Ces
 fonctions ne lisent aucune base ; elles prennent des faits + un barème (`PricingSnapshot`)
 et rendent un montant — ou `None` quand le barème manque (coût INCONNU, jamais un faux zéro).
 
-## Règles de non-double-comptage (fondées sur les usages réels du soak phase 0)
+## Règles de non-double-comptage (fondées sur les usages réels du soak initial)
 
 - **OpenAI (Responses)** : `output_tokens` INCLUT DÉJÀ les jetons de raisonnement
   (`reasoning_tokens` en est un sous-ensemble). On facture donc `output_tokens` au tarif de

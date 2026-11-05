@@ -10,7 +10,7 @@ complète, c'est quatre éléments ; `tools/sauvegarder.py` les copie et les rem
 | `output/` | les réunions en Markdown, qui font foi ; l'audio archivé (`.audio/`) ; les manifestes de projets ; les faits de l'ECL (`.ecl/`) et leurs versions ; la corbeille | non |
 | `index.db` | l'index de recherche, l'index sémantique **et le registre des voix** (noms donnés aux voix, empreintes) | l'index se reconstruit depuis `output/`, **pas le registre des voix** |
 | `auth.db` | les comptes, les sessions, les jetons d'appareil, les partages | non : la perdre perd tous les comptes et tous les jetons |
-| `usage.db` | la télémétrie d'usage et de coût (onglet Usage) | non |
+| `usage.db` | le suivi d'usage et de coût (onglet Usage) | non |
 
 Ne se sauvegardent pas :
 

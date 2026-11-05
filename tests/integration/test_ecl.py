@@ -1,4 +1,4 @@
-"""ECL, phase 1 : extraction ancrée par réunion et stockage borné.
+"""ECL : extraction ancrée par réunion et stockage borné.
 
 Corpus synthétique, écrit ici et non tiré d'une vraie réunion :
 

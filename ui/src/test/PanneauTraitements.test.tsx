@@ -20,7 +20,7 @@ const MAINTENANT = 1000 + 4 * 60 + 10
 
 beforeEach(() => { localStorage.clear(); localStorage.setItem('memoglyph.lang', 'fr') })
 
-describe('l\'indicateur de la barre haute (US5)', () => {
+describe('l\'indicateur de la barre haute', () => {
   it('est caché quand rien ne tourne', () => {
     const { container } = render(<LangProvider><IndicateurTraitements liste={L([], 0, 0)} ouvert={false} surBasculer={() => {}} /></LangProvider>)
     expect(container).toBeEmptyDOMElement()
@@ -54,7 +54,7 @@ describe('l\'indicateur de la barre haute (US5)', () => {
   })
 })
 
-describe('le panneau des traitements (US5)', () => {
+describe('le panneau des traitements', () => {
   const monter = (liste: ListeTraitements | null, props: Partial<React.ComponentProps<typeof PanneauTraitements>> = {}) => {
     const surFermer = vi.fn(), surOuvrir = vi.fn()
     render(<LangProvider><PanneauTraitements liste={liste} maintenant={MAINTENANT} surFermer={surFermer}
@@ -213,9 +213,9 @@ describe('le panneau des traitements (US5)', () => {
 })
 
 
-// ---------- Chantier 005, tranche D : annuler un traitement en attente de place ----------
+// ---------- annuler un traitement en attente de place ----------
 
-describe('annuler un traitement en attente (chantier 005, tranche D)', () => {
+describe('annuler un traitement en attente', () => {
   const attente = (extra: Partial<Traitement> = {}) => T({
     id: 'w1', statut: 'running', en_attente: true, etape: null, progression: 0, titre: 'Comité', ...extra })
   const annule = (extra: Partial<Traitement> = {}) => T({
@@ -370,7 +370,7 @@ describe('annuler un traitement en attente (chantier 005, tranche D)', () => {
   })
 })
 
-describe('le focus après une annulation qui n\'a pas eu lieu (chantier 005, tranche E)', () => {
+describe('le focus après une annulation qui n\'a pas eu lieu', () => {
   const attente = (extra: Partial<Traitement> = {}) => T({
     id: 'w1', statut: 'running', en_attente: true, etape: null, progression: 0, titre: 'Comité', ...extra })
 

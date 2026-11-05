@@ -85,7 +85,7 @@ ROUTES_DU_COMPAGNON = frozenset({
     ("GET", "/api/jobs/{job_id}"),
     ("GET", "/api/jobs/{job_id}/events"),
     ("GET", "/api/projects"),
-    # Chantier 003 : « en attente : N traitements ». Avec un jeton, la route ne rend que les
+    # « en attente : N traitements ». Avec un jeton, la route ne rend que les
     # comptes du compte et SES propres captures (`traitements_du_compte`).
     ("GET", "/api/jobs"),
 })
@@ -951,7 +951,7 @@ def _deja_recue_par_travail(job) -> dict:
 
 
 class DoublonRefuse(Exception):
-    """Le même compte a déjà ce fichier en attente ou en cours : refus 409 (chantier 005)."""
+    """Le même compte a déjà ce fichier en attente ou en cours : refus 409."""
 
     def __init__(self, existant) -> None:
         super().__init__(existant.id)
@@ -1033,7 +1033,7 @@ async def transcribe(
     if safe_name in {"", ".", ".."}:
         safe_name = "upload"
     suivi = dict(
-        # Le suivi : de quoi montrer ce traitement depuis n'importe quel écran (tranche B).
+        # Le suivi : de quoi montrer ce traitement depuis n'importe quel écran.
         titre=Path(safe_name).stem, projet_id=projet_destination.id,
         projet_nom=projet_destination.name,
         jeton=getattr(request.state, "jeton_id", None),
@@ -1068,8 +1068,8 @@ async def transcribe(
                         413, f"Fichier trop volumineux (limite : {config.MAX_UPLOAD_MB} Mo)"
                     )
                 out.write(chunk)
-        # Un second envoi du MÊME contenu par le même compte, pendant que le premier attend ou tourne, est refusé
-        # (chantier 005). Jamais pour un envoi de capture (le compagnon se reconnaît à son identifiant : un 409 serait
+        # Un second envoi du MÊME contenu par le même compte, pendant que le premier attend ou tourne, est refusé.
+        # Jamais pour un envoi de capture (le compagnon se reconnaît à son identifiant : un 409 serait
         # pour lui un refus définitif) ni pour un JETON d'appareil : le refus nommerait un traitement de la session,
         # que le jeton n'a pas le droit de voir (`_job_du_compte`). Le refus passe par le nettoyage ci-dessous, comme un 413.
         if not capture_id and not getattr(request.state, "par_jeton", False):
@@ -1155,7 +1155,7 @@ async def transcribe(
                 return target_locked(cb)
         finally:
             # `target_locked` efface le fichier reçu quand il a tourné. Si le créneau n'a jamais été obtenu
-            # (« trop d'attente », annulation), c'est ici : sans cela le fichier restait sur disque (chantier 005).
+            # (« trop d'attente », annulation), c'est ici : sans cela le fichier restait sur disque.
             _effacer_envoi(job.id)
 
     jobs.run(job, target)
@@ -1163,7 +1163,7 @@ async def transcribe(
 
 
 class AnnulationImpossible(Exception):
-    """Le traitement n'attend plus sa place : on ne l'annule pas (chantier 005). `statut` : son état actuel."""
+    """Le traitement n'attend plus sa place : on ne l'annule pas. `statut` : son état actuel."""
 
     def __init__(self, statut: str) -> None:
         super().__init__(statut)
@@ -1196,7 +1196,7 @@ def _job_du_compte(request: Request, job_id: str):
 
 @app.post("/api/jobs/{job_id}/cancel")
 def annuler_traitement(request: Request, job_id: str) -> dict:
-    """Annule un traitement EN ATTENTE de place (chantier 005). Session seulement : la route n'est pas dans
+    """Annule un traitement EN ATTENTE de place. Session seulement : la route n'est pas dans
     `ROUTES_DU_COMPAGNON`. Un autre compte, ou un identifiant inconnu : le même 404. Idempotent."""
     job = _job_du_compte(request, job_id)
     etat = jobs.annuler(job)
@@ -1804,7 +1804,7 @@ def read_finops_execution(request: Request, name: str, execution_id: str, view_s
     return {"available": True, "execution": _finops_public(ex), "calls": detail["calls"]}
 
 
-# ---------- Usage (agrégat FinOps, phase 3A — dark, lecture seule) ----------
+# ---------- Usage (agrégat FinOps — dark, lecture seule) ----------
 # Séries agrégées lues depuis `usage_daily` (jamais un scan de `model_call`). Alimente le futur
 # tableau de bord Usage ; AUCUNE UI ici. L'agrégat est BORNÉ PAR PROJET : `view_scope` suit la
 # convention de l'app — une portée projet ne renvoie QUE ce projet, tous les projets du compte
@@ -1839,7 +1839,7 @@ def read_usage_rollup(
     return {"group_by": dim, "scope": _libelle_portee(view_scope, project_arg), "rows": rows}
 
 
-# Drill-down progressif (phase 3B) : liste d'exécutions BORNÉE + détail forensique. Lecture seule,
+# Drill-down progressif : liste d'exécutions BORNÉE + détail forensique. Lecture seule,
 # bornée par projet (même `view_scope`), paginée/plafonnée, requêtes indexées sur les faits bruts.
 # JAMAIS un journal géant par défaut, jamais de texte de prompt/CR/secret, jamais d'écriture.
 @app.get("/api/usage/executions")
@@ -1874,7 +1874,7 @@ def read_usage_executions(
 def read_usage_execution_detail(request: Request, execution_id: str, view_scope: str = "") -> dict:
     """Détail forensique d'UNE exécution (lignes model_call), BORNÉ au projet de `view_scope`.
 
-    Réutilise le contrat forensique de la phase 2. Refuse (404) une exécution inconnue comme une
+    Réutilise le contrat forensique du résumé d'exécution. Refuse (404) une exécution inconnue comme une
     exécution hors de la portée : la réponse ne dit pas si l'identifiant existe chez un autre
     compte."""
     from core import usage_store  # noqa: PLC0415

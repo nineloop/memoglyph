@@ -61,7 +61,7 @@ final class Compagnon: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let donnees = try? Data(contentsOf: Compagnon.fichierFile)
         if let lue = FileRenvoi.lireOuNil(donnees) {
             file = lue
-            enregistrerFile()   // une file d'avant ce chantier reçoit ses identifiants de capture, une fois pour toutes
+            enregistrerFile()   // une file d'une version antérieure reçoit ses identifiants de capture, une fois pour toutes
         } else if donnees != nil {
             // Illisible : mise de côté, jamais écrasée par une file vide.
             let ecart = Compagnon.fichierFile.deletingLastPathComponent().appendingPathComponent(".envoi-en-attente.illisible.json")

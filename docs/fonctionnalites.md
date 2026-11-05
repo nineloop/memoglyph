@@ -27,13 +27,12 @@ et/ou le texte à l'API correspondante. La recherche par le sens s'appuie
 > l'intégrité est vérifiée déterministiquement, et un clic sur `[source]`
 > positionne la lecture audio à l'instant cité. Une citation est un repère pour
 > vérifier, pas une preuve : la transcription elle-même peut se tromper, et une
-> citation n'*implique* pas forcément l'affirmation (l'étude P0–P5 a explicitement
-> refusé d'intégrer les juges LLM/NLI actuels). Une **étiquette de sensibilité** à trois
+> citation n'*implique* pas forcément l'affirmation : les juges automatiques actuels
+> n'ont pas été retenus pour le vérifier. Une **étiquette de sensibilité** à trois
 > niveaux est portée par chaque document ; par défaut, un document **ultra-confidentiel**
 > ne part vers aucun fournisseur cloud (transcription, compte-rendu, faits, Assistant),
 > sauf si son propriétaire l'autorise pour ses propres documents. Voir
-> [SPEC.md](../SPEC.md) pour la conception. L'historique des décisions mesurées est
-> tenu dans un journal interne, non publié.
+> [SPEC.md](../SPEC.md) pour la conception.
 
 - Transcription Whisper `large-v3-turbo` (local) ou Mistral Voxtral Mini (API cloud) avec langue détectée ou imposée. Au-delà de 50 minutes, Voxtral transcrit en tranches qui se recouvrent de 30 s, envoyées au rythme de la limite audio du palier par défaut de Mistral (3 600 s d'audio par minute) ; les horodatages sont recalés sur la réunion entière et les locuteurs raccordés d'une tranche à l'autre par leur temps de parole commun dans le recouvrement.
 - Diarisation optionnelle avec pyannote (local, modèle `speaker-diarization-community-1`, installation à part) ou native Voxtral (Mistral API) et identification vocale entre réunions.
@@ -49,7 +48,7 @@ et/ou le texte à l'API correspondante. La recherche par le sens s'appuie
 - Comptes-rendus Markdown via MLX local, Mistral, OpenAI, Anthropic, OpenRouter ou Groq, avec des citations à vérifier contre l'audio et des réserves de qualité visibles.
 - **Étiquette de sensibilité** par réunion (`standard` / `confidential` / `ultra_confidential`), changée en une action pour toutes ses versions — par défaut, un document `ultra_confidential` ne part vers aucun fournisseur cloud : transcription, compte-rendu, faits et extraits de l'Assistant restent locaux. Chaque compte peut autoriser le cloud pour SES documents ultra-confidentiels dans **Confidentialité** (inactif par défaut, confirmé à l'activation, effectif aussitôt à la désactivation) ; le réglage n'ouvre rien pour ce qui est partagé ni pour un autre compte, et chaque envoi autorisé est consigné sans contenu (voir [SECURITY.md](../SECURITY.md)). Une réunion porte une seule sensibilité ; une valeur inconnue est refusée (422), et la sensibilité est relue avant chaque appel cloud. **Confidentiel** est une étiquette pour les personnes : elle n'oriente rien d'elle-même, c'est l'humain qui décide de ce qui part où.
 - **Cloud privé** : un serveur de modèle que vous hébergez (MLX, ou un « Serveur compatible OpenAI » comme Ollama, LM Studio ou vLLM, réglé par `.env`) ne compte comme local que sur la boucle locale de cette machine. Sur un autre hôte, il s'affiche « Cloud privé » et suit les règles du cloud, ultra-confidentiel compris.
-- **Suivi d'usage & coût IA (FinOps)** : télémétrie par exécution dans un magasin séparé `usage.db`, **usage & coût par document** dans l'onglet Information et **tableau de bord Usage** borné projet avec drill-down forensique. Le coût local est estimé (hypothèse), le coût cloud suit des tarifs ratifiés et datés.
+- **Suivi d'usage & coût IA (FinOps)** : suivi local par exécution dans un magasin séparé `usage.db`, **usage & coût par document** dans l'onglet Information et **tableau de bord Usage** borné projet avec drill-down forensique. Le coût local est estimé (hypothèse), le coût cloud suit des tarifs ratifiés et datés.
 - **Serveur MCP en lecture seule** pour les agents (`./memoglyph mcp <identifiant>`) : projets, réunions, recherche, comptes rendus et, s'ils sont activés, faits de la réunion, bornés à un compte ; l'ultra-confidentiel du compte seulement s'il autorise le cloud pour lui ([docs/mcp.md](mcp.md)).
 - **Interface bilingue FR/EN** : détection de la langue du navigateur et bascule manuelle persistée (catalogue maison, sans dépendance i18n).
 - Détection des doublons, Corbeille restaurable, purge vérifiée et maintenance des index.
@@ -79,7 +78,7 @@ Memoglyph adapte automatiquement la structure du compte-rendu au genre de la ré
 
 ## En bref
 
-- **Vérifiable** : chaque affirmation cite son horodatage, et un chiffre qui n'a jamais été prononcé est écarté.
+- **Vérifiable** : chaque affirmation cite son horodatage ; une unité dont un chiffre est absent de la parole, à 30 secondes de cet horodatage, est écartée.
 - **Local par défaut** : Whisper et un modèle local sur Apple Silicon. Mistral, OpenAI, Anthropic, OpenRouter, Groq ou un serveur auto-hébergé compatible OpenAI, seulement si vous les choisissez.
 - **Pour vous, ou pour une petite équipe, auto-hébergé** : des comptes, un espace privé chacun, un partage en lecture seule.
 - **Niveaux de confidentialité** : une réunion ultra-confidentielle n'est jamais envoyée à un modèle cloud, sauf si son propriétaire l'autorise.

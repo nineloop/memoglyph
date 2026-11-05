@@ -30,7 +30,7 @@ const NOMS: Record<string, MessageKey> = {
 }
 
 /**
- * « Régénérer » un compte rendu en choisissant le modèle (chantier 003, tranche E). Lancé comme un TRAITEMENT : il
+ * « Régénérer » un compte rendu en choisissant le modèle. Lancé comme un TRAITEMENT : il
  * se suit dans l'indicateur de la barre haute et la vue des traitements, et sa nouvelle version s'AJOUTE aux
  * autres. La règle d'envoi reste celle du serveur : une réunion ultra-confidentielle refuse un fournisseur en
  * ligne, avec une phrase claire — l'interface ne fait que la relayer.

@@ -1,4 +1,4 @@
-"""FinOps phase 3B — drill-down bornée : liste d'exécutions + détail forensique (lecture seule).
+"""FinOps — drill-down bornée : liste d'exécutions + détail forensique (lecture seule).
 
 Invariants : bornée par projet (aucune fuite), paginée/plafonnée, requête indexée sur les faits
 bruts (jamais un journal géant), détail forensique refusé hors portée projet, champs SÛRS

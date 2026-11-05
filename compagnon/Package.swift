@@ -1,6 +1,6 @@
 // swift-tools-version:5.10
-// Compagnon de capture de Memoglyph, phase 0 (docs/compagnon-capture.md) : un outil
-// en ligne de commande qui enregistre le son d'une application et le micro.
+// Compagnon de capture de Memoglyph (docs/compagnon-capture.md) : un outil en ligne de
+// commande qui enregistre le son d'une application et le micro, et l'application de barre de menus.
 // Aucune dépendance externe : Foundation, Core Audio et AVFoundation seulement.
 import PackageDescription
 
