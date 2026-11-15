@@ -70,8 +70,8 @@ Memoglyph adapte automatiquement la structure du compte-rendu au genre de la ré
 ## Parcours produit
 
 1. Choisir un projet actif ou conserver **Non classé**.
-2. Déposer un fichier audio ou vidéo dans **Transcrire** et cocher les enrichissements souhaités (Locuteurs, Profilage, Compte-rendu automatique).
-3. Suivre le traitement en temps réel via la **timeline à 6 étapes** (Préparation → STT → Diarisation → Profilage → Compte-rendu Map-Reduce → Finalisation).
+2. Déposer un fichier audio ou vidéo dans **Transcrire** et cocher les enrichissements souhaités (Locuteurs, Résumé et thèmes, Compte rendu automatique).
+3. Suivre le traitement en temps réel via la **timeline à 6 étapes** (Préparation → Transcription → Locuteurs → Analyse → Compte rendu → Finalisation).
 4. Ouvrir la réunion dans la **Bibliothèque** pour relire le transcript, écouter l'audio synchronisé et consulter le compte-rendu généré.
 5. Utiliser **Recherche** ou **Assistant** pour interroger le corpus en langage naturel.
 6. Archiver unitairement un transcript ou un compte-rendu depuis le lecteur vers la **Maintenance → Corbeille** pour restauration ou purge définitive.

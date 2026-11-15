@@ -425,6 +425,7 @@ def _run(
                         else (config.DIARIZATION_MODEL if diarized else None)
                     ),
                     profiling_model=modele_profilage,
+                    profiling_prompt_cache_size=llm.taille_cache_prompts(llm_provider),
                 ),
             }
             content = writer_md.render_markdown(

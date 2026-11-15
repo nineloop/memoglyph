@@ -23,6 +23,7 @@
 .mini-scrub { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .mini-time { flex: none; font-family: var(--mono); font-size: 11px; color: var(--text); font-variant-numeric: tabular-nums; }
 .mini-time.dim { color: var(--muted); }
+.mini-erreur { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13px; color: var(--err); }
 
 /* Défileur réel, stylé teal ; le remplissage suit --pct (position réelle). */
 .mini-range { flex: 1 1 auto; min-width: 60px; height: 44px; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; }
@@ -51,6 +52,10 @@
 @media (max-width: 600px) {
   .mini-player { left: 10px; right: 10px; bottom: 84px; transform: none; width: auto; }
   .mini-info { display: none; }
+}
+/* Sans survol (toucher) ou sur petit écran, le titre complet passe à la ligne ; au pointeur fin, l'ellipse et l'info-bulle restent. */
+@media (max-width: 820px), (pointer: coarse) {
+  .mini-title { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
 }
 @media (prefers-reduced-motion: reduce) { .mini-player { backdrop-filter: none; } }
 

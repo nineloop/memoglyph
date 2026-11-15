@@ -6,7 +6,7 @@ afterEach(cleanup)
 
 // jsdom expose bien un objet `localStorage`, mais SANS `setItem` ni `getItem`
 // (sondé : `typeof localStorage.setItem === 'undefined'`). Tout le code
-// de persistance — `llmProvider.ts` comme la langue — entoure ses accès d'un
+// de persistance — la langue, la vue préférée — entoure ses accès d'un
 // `try/catch` : sous les tests, il tombait donc silencieusement dans le `catch`.
 // Autrement dit, aucune persistance n'était réellement exercée, et un test qui
 // aurait prétendu la vérifier serait passé sur du vide.

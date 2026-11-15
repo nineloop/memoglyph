@@ -5,7 +5,7 @@ Un modèle que le service marque gratuit ne reçoit JAMAIS un document « ultra-
 
 - un document « ultra-confidentiel » AUTORISÉ au nuage avec un modèle gratuit : 403 `{detail, code: "model.free.restricted"}`, rien de
   créé, rien reçu ;
-- l'ultra-confidentiel NON autorisé au nuage garde sa phrase d'avant (`REFUS_CLOUD`, sans code) : le refus du nuage vient d'abord ;
+- l'ultra-confidentiel NON autorisé au nuage garde sa phrase d'avant (`REFUS_CLOUD`, avec le code `cloud.refused`) : le refus du nuage vient d'abord ;
 - « public · normal », « confidentiel », un modèle non gratuit, Groq (jamais gratuit) : acceptés.
 
 Le piège de la lecture du code : `_refuser_le_cloud` rend la main tout de suite pour un document « confidentiel » ; la règle des
@@ -159,7 +159,7 @@ def test_l_ultra_non_autorise_garde_la_phrase_du_nuage_et_pas_le_code_des_gratui
         client, inbox, monkeypatch, tmp_path, pipeline_inerte) -> None:
     _prets(monkeypatch, GRATUIT, ["openrouter"])
     reponse = _transcrire(client, sensitivity_level="ultra_confidential", llm_provider="openrouter", report_on="true")
-    assert reponse.status_code == 403 and reponse.json() == {"detail": sensitivity.REFUS_CLOUD}
+    assert reponse.status_code == 403 and reponse.json() == {"detail": sensitivity.REFUS_CLOUD, "code": "cloud.refused"}
     assert not (tmp_path / "uploads").exists()
 
 
@@ -201,7 +201,7 @@ def test_le_compte_rendu_ultra_non_autorise_garde_la_phrase_du_nuage(
     nom = _document(isolated_stores, inbox, "reunion.md", "ultra_confidential")
     reponse = client.post(dict(_routes_compte_rendu(nom))[route], params={"view_scope": inbox.id},
                           json={"llm_provider": "openrouter"})
-    assert reponse.status_code == 403 and reponse.json() == {"detail": sensitivity.REFUS_CLOUD}
+    assert reponse.status_code == 403 and reponse.json() == {"detail": sensitivity.REFUS_CLOUD, "code": "cloud.refused"}
 
 
 @pytest.mark.parametrize("route", ["synchrone", "traitement"])
@@ -251,7 +251,7 @@ def test_la_relance_des_faits_ultra_non_autorisee_garde_la_phrase_du_nuage(
     _document(isolated_stores, inbox, "rachat.md", "ultra_confidential", reunion=reunion)
     reponse = client.post(f"/api/meetings/{reunion}/ecl", params={"view_scope": inbox.id},
                           json={"provider": "openrouter"})
-    assert reponse.status_code == 403 and reponse.json() == {"detail": sensitivity.REFUS_CLOUD}
+    assert reponse.status_code == 403 and reponse.json() == {"detail": sensitivity.REFUS_CLOUD, "code": "cloud.refused"}
 
 
 def test_la_relance_des_faits_ultra_autorisee_est_refusee_quand_meme_par_la_regle_des_gratuits(
@@ -323,16 +323,21 @@ def test_l_assistant_groq_ou_modele_payant_garde_les_passages_confidentiels(clie
 
 # ---------- /api/config : inchangé par la règle ----------
 
-def test_la_configuration_n_annonce_aucune_gratuite(client, monkeypatch) -> None:
-    """La règle s'applique à l'envoi, pas à l'affichage : `/api/config` rend la même chose avec un modèle gratuit ou payant,
-    au nom du modèle près."""
+def test_la_configuration_ne_varie_avec_le_modele_que_par_son_nom_et_l_etat_gratuit(client, monkeypatch) -> None:
+    """La règle s'applique à l'envoi ; l'écran, lui, DIT l'état « modèle gratuit » (`llm_etats`) pour que la personne choisisse en
+    connaissance de cause. Rien d'autre ne change avec le modèle : ni `llm_providers`, ni `llm_ready`, ni le reste de la réponse
+    (au nom du modèle près, `llm_models`)."""
     _prets(monkeypatch, GRATUIT)
     gratuit = client.get("/api/config").json()
     _prets(monkeypatch, PAYANT)
     payant = client.get("/api/config").json()
     assert "openrouter" in gratuit["llm_providers"] and "groq" in gratuit["llm_providers"]
     assert gratuit.keys() == payant.keys()
-    assert {k: v for k, v in gratuit.items() if k != "llm_models"} == {k: v for k, v in payant.items() if k != "llm_models"}
+    variables = {"llm_models", "llm_etats"}
+    assert {k: v for k, v in gratuit.items() if k not in variables} == {k: v for k, v in payant.items() if k not in variables}
+    assert gratuit["llm_etats"]["openrouter"]["etat"] == "gratuit" and payant["llm_etats"]["openrouter"]["etat"] == "pret"
+    differences = {nom for nom in gratuit["llm_etats"] if gratuit["llm_etats"][nom] != payant["llm_etats"][nom]}
+    assert differences <= {"openrouter", "groq"}, "seul l'état d'un fournisseur nommé varie avec son modèle"
 
 
 # ---------- En cours de travail : le refus du cœur garde SON code, jamais la phrase de l'ultra-confidentiel ----------
@@ -412,13 +417,14 @@ def test_l_assistant_sur_un_quota_atteint_rend_un_503_a_corps_plat_avec_son_code
 
 @pytest.mark.parametrize("statut", [500, 503])
 def test_une_autre_panne_du_moteur_reste_un_503_sans_code(statut, client, inbox, transport, monkeypatch) -> None:
-    """Le code n'est posé que pour un quota : toute autre panne garde le 503 d'avant, sans `code`."""
+    """Un quota atteint porte son code propre ; toute autre panne garde le 503 d'avant avec le code général de l'Assistant."""
     _prets(monkeypatch, PAYANT, ["openrouter"])
     transport.statut = statut
     monkeypatch.setattr(semantic, "retrieve", lambda q, **k: [dict(PASSAGE_ORDINAIRE)])
     reponse = _demander(client, inbox, "openrouter")
     assert reponse.status_code == 503
-    assert set(reponse.json()) == {"detail"} and reponse.json()["detail"].startswith("Assistant indisponible : ")
+    assert reponse.json()["code"] == "ask.unavailable" and set(reponse.json()) == {"detail", "code"}
+    assert reponse.json()["detail"].startswith("Assistant indisponible : ")
     assert "Quota atteint" not in reponse.text
 
 

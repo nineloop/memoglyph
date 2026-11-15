@@ -5,7 +5,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import App from '../App'
 import type { AppConfig, LibraryItem, Partage, Project, Voice } from '../api'
 import {
-  ask, creerPartage, getConfig, getEtatAuth, getMeetings, getPartages, getProjects,
+  ErreurAvecCode,
+  ask, creerPartage, getConfig, getEtatAuth, getMeetings, getPartages, getProjects, listerComptes,
   getTranscript, getTrash, getVoices, retirerPartage,
 } from '../api'
 import { AskPanel } from '../components/AskPanel'
@@ -14,6 +15,7 @@ import { MeetingView } from '../components/MeetingView'
 import { PartageDialog } from '../components/PartageDialog'
 import { VoicesPanel } from '../components/VoicesPanel'
 import { PartageContext } from '../lib/partage'
+import { SessionContext } from '../lib/sessionContext'
 import type { Reunion } from '../lib/meetings'
 
 vi.mock('../api', async (importOriginal) => {
@@ -21,7 +23,7 @@ vi.mock('../api', async (importOriginal) => {
   return {
     ...actual,
     getConfig: vi.fn(), getProjects: vi.fn(), getTrash: vi.fn(), getEtatAuth: vi.fn(),
-    getPartages: vi.fn(), creerPartage: vi.fn(), retirerPartage: vi.fn(),
+    getPartages: vi.fn(), creerPartage: vi.fn(), retirerPartage: vi.fn(), listerComptes: vi.fn(),
     getMeetings: vi.fn(), getTranscript: vi.fn(), getVoices: vi.fn(), ask: vi.fn(),
   }
 })
@@ -130,10 +132,10 @@ it('Partager n’apparaît que dans la Bibliothèque, jamais pour « Non classé
   expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
 })
 
-it('le refus du serveur s’affiche tel qu’il l’écrit', async () => {
+it('un refus du serveur à code s’affiche par sa phrase du catalogue', async () => {
   const user = userEvent.setup()
   const refus = 'Cette réunion contient un document ultra-confidentiel : elle ne se partage pas.'
-  vi.mocked(creerPartage).mockRejectedValue(new Error(refus))
+  vi.mocked(creerPartage).mockRejectedValue(new ErreurAvecCode('share.ultra.blocked', refus))
   render(<LangProvider><PartageDialog type="reunion" cible="M-1" nom="Comité" onClose={vi.fn()} /></LangProvider>)
 
   const dialogue = await screen.findByRole('dialog', { name: 'Partager la réunion « Comité »' })
@@ -174,9 +176,14 @@ it('en lecture seule, les vues du propriétaire quittent la navigation', async (
   history.replaceState(null, '', '/?vue=library')
   await consulter(user, /Atelier/)
 
+  // Un compte invité (lecture seule) ne voit que Voix sous « Plus » : aucune vue du propriétaire, ni au dock ni dans la feuille.
+  await user.click(within(dock()).getByRole('button', { name: 'Plus' }))
+  const feuille = within(screen.getByRole('group', { name: /plus d.écrans/i }))
+  expect(feuille.getAllByRole('button').map((b) => b.textContent)).toEqual(['Voix'])
   for (const vue of ['Corbeille', 'Doublons', 'Usage', 'Maintenance']) {
     expect(within(dock()).queryByRole('button', { name: new RegExp(vue) })).not.toBeInTheDocument()
   }
+  await user.keyboard('{Escape}')
   expect(within(dock()).getByRole('button', { name: /Bibliothèque/ })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
   // La transcription écrit toujours dans un projet du compte.
@@ -224,9 +231,13 @@ it('une réunion reçue se lit sans archiver, générer, changer la sensibilité
   }))
   const { rerender } = render(enLectureSeule(<MeetingView reunion={reunion} onBack={vi.fn()} />))
 
+  // La vue partagée ne propose aucune action de compte rendu : ni rédiger, ni régénérer, ni l'ancienne forme. On le lit sur
+  // l'onglet du compte rendu (là où « Régénérer » vit) comme sur celui du transcript.
+  await screen.findByRole('tab', { name: /Compte rendu/ })
+  expect(screen.queryByRole('button', { name: /compte rendu|régénérer/i })).not.toBeInTheDocument()
   await user.click(await screen.findByRole('tab', { name: /Transcript/ }))
   expect((await screen.findAllByText('Texte')).length).toBeGreaterThan(0)
-  expect(screen.queryByRole('button', { name: /Compte-rendu/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /compte rendu|régénérer/i })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Archiver/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Partager' })).not.toBeInTheDocument()
   await user.click(screen.getByRole('tab', { name: /Informations/ }))
@@ -236,6 +247,8 @@ it('une réunion reçue se lit sans archiver, générer, changer la sensibilité
   rerender(enLectureSeule(<MeetingView reunion={reunion} onBack={vi.fn()} />, false))
   expect(await screen.findByRole('button', { name: 'Partager' })).toBeInTheDocument()
   expect(screen.getByRole('combobox', { name: 'Sensibilité' })).toBeInTheDocument()
+  await user.click(screen.getByRole('tab', { name: /Compte rendu/ }))
+  expect(await screen.findByRole('button', { name: /Régénérer/ })).toBeInTheDocument()
 })
 
 it('les voix partagées se lisent sans être renommées ni fusionnées', async () => {
@@ -274,8 +287,11 @@ it('sans partage reçu, le panneau et la navigation restent ceux d’avant', asy
   await waitFor(() => expect(getPartages).toHaveBeenCalled())
   expect(within(nav).queryByRole('heading', { name: 'Partagés avec moi' })).not.toBeInTheDocument()
   expect(within(nav).getByRole('link', { name: /Tous mes projets/ })).toBeInTheDocument()
-  for (const vue of ['Corbeille', 'Doublons', 'Usage']) {
-    expect(within(dock()).getByRole('button', { name: new RegExp(vue) })).toBeInTheDocument()
+  // Sans partage reçu, le compte garde ses vues (Voix, Usage, Maintenance avec Doublons et Corbeille) : sous « Plus » désormais.
+  await userEvent.click(within(dock()).getByRole('button', { name: 'Plus' }))
+  const feuille = within(screen.getByRole('group', { name: /plus d.écrans/i }))
+  for (const vue of ['Voix', 'Usage', 'Maintenance']) {
+    expect(feuille.getByRole('button', { name: new RegExp(`^${vue}`) })).toBeInTheDocument()
   }
   expect(screen.queryByText('Lecture seule')).not.toBeInTheDocument()
 })
@@ -315,3 +331,56 @@ it.each([
   expect(champ).toHaveAttribute('aria-label', nom)
   expect(within(dialogue).getByText(nom)).toBeVisible()
 })
+
+
+it('un compte sans document propre et avec un projet partagé s’ouvre sur « Partagés avec moi »', async () => {
+  vi.mocked(getProjects).mockResolvedValue([
+    { id: INBOX, project: 'Non classé', name: 'Non classé', kind: 'inbox', owner: 'alice', count: 0 },
+  ])
+  vi.mocked(getPartages).mockResolvedValue({ donnes: [], recus })
+  history.replaceState(null, '', '/')
+  render(<App />)
+
+  // Ni Transcrire, ni le « Non classé » vide : la Bibliothèque, sur ce qui est partagé avec le compte.
+  await waitFor(() => expect(getMeetings).toHaveBeenCalledWith(expect.objectContaining({ viewScope: 'shared' })))
+  expect(within(dock()).getByRole('button', { name: /Bibliothèque/ })).toHaveAttribute('aria-current', 'page')
+  expect(screen.getAllByText(/lecture seule/i).length).toBeGreaterThan(0)
+})
+
+
+function ouvrirPartage(admin: boolean) {
+  const session = { utilisateur: { identifiant: 'alice', admin }, deconnexion: vi.fn() }
+  render(<LangProvider><SessionContext.Provider value={session}><PartageDialog type="reunion" cible="M-1" nom="Comité" onClose={vi.fn()} /></SessionContext.Provider></LangProvider>)
+}
+const propositions = () => [...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))
+
+it('le dialogue Partager propose les comptes actifs à l’administrateur, le champ libre restant possible', async () => {
+  vi.mocked(getPartages).mockResolvedValue({
+    donnes: [{ id: 'S-9', proprietaire: 'alice', invite: 'bruno', type: 'reunion', cible: 'M-1', cree_le: '', nom: 'Comité' }], recus: [] })
+  vi.mocked(listerComptes).mockResolvedValue([
+    { identifiant: 'alice', admin: true, actif: true, cree_le: '' },
+    { identifiant: 'bruno', admin: false, actif: true, cree_le: '' },
+    { identifiant: 'carole', admin: false, actif: false, cree_le: '' },
+    { identifiant: 'denis', admin: false, actif: true, cree_le: '' },
+  ])
+  ouvrirPartage(true)
+
+  const champ = await screen.findByLabelText('Identifiant du compte')
+  await waitFor(() => expect(propositions()).toEqual(['denis']))   // ni soi-même, ni un compte désactivé, ni bruno (déjà partagé ici)
+  expect(champ).toHaveAttribute('list')
+  expect(champ).toHaveAttribute('type', 'text')                    // le champ libre reste
+})
+
+it('le dialogue Partager ne propose à un membre que les comptes qu’il connaît déjà par ses partages', async () => {
+  vi.mocked(getPartages).mockResolvedValue({
+    donnes: [{ id: 'S-1', proprietaire: 'alice', invite: 'carole', type: 'projet', cible: CLIENTS, cree_le: '', nom: 'Clients' }],
+    recus,
+  })
+  vi.mocked(listerComptes).mockClear()
+  ouvrirPartage(false)
+
+  await screen.findByLabelText('Identifiant du compte')
+  await waitFor(() => expect(propositions().sort()).toEqual(['bruno', 'carole']))
+  expect(listerComptes).not.toHaveBeenCalled()                       // un membre n'a aucune route qui liste les comptes
+})
+

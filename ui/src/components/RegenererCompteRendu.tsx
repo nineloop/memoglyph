@@ -1,12 +1,14 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ModeleGratuitError, getConfig, lancerCompteRendu, type AppConfig } from '../api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ModeleGratuitError, getConfig, getReglagesTraitement, lancerCompteRendu, type AppConfig } from '../api'
 import { useLang } from '../lib/langContext'
+import { useConfirmer } from '../design/Confirmation'
+import { phraseDErreur } from '../lib/erreurs'
 import { useCloudUltra } from '../lib/cloudUltra'
-import { getLlmProvider } from '../lib/llmProvider'
-import type { MessageKey } from '../lib/messages'
-import { modelesPrets } from '../lib/modelesPrets'
+import { LIBELLES, estEnLigne, estInterdit, estPret, fournisseursConnus } from '../lib/fournisseurs'
+import { fournisseurLocal, fournisseurRetenuIndisponible, reglagesApplicables } from '../lib/reglagesTraitement'
 import { useTraitementsCourants } from '../lib/traitementsContext'
 import { Icon } from './Icon'
+import { SelecteurFournisseur } from './SelecteurFournisseur'
 
 type Props = {
   /** Le transcript dont on régénère le compte rendu, et la portée où il se lit. */
@@ -16,17 +18,14 @@ type Props = {
   surTermine?: (nomDuCompteRendu: string) => void
   /** La réunion est ultra-confidentielle : sauf autorisation du compte, aucun fournisseur en ligne. */
   ultra?: boolean
-}
-
-/** Libellé lisible d'un fournisseur ; un fournisseur sans libellé garde son identifiant. */
-const NOMS: Record<string, MessageKey> = {
-  mlx: 'app.provider.mlxLocal',
-  mistral: 'app.provider.mistralCloud',
-  openai: 'app.provider.openaiCloud',
-  anthropic: 'app.provider.anthropicCloud',
-  compatible: 'app.provider.compatible',
-  openrouter: 'app.provider.openrouter',
-  groq: 'app.provider.groq',
+  /** Le panneau s'affiche ouvert (état vide : « Rédiger le compte rendu » ouvre directement le choix). */
+  ouvertInitial?: boolean
+  /** Une première rédaction, pas une régénération : seuls les libellés du bouton changent. */
+  redaction?: boolean
+  /** Chaque CHANGEMENT de ce nombre, après l'affichage, ouvre le panneau (un autre onglet de la réunion le demande). */
+  demandeOuverture?: number
+  /** Le transcript est sans horodatage : un compte rendu n'y citerait rien. L'entrée est désactivée, avec l'explication. */
+  sansHorodatage?: boolean
 }
 
 /**
@@ -35,44 +34,70 @@ const NOMS: Record<string, MessageKey> = {
  * autres. La règle d'envoi reste celle du serveur : une réunion ultra-confidentielle refuse un fournisseur en
  * ligne, avec une phrase claire — l'interface ne fait que la relayer.
  */
-export function RegenererCompteRendu({ name, documentScope, surTermine, ultra: ultraDocument }: Props) {
-  const { t } = useLang()
+export function RegenererCompteRendu({ name, documentScope, surTermine, ultra: ultraDocument, ouvertInitial = false, redaction = false, demandeOuverture = 0, sansHorodatage = false }: Props) {
+  const { t, lang } = useLang()
+  const confirmer = useConfirmer()
   // Le compte peut autoriser le cloud pour son ultra-confidentiel (panneau Confidentialité).
   const cloudUltra = useCloudUltra()
-  const ultra = Boolean(ultraDocument) && !cloudUltra
   const { liste, rafraichir, suivre } = useTraitementsCourants()
-  const [ouvert, setOuvert] = useState(false)
+  const [ouvertDemande, setOuvert] = useState(ouvertInitial)
+  // Sans horodatage, rien ne s'ouvre : l'entrée reste fermée, désactivée, avec son explication.
+  const ouvert = ouvertDemande && !sansHorodatage
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [choix, setChoix] = useState('')
+  // Le fournisseur retenu par le compte mais pas configuré : dit en une ligne tant que la personne n'a rien choisi.
+  const [retenuIndisponible, setRetenuIndisponible] = useState('')
   const [envoi, setEnvoi] = useState(false)
   const [message, setMessage] = useState('')
   const [erreur, setErreur] = useState('')
   const [jobId, setJobId] = useState('')
-  const idLegende = useId()
+  // Le dernier traitement qui a ÉCHOUÉ : « Suivre » reste affiché à côté du message, qui renvoie à la vue des traitements.
+  const [dernierJob, setDernierJob] = useState('')
   const declencheur = useRef<HTMLButtonElement>(null)
+
+  // Seul un CHANGEMENT après l'affichage ouvre le panneau : une valeur déjà non nulle au montage (la barre d'outils qui
+  // apparaît après une première rédaction) ne l'ouvre pas.
+  const derniereDemande = useRef(demandeOuverture)
+  useEffect(() => {
+    if (demandeOuverture === derniereDemande.current) return
+    derniereDemande.current = demandeOuverture
+    setOuvert(true)
+  }, [demandeOuverture])
 
   useEffect(() => {
     if (!ouvert || config) return
     let courant = true
-    getConfig().then((c) => {
+    Promise.all([getConfig(), getReglagesTraitement().catch(() => ({ reglages: null }))]).then(([c, retenus]) => {
       if (!courant) return
       setConfig(c)
-      const prets = modelesPrets(c)
-      const permis = prets.filter((p) => !ultra || (c.local_providers ?? ['mlx']).includes(p))
-      const habituel = getLlmProvider(c.default_llm_provider || 'mlx')
+      setRetenuIndisponible(fournisseurRetenuIndisponible(retenus.reglages, c) ?? '')
+      // Le fournisseur de départ : celui que le compte a retenu s'il est prêt, sinon le modèle local (`reglagesApplicables`).
+      const permis = fournisseursConnus(c).filter((f) => estPret(f) && !estInterdit(f, Boolean(ultraDocument), cloudUltra)).map((f) => f.id)
+      const habituel = reglagesApplicables(retenus.reglages, c)?.fournisseur ?? fournisseurLocal(c)
       setChoix((precedent) => (precedent && permis.includes(precedent) ? precedent
         : permis.includes(habituel) ? habituel : permis[0] ?? ''))
-    }).catch(() => { if (courant) setErreur(t('regenerer.refused.other', { erreur: '—' })) })
+    }).catch(() => { if (courant) setErreur(t('regenerer.refused.other')) })
     return () => { courant = false }
-  }, [ouvert, config, t, ultra])
+  }, [ouvert, config, t, ultraDocument, cloudUltra])
 
-  const prets = useMemo(() => (config ? modelesPrets(config) : []), [config])
-  const locaux = config?.local_providers ?? ['mlx']
+  // La sensibilité de la réunion (ou l'autorisation du compte) peut être connue APRÈS l'ouverture du panneau : le choix est
+  // revalidé à chaque changement, sinon un fournisseur en ligne retenu resterait coché, refusé ensuite par le serveur.
+  useEffect(() => {
+    if (!config) return
+    const permis = fournisseursConnus(config).filter((f) => estPret(f) && !estInterdit(f, Boolean(ultraDocument), cloudUltra)).map((f) => f.id)
+    setChoix((precedent) => {
+      if (precedent && permis.includes(precedent)) return precedent
+      const local = fournisseurLocal(config)
+      return permis.includes(local) ? local : permis[0] ?? ''
+    })
+  }, [config, ultraDocument, cloudUltra])
+
+  const connus = useMemo(() => (config ? fournisseursConnus(config) : []), [config])
+  const prets = useMemo(() => connus.filter(estPret).map((f) => f.id), [connus])
   // « En ligne » = hors des fournisseurs locaux (un serveur hébergé hors de cette machine en est un aussi).
-  const interdit = (p: string) => ultra && !locaux.includes(p)
-  const nomDe = (p: string) => (NOMS[p] ? t(NOMS[p]) : p)
-  const modeleDe = (p: string) => config?.llm_models?.[p]
-  const unSeulLocal = config !== null && prets.length > 0 && prets.every((p) => locaux.includes(p))
+  const enLigne = (p: string) => { const f = connus.find((x) => x.id === p); return f ? estEnLigne(f) : true }
+  const nomDe = (p: string) => (LIBELLES[p] ? t(LIBELLES[p]) : p)
+  const unSeulLocal = config !== null && prets.length > 0 && prets.every((p) => !enLigne(p))
 
   // Le traitement lancé, suivi dans la liste partagée : fini → la nouvelle version ; en échec → on le dit.
   const suivi = jobId ? liste?.traitements.find((x) => x.id === jobId) : undefined
@@ -86,15 +111,17 @@ export function RegenererCompteRendu({ name, documentScope, surTermine, ultra: u
     } else if (suivi.statut === 'error') {
       setJobId('')
       setMessage('')
+      setDernierJob(suivi.id)
       setErreur(t('regenerer.failed'))
     }
   }, [suivi, surTermine, t])
 
   async function lancer() {
     if (!choix || envoi || enCours) return
-    if (!locaux.includes(choix) && !window.confirm(t('regenerer.cloudConfirm', { provider: nomDe(choix) }))) return
+    if (enLigne(choix) && !await confirmer({ titre: t('confirmation.envoiEnLigne.titre'), phrase: t('regenerer.cloudConfirm', { provider: nomDe(choix) }), libelleAction: t('confirmation.envoiEnLigne.action') })) return
     setEnvoi(true)
     setErreur('')
+    setDernierJob('')
     setMessage('')
     try {
       const { job_id: id } = await lancerCompteRendu(name, documentScope, choix)
@@ -109,7 +136,7 @@ export function RegenererCompteRendu({ name, documentScope, surTermine, ultra: u
       setErreur(raison instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted')
         : statut === '403' ? t('regenerer.refused.confidential')
         : statut === '429' ? t('regenerer.refused.busy')
-          : t('regenerer.refused.other', { erreur: String(raison) }))
+          : phraseDErreur(t, lang, raison, t('regenerer.refused.other')))
     } finally {
       setEnvoi(false)
     }
@@ -121,35 +148,32 @@ export function RegenererCompteRendu({ name, documentScope, surTermine, ultra: u
            // Échap referme le panneau et rend le focus à son bouton.
            if (e.key === 'Escape' && ouvert) { e.stopPropagation(); setOuvert(false); declencheur.current?.focus() }
          }}>
-      <button type="button" className="btn" ref={declencheur} aria-expanded={ouvert} onClick={() => setOuvert((o) => !o)}>
-        <Icon name="report" /> {ouvert ? t('regenerer.close') : t('regenerer.open')}
+      <button type="button" className="btn" ref={declencheur} aria-expanded={ouvert} onClick={() => setOuvert((o) => !o)}
+              disabled={sansHorodatage} title={sansHorodatage ? t('reader.generate.needsTimestamps') : undefined}>
+        <Icon name={ouvert ? 'close' : 'report'} /> {ouvert ? t('regenerer.close') : t(redaction ? 'regenerer.write' : 'regenerer.open')}
       </button>
       {ouvert && (
         <div className="regenerer-panneau">
           {!config && !erreur && <p className="muted">{t('regenerer.loading')}</p>}
           {config && prets.length === 0 && <p className="muted">{t('regenerer.none')}</p>}
           {config && prets.length > 0 && (
-            <fieldset className="regenerer-choix" aria-labelledby={idLegende}>
-              <legend id={idLegende}>{t('regenerer.legend')}</legend>
-              {prets.map((p) => (
-                <label key={p} className={`regenerer-option ${interdit(p) ? 'interdit' : ''}`}>
-                  <input type="radio" name={`regenerer-${name}`} value={p} checked={choix === p}
-                         onChange={() => setChoix(p)} disabled={envoi || enCours || interdit(p)}
-                         aria-describedby={interdit(p) ? `${idLegende}-raison-${p}` : undefined} />
-                  <span>
-                    <strong>{nomDe(p)}</strong>
-                    {modeleDe(p) && <small> · <code>{modeleDe(p)}</code></small>}
-                    {/* La raison est du TEXTE, lié à l'option : une option désactivée ne reçoit pas le focus. */}
-                    {interdit(p) && <small id={`${idLegende}-raison-${p}`} className="regenerer-raison"> — {t('regenerer.notAllowed')}</small>}
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+            <SelecteurFournisseur config={config} valeur={choix} onChange={(p) => { setRetenuIndisponible(''); setChoix(p) }} legende={t('regenerer.legend')}
+                                  nom={`regenerer-${name}`} ultra={Boolean(ultraDocument)} cloudUltra={cloudUltra}
+                                  desactive={envoi || enCours} enLigneOuvert />
           )}
-          {unSeulLocal && <p className="muted regenerer-aide">{t('regenerer.noOnline')}</p>}
+          {retenuIndisponible && (
+            <p className="muted regenerer-aide" role="status">
+              {t('reglages.retenuIndisponible', { fournisseur: LIBELLES[retenuIndisponible] ? t(LIBELLES[retenuIndisponible]) : retenuIndisponible })}
+            </p>
+          )}
+          {unSeulLocal && (
+            <p className="muted regenerer-aide">
+              {t('regenerer.noOnline')} {t('regenerer.addProvider')}
+            </p>
+          )}
           {config && prets.length > 0 && (
-            <button type="button" className="btn accent llm" onClick={lancer} disabled={!choix || envoi || enCours}>
-              {t('regenerer.launch')}
+            <button type="button" className="btn accent" onClick={lancer} disabled={!choix || envoi || enCours}>
+              {t(redaction ? 'regenerer.writeLaunch' : 'regenerer.launch')}
             </button>
           )}
           {message && (
@@ -159,6 +183,7 @@ export function RegenererCompteRendu({ name, documentScope, surTermine, ultra: u
             </p>
           )}
           {erreur && <p className="error" role="alert">{erreur}</p>}
+          {erreur && dernierJob && <button type="button" className="btn sm" onClick={suivre}>{t('traitements.confirm.follow')}</button>}
         </div>
       )}
     </div>

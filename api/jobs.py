@@ -253,8 +253,8 @@ class JobManager:
     def _creer_sous_verrou(self, owner: Optional[str], nature: str, **suivi: Any) -> Job:
         if self.active_count() >= self._max_active:
             raise JobsBusy(
-                f"{self._max_active} traitement(s) déjà en cours — réessaie "
-                "quand l'un d'eux sera terminé."
+                f"{self._max_active} traitement(s) en cours. Réessayez "
+                "quand l'un sera terminé."
             )
         plan = list(suivi.pop("plan", None) or [])
         job = Job(id=uuid.uuid4().hex[:12], owner=owner, nature=nature, plan=plan, **suivi)

@@ -20,12 +20,12 @@ l'autre. Les images sont régénérables par un script Playwright déterministe.
 | `04-transcript-player.png` | Transcript — frise d'onde + locuteurs | réel (diarisé, onde décodée) |
 | `05-search.png` | Recherche groupée par réunion (`q=remote control`) | réel — titres humains, retour horodaté |
 | `06-assistant.png` | Assistant (intro) | réel — pas d'appel LLM |
-| `07-voices.png` | Voix (registre + détail) | réel (4 voix) |
-| `08-duplicates.png` | Doublons | réel (1 groupe) |
-| `09-trash.png` | Corbeille | réel (1 élément) |
-| `10-maintenance.png` | Maintenance (état & index) | réel |
+| `07-voices.png` | Voix (registre + détail) | réel — **état vide** : la démo ne contient pas de profil de voix |
+| `08-duplicates.png` | Doublons | réel (1 groupe) — **doublon fabriqué** avec un extrait de 20 s importé deux fois ; pris après cet import |
+| `09-trash.png` | Corbeille | réel (2 éléments : le transcript et le compte rendu d'une même réunion) |
+| `10-maintenance.png` | Maintenance (état & index) | réel — pris avant l'import du doublon (0 doublon) |
 | `11-versions.png` | Réunion — Versions | réel |
-| `12-information.png` | Réunion — Informations | réel |
+| `12-information.png` | Réunion — Informations | réel — pris après l'import du doublon (la barre latérale compte 4 réunions) ; la carte « Usage et coût » dit « Aucun usage enregistré. » |
 | `13-library-empty.png` | Bibliothèque — **état vide** | portée projet réellement vide |
 | `15-share.png` | Réunion — fenêtre de partage | réel — aucun partage encore |
 
@@ -33,7 +33,7 @@ l'autre. Les images sont régénérables par un script Playwright déterministe.
 `01-transcribe.png` · `02-library.png` · `03-meeting-report.png` · `04-transcript-player.png`
 
 ### `mobile/light/` — 390×844
-`00-dock.png` (dock flottant, navigation primaire) · `01-transcribe.png` · `02-library.png` · `03-meeting-report.png` · `04-transcript-player.png`
+`01-transcribe.png` · `02-library.png` · `03-meeting-report.png` · `04-transcript-player.png` — le dock flottant (navigation primaire) se voit sur chacune ; il n'a plus de capture à part.
 
 ### `mobile/dark/`
 Réservé aux itérations futures (non peuplé dans cette baseline).
@@ -99,15 +99,22 @@ une bibliothèque réelle :
    silence), importé sous le titre « AMI IS1009a, réunion de lancement d'une
    télécommande », avec diarisation, profil et compte-rendu ;
 2. un projet « Projet vide », pour `13-library-empty` ;
-3. le même extrait importé une seconde fois en transcription seule (le doublon de
-   `08-duplicates`), et un extrait de deux minutes d'ES2002a importé et archivé
-   (l'élément de `09-trash`). Les captures étant refaites en un seul passage, le doublon
-   paraît aussi dans la bibliothèque et la recherche ;
+3. un extrait de deux minutes d'ES2002a, importé sans compte rendu ;
+4. la corbeille : le transcript et le compte rendu de la réunion IS1009a, archivés
+   (les deux éléments de `09-trash`) ;
+5. un **doublon fabriqué** : un extrait de 20 s, importé deux fois par le pipeline réel
+   (transcription seule, sans locuteurs ni compte rendu) sous le nom `doublon-fabrique`.
+   Il est importé **après** toutes les captures qui ne doivent pas le montrer :
+   `08-duplicates` est donc pris après l'import, `10-maintenance` avant (0 doublon), et
+   `12-information` (reprise après l'import) montre 4 réunions dans la barre latérale.
+
+La démo ne contient **aucun profil de voix** : `07-voices` montre l'état vide.
 
 ## Couverture & limites connues
 
-- **Réel** : toutes les captures sauf l'intro Assistant (état d'accueil, sans appel
-  au modèle) et l'état vide Bibliothèque (portée projet réellement vide).
+- **Réel** : toutes les captures sont réelles. L'Assistant est montré sans question
+  posée (état d'accueil, aucun appel au modèle) ; l'état vide de la Bibliothèque vient
+  d'un projet réellement vide.
 - **Non capturé** : la **réponse** de l'Assistant (nécessite le modèle local, non
   déterministe) ; `mobile/dark/`.
 - **Reprendre l'écoute** : la position de lecture et la dernière écoute sont
@@ -125,3 +132,20 @@ une bibliothèque réelle :
   - `VoiceOccurrence` (registre des voix) : pas de champ `source` → les
     occurrences affichent le slug. **Requis backend** : ajouter `source` à
     `VoiceOccurrence` (et à `SearchResult` des rapports) pour un titre humain.
+
+## Provenance de cette base
+
+Prise le 14 novembre 2026 sur la démo locale (`http://127.0.0.1:9200`, l'API en 9201),
+avec les sources de l'application du commit indiqué. Le script de capture utilisé est
+une copie de `capture.mjs`, qui en diffère sur quatre points : une session enregistrée
+au lieu de la connexion par identifiant ; `BASE` sans valeur par défaut ; une sortie
+refusée hors du dossier de travail prévu ; et une liste d'écrans à prendre (certains
+écrans se prennent après l'import du doublon, d'autres avant). Le `capture.mjs` livré ici
+signale désormais chaque échec (« ✗ ») et sort en erreur, au lieu d'annoncer « ✓ » sur
+un écran de chargement.
+
+| Images | Commit des sources |
+|---|---|
+| 20 images (toutes sauf les trois ci-dessous) | `12013bd` |
+| `desktop/light/12-information.png` | `06fae57` |
+| `mobile/light/03-meeting-report.png`, `mobile/light/04-transcript-player.png` | `996502f` (fil d'Ariane coupé par une ellipse sous 820 px) |

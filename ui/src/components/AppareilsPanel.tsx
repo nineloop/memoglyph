@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 
 import { creerJeton, listerJetons, retirerJeton, type JetonAppareil } from '../api'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
+import { formaterInstant } from '../lib/dates'
 import { useSession } from './AuthGate'
 
 /**
@@ -20,12 +22,12 @@ export function AppareilsPanel() {
   const [avis, setAvis] = useState('')
 
   const charger = useCallback(() => {
-    listerJetons().then(setJetons).catch((exc: Error) => setErreur(exc.message))
-  }, [])
+    listerJetons().then(setJetons).catch((exc: unknown) => setErreur(phraseDErreur(t, lang, exc, t('repli.appareilsCharger'))))
+  }, [t, lang])
   useEffect(() => { charger() }, [charger])
 
   const date = (valeur: string | null) =>
-    valeur ? new Date(valeur).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-GB') : t('devices.never')
+    valeur ? formaterInstant(new Date(valeur).getTime() / 1000, lang) : t('devices.never')
 
   const creer = async (event: FormEvent) => {
     event.preventDefault()
@@ -37,7 +39,7 @@ export function AppareilsPanel() {
       setNom('')
       charger()
     } catch (exc) {
-      setErreur(t('auth.error.failed', { detail: (exc as Error).message }))
+      setErreur(phraseDErreur(t, lang, exc, t('repli.appareilAjouter')))
     }
   }
 
@@ -49,7 +51,7 @@ export function AppareilsPanel() {
       setAvis(t('devices.revoked', { name: jeton.nom }))
       charger()
     } catch (exc) {
-      setErreur(t('auth.error.failed', { detail: (exc as Error).message }))
+      setErreur(phraseDErreur(t, lang, exc, t('repli.appareilRetirer')))
     }
   }
 

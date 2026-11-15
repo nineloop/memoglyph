@@ -4,12 +4,11 @@ import { Icon } from './Icon'
 import type { IconName } from './Icon'
 
 /**
- * Le bouton « Plus » du dock mobile.
+ * Le bouton « Plus » du dock, au bureau comme sur mobile.
  *
  * Le dock garde QUATRE entrées (Transcrire, Bibliothèque, Recherche, Assistant) ; les autres
- * écrans (Voix, Usage, Corbeille, Doublons, Maintenance) s'ouvrent dans la feuille de « Plus » :
- * chaque écran est ainsi à deux touches au plus. Au bureau, CSS cache ce bouton et le dock montre
- * tout, comme avant.
+ * écrans (Voix, Usage, Maintenance) s'ouvrent dans la feuille de « Plus » : chaque écran est ainsi
+ * à deux touches au plus. Doublons et Corbeille sont des onglets de la Maintenance.
  */
 export type EntreePlus = { id: string; label: string; icon: IconName; badge?: number }
 
@@ -24,6 +23,7 @@ export function BoutonPlus({ entrees, courant, surChoisir }: {
   const bouton = useRef<HTMLButtonElement>(null)
   const idFeuille = useId()
   const dedans = entrees.some((e) => e.id === courant)
+  const badge = entrees.reduce((n, e) => n + (e.badge ?? 0), 0)
 
   useEffect(() => {
     if (!ouvert) return
@@ -51,6 +51,7 @@ export function BoutonPlus({ entrees, courant, surChoisir }: {
               aria-expanded={ouvert} aria-controls={idFeuille} onClick={() => setOuvert((o) => !o)}>
         <span className="dock-glyph"><Icon name="more" /></span>
         <span className="dock-label">{t('nav.more')}</span>
+        {badge > 0 && <span className="nav-badge" aria-hidden="true">{badge}</span>}
       </button>
       {ouvert && (
         <div id={idFeuille} role="group" aria-label={t('nav.more.aria')} className="dock-feuille">

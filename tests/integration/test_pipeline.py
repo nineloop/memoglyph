@@ -117,6 +117,8 @@ def test_pipeline_runs_basic_transcription_and_scales_progress(monkeypatch, tmp_
         # le modèle Ollama, et il aurait fallu le retoucher à chaque
         # changement de fournisseur par défaut.
         "profiling_model": llm.modele_servi(llm.FOURNISSEUR_DEFAUT),
+        # DÉRIVÉ aussi : la taille du cache de prompts du serveur local, ou rien pour un autre moteur.
+        "profiling_prompt_cache_size": llm.taille_cache_prompts(llm.FOURNISSEUR_DEFAUT),
     }
     assert docid.est_valide(rendered["meta"]["id"])
     assert docid.est_valide(rendered["meta"]["meeting_id"])

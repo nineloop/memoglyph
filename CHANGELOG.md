@@ -2,6 +2,26 @@
 
 All notable changes to Memoglyph are documented in this file. Versions are listed from the most recent to the oldest; dates use the ISO 8601 format.
 
+## v1.3.0 (2026-11-15)
+
+The interface is reworked for clarity and accessibility: your processing settings follow your account, failures say one plain sentence, the main screens are easier to read, and the application can be used with a keyboard and a screen reader. The optional speaker identification no longer sends usage statistics to its publisher, and the local MLX server keeps four prompt caches instead of ten, which lowers its memory use.
+
+### Changes
+- Privacy: the optional speaker identification (pyannote.audio) sent usage statistics by default to its publisher (otel.pyannote.ai): the library version, the identifier of the pipeline and models loaded, a random session identifier, the audio duration and the number of speakers requested; never the sound, the text or file names. Memoglyph now turns this off before every model load, whatever the environment says. This concerns versions 1.0.0 to 1.2.1 with the option installed.
+- Local MLX server: it keeps four prompt caches instead of ten, which lowers its peak memory use (`MEMOGLYPH_MLX_PROMPT_CACHE_SIZE` changes it). The size is recorded in the provenance of a local report, and in that of a transcript when its profiling ran locally.
+- Transcribe screen: the settings are in the left zone and the file and the follow-up in the right zone; a shared provider selector names the two places, "Local" and "Online", with the model of each provider. The choices you keep (provider, language, sensitivity) are saved with your account, not in the browser, and a kept provider that is not configured is said so.
+- Transcribe screen: the send bar stays visible at the bottom of the "File" card and says which file will be sent; cancelling a processing asks for confirmation, and the safe choice reads "Keep the job".
+- Navigation: the bottom bar keeps four entries (Transcribe, Library, Search, Assistant) and a "More" entry; Duplicates and Trash are now tabs of Maintenance.
+- Meeting page: a "Listen" button in the transcript header opens the audio player, which now appears only once listening is asked; the file name is no longer repeated under the title; the "Usage and cost" card says "No usage recorded." instead of showing only its title.
+- Reports: italic text in a report is shown in italics instead of between asterisks.
+- Sharing: the Share dialog leaves out the accounts the item is already shared with.
+- Failures: a failed load or action says one plain sentence of its own screen, with "Try again" where it helps, instead of a raw technical message; the technical detail stays folded and is shown to administrators only. Archiving, deleting, cancelling and sending online are confirmed in an application dialog instead of the browser's native boxes.
+- Titles: the active document name, the list and the audio player title wrap instead of being cut; under 820 px the breadcrumb is cut by an ellipsis on one line, because the page title repeats it in full right below.
+- Accessibility: one level-one heading per screen; the tabs of a meeting and of Maintenance work with the arrow keys and show a visible focus ring; toggles, groups and the usage bars announce their state to screen readers; controls are at least 44 px on narrow or touch screens (a citation inside a sentence stays compact at 24 px); the labels of the bottom bar fit whole down to 320 px.
+- Usage: the bars are proportional to the largest real cost, with no floor of 1 $.
+- Wording: "Local" and "Online" everywhere, "report" without a hyphen in French, "Analyzed" for the Library filter, provider names without "(cloud)" or "(local)"; the speaker tone asked from the model is no longer written into the document.
+- Documentation: the page on local and online use states that the usage statistics of speaker identification are turned off, the architecture page describes the new navigation, and the screenshots of the README and of the interface reference show the new interface.
+
 ## v1.2.1 (2026-11-05)
 
 Documentation, comments and repository files only; the behavior of Memoglyph does not change. The README opens with a more precise line and gains an "At a glance" section, an English overview page answers common questions in short form, and several pages are corrected where they disagreed with the code.

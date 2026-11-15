@@ -696,6 +696,20 @@ def test_le_cache_de_prompt_est_borne_en_OCTETS_et_pas_seulement_en_nombre(
     assert argv[argv.index("--prompt-cache-bytes") + 1] == str(2 * 1024**3), argv
 
 
+def test_le_serveur_garde_QUATRE_sequences_de_cache_de_prompts() -> None:
+    """`mlx_lm.server` garde dix séquences par défaut ; le produit en garde quatre.
+
+    Quatre séquences limitent la mémoire du serveur sur les longues réunions sans
+    changer le texte du compte rendu. Le drapeau est porté par le SERVEUR à son
+    lancement : aucune requête ne peut le rattraper.
+    """
+    argv = llm_mlx.MlxEngine().commande_serveur()
+
+    assert config.MLX_PROMPT_CACHE_SIZE == 4
+    assert "--prompt-cache-size" in argv, argv
+    assert argv[argv.index("--prompt-cache-size") + 1] == "4", argv
+
+
 # ---------- 5. La supervision du processus enfant ----------
 
 def _port_libre() -> int:

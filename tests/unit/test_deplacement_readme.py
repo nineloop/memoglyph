@@ -228,7 +228,7 @@ EXTRAITS = {
     "docs/architecture.md": [
         "flowchart TD",
         "subgraph UI [\"Interface Utilisateur (React + Vite)\"]",
-        "Nav[\"Navigation — Espace : Transcrire | Bibliothèque | Recherche | Assistant | Voix · Données : Doublons | Corbeille | Maintenance\"]",
+        "Nav[\"Navigation — Barre du bas : Transcrire | Bibliothèque | Recherche | Assistant | Plus (Voix · Usage · Maintenance, avec Doublons et Corbeille en onglets)\"]",
         "Timeline[\"Timeline SSE 6 étapes (0 à 100%)\"]",
         "Player[\"Lecteur audio synchronisé aux timestamps\"]",
         "end",
@@ -348,7 +348,7 @@ EXTRAITS = {
         "borne l'accès",
         "dossier",
         "Les voix sont communes à tous les projets d'un compte, et à lui seul.",
-        "L'écran **Maintenance** distingue les archives fidèles déjà",
+        "L'écran **Maintenance** (« Copie audio conservée ») distingue les copies audio déjà",
         "Le mode `--apply` n'utilise jamais l'archive d'écoute comme",
         "Archiver retire le Markdown actif de la bibliothèque, de FTS",
         "La suppression définitive d'un élément de la Corbeille retir",

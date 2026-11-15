@@ -13,8 +13,8 @@ import { CATALOGUES } from '../lib/messages'
 describe('traduireEtape', () => {
   it('traduit un code connu dans la langue demandée', () => {
     const etape = { code: 'step.diarization', params: {}, message: 'Identifying speakers…' }
-    expect(traduireEtape('fr', etape)).toBe('Diarisation (qui parle)…')
-    expect(traduireEtape('en', etape)).toBe('Identifying speakers…')
+    expect(traduireEtape('fr', etape)).toBe('Reconnaissance des locuteurs…')
+    expect(traduireEtape('en', etape)).toBe('Recognizing speakers…')
   })
 
   it('interpole les paramètres du backend', () => {
@@ -23,8 +23,8 @@ describe('traduireEtape', () => {
       params: { model: 'qwen2.5:7b' },
       message: 'Profiling with qwen2.5:7b…',
     }
-    expect(traduireEtape('fr', etape)).toBe('Profilage avec qwen2.5:7b…')
-    expect(traduireEtape('en', etape)).toBe('Profiling with qwen2.5:7b…')
+    expect(traduireEtape('fr', etape)).toBe('Analyse avec qwen2.5:7b…')
+    expect(traduireEtape('en', etape)).toBe('Analyzing with qwen2.5:7b…')
   })
 
   it('dit la pause d\u2019un quota atteint avec son délai, dans les deux langues', () => {

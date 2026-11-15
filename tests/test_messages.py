@@ -129,8 +129,7 @@ def test_chaque_message_a_un_code_non_vide_et_un_texte(fabrique, args):
 # le test de complétude ci-dessous oblige à l'étendre à chaque nouveau message.
 TEXTES_ATTENDUS = {
     # Texte historique de `ResourcesBusy`, conservé tel quel pour les clients existants ; le CODE est ce qui se traduit.
-    "step.error.waitTooLong": ("Ressources occupées : un autre traitement est en cours. Réessaie dans un moment — "
-                               "cette machine ne traite qu'une tâche lourde à la fois."),
+    "step.error.waitTooLong": "Ressources occupées : un autre traitement est en cours. Réessayez dans un moment.",
     "step.error.cancelled": "Traitement annulé.",
     "step.audio.prepare": "Preparing audio…",
     "step.audio.ready": "Audio ready.",

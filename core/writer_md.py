@@ -133,11 +133,11 @@ _LABELS = {
     "fr": {"colon": " :", "conv": "🗣️ Profil de la conversation", "type": "Type",
            "duration": "durée", "speakers": "locuteurs", "turns": "tours",
            "topics": "Thèmes", "speakers_sec": "👥 Profils des locuteurs",
-           "tone": "Ton", "transcript": "Transcript"},
+           "transcript": "Transcript"},
     "en": {"colon": ":", "conv": "🗣️ Conversation profile", "type": "Type",
            "duration": "duration", "speakers": "speakers", "turns": "turns",
            "topics": "Topics", "speakers_sec": "👥 Speaker profiles",
-           "tone": "Tone", "transcript": "Transcript"},
+           "transcript": "Transcript"},
 }
 
 
@@ -186,8 +186,6 @@ def _render_profile_sections(profile: dict, diarized: bool, lang: str | None = N
             titre = f"{label} — {role}" if role else label
             suffix = f" · {' · '.join(head_bits)}" if head_bits else ""
             out.append(f"**{titre}**{suffix}")
-            if info.get("tone"):
-                out.append(f"- *{L['tone']}{c}* {info['tone']}")
             for kp in info.get("key_points") or []:
                 out.append(f"- {kp}")
             out.append("")

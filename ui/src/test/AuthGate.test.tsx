@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import { connecter, deconnecter, getEtatAuth, installer } from '../api'
+import { ErreurAvecCode, connecter, deconnecter, getEtatAuth, installer } from '../api'
 import { AuthGate, BoutonDeconnexion } from '../components/AuthGate'
 import { LangProvider } from '../components/LangProvider'
 
@@ -47,6 +47,9 @@ it('premier lancement : seul l’écran « Créer le compte administrateur » s�
 
   expect(await screen.findByRole('heading', { name: 'Créer le compte administrateur' })).toBeInTheDocument()
   expect(screen.queryByText('Application')).not.toBeInTheDocument()
+  // Le nom du produit et la règle du mot de passe sont visibles avant la saisie.
+  expect(screen.getByText('Memoglyph')).toBeInTheDocument()
+  expect(screen.getByText('Au moins 10 caractères.')).toBeInTheDocument()
 
   await user.type(screen.getByLabelText('Code d’installation'), 'ABCD-EFGH-JKMN')
   await user.type(screen.getByLabelText('Identifiant'), 'admin')
@@ -70,7 +73,7 @@ it('sans session : l’écran de connexion, et le refus du backend affiché', as
   const user = userEvent.setup()
   vi.mocked(getEtatAuth).mockResolvedValue({ installation_requise: false, connecte: false, utilisateur: null })
   vi.mocked(connecter)
-    .mockRejectedValueOnce(new Error('Identifiant ou mot de passe incorrect.'))
+    .mockRejectedValueOnce(new ErreurAvecCode('auth.login.invalid', 'Identifiant ou mot de passe incorrect.'))
     .mockResolvedValueOnce({ utilisateur: { identifiant: 'alice', admin: false } })
   rendre()
 

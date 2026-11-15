@@ -20,7 +20,11 @@ MOTIF = re.compile(("D" + "-" + r"\d{3}").encode())
 # (donnée lue par le code testé), pas un commentaire. Le retirer changerait un
 # comportement : c'est à trancher à part. Chaque entrée donne le nombre exact
 # d'occurrences tolérées et sa raison.
-LISTE_FERMEE: dict[str, tuple[int, str]] = {}
+LISTE_FERMEE: dict[str, tuple[int, str]] = {
+    # Des OCTETS d'image compressée, pas un texte : le motif y apparaît par hasard. Si l'image est reprise,
+    # l'entrée se retire ou se recompte (le second test de ce fichier le dit).
+    "docs/assets/screenshots/library.png": (1, "octets compressés d'une image : correspondance fortuite du motif, sans texte"),
+}
 
 
 def _fichiers_suivis() -> list[str]:

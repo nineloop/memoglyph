@@ -5,6 +5,8 @@ import { getCloudUltra, getConfig, setCloudUltra, type ReglageCloudUltra } from 
 import { cleSelonFaits } from '../lib/messages'
 import { annoncerCloudUltra } from '../lib/cloudUltra'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
+import { formaterInstant } from '../lib/dates'
 import { useSession } from './AuthGate'
 
 /**
@@ -32,8 +34,8 @@ export function ConfidentialitePanel() {
   }, [])
 
   useEffect(() => {
-    getCloudUltra().then(setReglage).catch((exc: Error) => setErreur(exc.message))
-  }, [])
+    getCloudUltra().then(setReglage).catch((exc: unknown) => setErreur(phraseDErreur(t, lang, exc, t('repli.reglageCharger'))))
+  }, [t, lang])
 
   const changer = useCallback(async (autorise: boolean) => {
     setEnCours(true)
@@ -46,14 +48,14 @@ export function ConfidentialitePanel() {
       annoncerCloudUltra(lu.autorise)
       setAvis(t(lu.autorise ? 'privacy.enabled' : 'privacy.disabled'))
     } catch (exc) {
-      setErreur(t('auth.error.failed', { detail: (exc as Error).message }))
+      setErreur(phraseDErreur(t, lang, exc, t('repli.reglageEnregistrer')))
     } finally {
       setEnCours(false)
     }
-  }, [t])
+  }, [t, lang])
 
   const date = (valeur: string | null) =>
-    valeur ? new Date(valeur).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-GB') : ''
+    valeur ? formaterInstant(new Date(valeur).getTime() / 1000, lang) : ''
 
   return (
     <section className="accounts-panel" aria-labelledby="privacy-title">

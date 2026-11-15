@@ -703,7 +703,7 @@ def test_le_budget_n_est_PAS_comble_par_du_non_verifie() -> None:
         "le budget de dix reste ouvert plutôt que d'être comblé par du non vérifié")
     assert "La seule prouvée" in editorial
     assert "12 affirmation(s) écartée(s)" in rendu
-    assert "ne complètent pas le compte-rendu" in rendu, (
+    assert "ne complètent pas le compte rendu" in rendu, (
         "le lecteur doit savoir POURQUOI le document est court")
 
 

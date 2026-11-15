@@ -105,6 +105,25 @@ describe('la relève : 3 s quand quelque chose tourne, 15 s au repos, suspendue 
     releve.arreter()
   })
 
+  it('dit l’échec d’un tour par surEchec (jamais sur un succès) sans changer le rythme ni les essais', async () => {
+    const surEchec = vi.fn()
+    const surListe = vi.fn()
+    const recuperer = vi.fn()
+      .mockRejectedValueOnce(new Error('réseau'))
+      .mockResolvedValue(L([], 0, 0))
+    const releve = demarrerReleve({ recuperer, surListe, surEchec, doc })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(surEchec).toHaveBeenCalledTimes(1)
+    expect(surListe).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(14999)
+    expect(recuperer).toHaveBeenCalledTimes(1)            // toujours le rythme du repos
+    await vi.advanceTimersByTimeAsync(1)
+    expect(recuperer).toHaveBeenCalledTimes(2)
+    expect(surListe).toHaveBeenCalledTimes(1)
+    expect(surEchec).toHaveBeenCalledTimes(1)             // un succès ne l'appelle pas
+    releve.arreter()
+  })
+
   it('arreter() ne laisse aucune minuterie (pas de relève doublée sous StrictMode)', async () => {
     const recuperer = vi.fn(async () => L([T()], 1, 0))
     const releve = demarrerReleve({ recuperer, surListe: () => {}, doc })

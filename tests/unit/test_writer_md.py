@@ -149,6 +149,35 @@ def test_render_profile_and_embeddings_are_valid_yaml(transcript_factory) -> Non
     assert "## Transcript" in content
 
 
+@pytest.mark.parametrize(("langue", "etiquette"), [("fr", "Ton"), ("en", "Tone")])
+def test_le_ton_du_locuteur_n_est_pas_ecrit_mais_son_role_et_ses_points_cles_le_sont(
+    transcript_factory, langue, etiquette
+) -> None:
+    transcript = transcript_factory(("Bonjour",), language=langue, speakers=("Speaker 1",))
+    profile = {
+        "conversation": {"type": "interview", "summary": "Résumé court.", "topics": ["tests"]},
+        "conversation_stats": {"duration": "00:01", "n_speakers": 1, "n_turns": 1},
+        "speakers": {
+            "Speaker 1": {
+                "role": "animateur",
+                "talk_time": "00:01",
+                "share": "100%",
+                "tone": "pédagogique",
+                "key_points": ["Les tests comptent"],
+            }
+        },
+    }
+
+    content = render_markdown(
+        transcript, {"title": "profil", "language": langue, "profiled": True}, diarized=True, profile=profile
+    )
+
+    assert "pédagogique" not in content
+    assert f"*{etiquette}" not in content
+    assert "**Speaker 1 — animateur**" in content
+    assert "- Les tests comptent" in content
+
+
 def test_embedding_encoding_roundtrips() -> None:
     """L'encodage base64 des empreintes reste réversible (stockage annexe)."""
     assert decode_embedding(encode_embedding([0.25, 0.5])) == pytest.approx([0.25, 0.5])

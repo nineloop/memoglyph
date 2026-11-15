@@ -56,6 +56,17 @@ def normaliser(valeur: object) -> str:
     return valeur if valeur in SENSIBILITES else SENSIBILITE_DEFAUT
 
 
+def plus_stricte(candidate: object, reference: object) -> bool:
+    """`candidate` est-elle STRICTEMENT plus sensible que `reference` ? Un ordre strict : l'égalité vaut non. Une valeur inconnue vaut
+    le défaut (`normaliser`), donc ne bat jamais rien."""
+    return SENSIBILITES.index(normaliser(candidate)) < SENSIBILITES.index(normaliser(reference))
+
+
+def la_plus_stricte(a: object, b: object) -> str:
+    """La plus sensible des deux (à égalité, la même)."""
+    return normaliser(a) if SENSIBILITES.index(normaliser(a)) <= SENSIBILITES.index(normaliser(b)) else normaliser(b)
+
+
 ULTRA_CONFIDENTIEL: Sensibilite = "ultra_confidential"
 REFUS_CLOUD = "Un document ultra-confidentiel ne part pas vers un fournisseur cloud"
 

@@ -1033,7 +1033,7 @@ def render_structured(
             f"dont une citation a été VÉRIFIÉE dans le transcript, et au moins "
             f"une par section, dans la limite de {plafond_total}. Les "
             f"affirmations sans citation vérifiable ne complètent pas le "
-            f"compte-rendu : elles ne sont pas fausses pour autant, mais rien "
+            f"compte rendu : elles ne sont pas fausses pour autant, mais rien "
             f"ici ne permet de les appuyer."
             if fr else
             f"> ℹ️ **{ecartees} claim(s) dropped.** Kept are those whose citation "
@@ -1218,7 +1218,7 @@ def audit(report_markdown: str, transcript_markdown: str) -> CitationAudit:
     close_claim()
 
     if not claims:
-        warnings.append("aucune affirmation détectée dans le compte-rendu")
+        warnings.append("aucune affirmation détectée dans le compte rendu")
 
     for claim in claims:
         if claim.abstentions and claim.valid_citations:

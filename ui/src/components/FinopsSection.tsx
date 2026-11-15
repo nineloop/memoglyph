@@ -15,7 +15,11 @@ type State = 'loading' | 'error' | FinopsSummary
  * Best-effort : une lecture en échec n'affecte jamais le reste de la vue (état « indisponible »).
  * Ne combine JAMAIS deux devises ; noms provider/model VERBATIM ; NULL => « — unpriced ».
  */
-export function FinopsSection({ name, viewScope, label }: { name: string; viewScope: string; label: string }) {
+export function FinopsSection({ name, viewScope, label, sansUsage }: {
+  name: string; viewScope: string; label: string
+  /** La phrase dite quand AUCUNE exécution n'est liée au document. Absente : rien n'est affiché (le comportement d'origine). */
+  sansUsage?: string
+}) {
   const { t } = useLang()
   const [state, setState] = useState<State>('loading')
 
@@ -39,7 +43,17 @@ export function FinopsSection({ name, viewScope, label }: { name: string; viewSc
   }
   // Un transcript porte aussi son profilage (exécution `profile`), au même contrat.
   const profil = state.profile?.available ? state.profile : null
-  if (!state.available && !profil) return null   // aucune exécution liée : on n'invente rien
+  if (!state.available && !profil) {
+    // Aucune exécution liée : on n'invente rien. Sous un titre de carte, le silence ressemble à une carte cassée :
+    // l'appelant qui le veut fait dire la phrase, avec le libellé du document concerné.
+    if (!sansUsage) return null
+    return (
+      <div className="finops-block">
+        <div className="action-scope">{label}</div>
+        <p className="muted small">{sansUsage}</p>
+      </div>
+    )
+  }
 
   return (
     <>

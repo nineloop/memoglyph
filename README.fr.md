@@ -31,8 +31,8 @@ Memoglyph transforme un enregistrement en transcript horodaté et en compte rend
 
 Un fichier audio ou vidéo déposé sur l'écran Transcrire, jusqu'à 2 048 Mo par défaut, est rangé dans un projet et, par défaut, traité sur le Mac.
 
-![L'écran Transcrire : la zone de dépôt du fichier, le projet de destination et les étapes du traitement](docs/assets/screenshots/transcribe-fr.png)
-*L'écran Transcrire : fichier, projet et étapes du traitement.*
+![L'écran Transcrire : les réglages du traitement (local ou en ligne, langue parlée, sensibilité du document), la zone de dépôt du fichier, le projet de destination et les étapes du traitement](docs/assets/screenshots/transcribe-fr.png)
+*L'écran Transcrire : réglages du traitement, fichier, projet et étapes du traitement.*
 
 ### 2. Lire
 
@@ -117,4 +117,4 @@ make check
 
 Le code est sous licence Apache-2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). Les modèles gardent leurs propres licences. Le nom et le logo Memoglyph ne sont pas couverts par cette licence ; les fichiers de la marque sont décrits dans [docs/assets/brand/](docs/assets/brand/README.md).
 
-Version v1.2.1.
+Version v1.3.0.

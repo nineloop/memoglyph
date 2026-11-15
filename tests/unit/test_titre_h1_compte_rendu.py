@@ -55,9 +55,9 @@ def test_le_cr_herite_ecrit_le_titre_lisible_dans_son_h1(monkeypatch, transcript
 
     resultat = report.make_report(transcript_importe)
 
-    assert _h1(resultat["content"]) == f"# Compte-rendu — {LISIBLE}"
+    assert _h1(resultat["content"]) == f"# Compte rendu — {LISIBLE}"
     meta, _ = library._split_frontmatter(resultat["content"])
-    assert meta["title"] == f"{LISIBLE} — compte-rendu"
+    assert meta["title"] == f"{LISIBLE} — compte rendu"
 
 
 def _etapes_simulees(monkeypatch) -> None:
@@ -104,6 +104,6 @@ def test_le_cr_de_l_application_ecrit_le_titre_lisible_dans_son_h1(monkeypatch) 
                                  provider="mistral", seed=42)
     contenu = app_report._assemble_app_report(f"{SLUG}.md", meta, "generique", sortie)
 
-    assert _h1(contenu) == f"# Compte-rendu — {LISIBLE}"
+    assert _h1(contenu) == f"# Compte rendu — {LISIBLE}"
     front, _ = library._split_frontmatter(contenu)
-    assert front["title"] == f"{LISIBLE} — compte-rendu"
+    assert front["title"] == f"{LISIBLE} — compte rendu"

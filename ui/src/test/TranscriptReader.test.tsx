@@ -2,8 +2,10 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 
+import { LangProvider } from '../components/LangProvider'
 import { TranscriptReader } from '../components/TranscriptReader'
 import { AudioProvider } from '../audio/AudioProvider'
+import { MiniPlayer } from '../audio/MiniPlayer'
 import { getTranscript, makeReport } from '../api'
 
 
@@ -44,25 +46,31 @@ it('affiche le transcript et les correspondances de voix', async () => {
 })
 
 
-it('génère puis affiche un compte-rendu', async () => {
+it('l\'action du compte rendu est celle que la réunion fournit : un clic la déclenche, rien ne s\'appelle en direct', async () => {
   const user = userEvent.setup()
-  const created = vi.fn()
+  const action = vi.fn()
   vi.mocked(getTranscript).mockResolvedValue({
     name: 'note.md', meta: {}, body: 'Texte', content: '# Note',
   })
-  vi.mocked(makeReport).mockResolvedValue({
-    name: 'note-cr.md', content: '# Compte-rendu', genre: 'town_hall',
-  })
-  render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} onReportCreated={created} />)
+  render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()}
+                           actionCompteRendu={{ libelle: 'Rédiger le compte rendu', onClick: action }} />)
   await screen.findByText('Texte')
 
-  await user.click(screen.getByRole('button', { name: /Compte-rendu/ }))
+  await user.click(screen.getByRole('button', { name: 'Rédiger le compte rendu' }))
 
-  await waitFor(() => expect(makeReport).toHaveBeenCalledWith('note.md', 'projet-1'))
-  expect(await screen.findByRole('heading', { name: 'Compte-rendu', level: 1 })).toBeInTheDocument()
-  expect(screen.getByText('Réunion plénière interne')).toBeInTheDocument()
-  expect(screen.getByText('note-cr.md')).toBeInTheDocument()
-  expect(created).toHaveBeenCalledWith('note-cr.md')
+  expect(action).toHaveBeenCalledTimes(1)
+  expect(makeReport).not.toHaveBeenCalled()       // plus d'appel synchrone depuis le lecteur : le panneau « Régénérer » est le seul chemin
+})
+
+
+it('sans action fournie (Assistant, Recherche, Doublons), le lecteur ne propose aucun compte rendu', async () => {
+  vi.mocked(getTranscript).mockResolvedValue({
+    name: 'note.md', meta: {}, body: 'Texte', content: '# Note',
+  })
+  render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} />)
+  await screen.findByText('Texte')
+
+  expect(screen.queryByRole('button', { name: /compte rendu|Régénérer|Rédiger/i })).not.toBeInTheDocument()
 })
 
 
@@ -135,6 +143,16 @@ it('groupe les passages consécutifs et nomme le locuteur UNE fois', async () =>
   for (const mark of ['[00:00:01]', '[00:00:09]', '[00:00:20]']) {
     expect(screen.getByRole('button', { name: mark })).toBeInTheDocument()
   }
+})
+
+it('un locuteur sans nom s’affiche « Locuteur N » dans l’interface française', async () => {
+  chargeDiarise()
+  render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} />)
+
+  await screen.findByText(/Commençons par le budget/)
+  const titres = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent ?? '')
+  expect(titres.some((x) => x.includes('Locuteur 1'))).toBe(true)
+  expect(titres.some((x) => x.includes('Locuteur 2'))).toBe(true)
 })
 
 it('range le profil LLM dans un repli, sans le PERDRE', async () => {
@@ -260,4 +278,65 @@ it('le rail des locuteurs et des repères se déplie au bouton (replié par déf
   expect(contenu).toHaveClass('ouvert')
   await user.click(bascule)
   expect(contenu).not.toHaveClass('ouvert')
+})
+
+
+it('le bloc d\'en-tête du transcript s\'appelle « Résumé, thèmes et profils des locuteurs », sans promettre un titre, en français et en anglais', async () => {
+  vi.mocked(getTranscript).mockResolvedValue({
+    name: 'note.md',
+    meta: {},
+    body: '## 🗣️ Profil de la conversation\n\nRésumé court.\n\n**Speaker 1** [00:00:01] Bonjour',
+    content: '# Note',
+    voices: {},
+  })
+
+  const fr = render(<LangProvider initiale="fr"><TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} /></LangProvider>)
+  expect(await screen.findByText('Résumé, thèmes et profils des locuteurs')).toBeInTheDocument()
+  expect(screen.queryByText(/Titre/)).toBeNull()
+  fr.unmount()
+
+  render(<LangProvider initiale="en"><TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} /></LangProvider>)
+  expect(await screen.findByText('Summary, themes and speaker profiles')).toBeInTheDocument()
+  expect(screen.queryByText(/Title/)).toBeNull()
+})
+
+
+it('un transcript qui ne s’ouvre pas dit la phrase du contexte : ni « HTTP », ni le texte de l’exception', async () => {
+  vi.mocked(getTranscript).mockRejectedValue(new Error('HTTP 404: {"detail":"introuvable-brut"}'))
+  render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} />)
+
+  expect(await screen.findByText('Ce transcript n’a pas pu être ouvert.')).toBeInTheDocument()
+  expect(screen.getByRole('alert')).toHaveTextContent('Ce transcript n’a pas pu être ouvert.')   // annoncée
+  expect(document.body.textContent).not.toMatch(/HTTP|introuvable-brut/)
+})
+
+
+it('ouvrir un document avec audio ne montre pas le mini-lecteur ; « Écouter » le montre', async () => {
+  const user = userEvent.setup()
+  vi.mocked(getTranscript).mockResolvedValue({
+    name: 'note.md', meta: {}, body: '[00:10] Introduction', content: '', has_audio: true,
+  })
+  render(<LangProvider><AudioProvider><TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} /><MiniPlayer /></AudioProvider></LangProvider>)
+  await screen.findByText(/Introduction/)
+
+  expect(screen.queryByRole('region', { name: 'En cours d’écoute' })).not.toBeInTheDocument()   // rien ne recouvre le contenu
+  await user.click(screen.getByRole('button', { name: 'Écouter' }))
+
+  expect(await screen.findByRole('region', { name: 'En cours d’écoute' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Écouter' })).not.toBeInTheDocument()            // le mini-lecteur porte désormais la commande
+  expect(document.querySelector('.player-ecouter')).toBeInTheDocument()                        // sa place est gardée : la frise ne remonte pas
+})
+
+
+
+it('sans audio conservé, la phrase est écrite sur l’écran (pas seulement en info-bulle) ; avec audio, elle n’y est pas', async () => {
+  chargeDiarise({ has_audio: false })
+  const sans = render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} />)
+  expect(await screen.findByText('Aucun audio conservé pour ce transcript.')).toBeVisible()
+  sans.unmount()
+
+  chargeDiarise({ has_audio: true })
+  render(<TranscriptReader name="note.md" documentScope="projet-1" onBack={vi.fn()} />)
+  await screen.findByText(/Commençons par le budget/)
+  expect(screen.queryByText('Aucun audio conservé pour ce transcript.')).toBeNull()
 })

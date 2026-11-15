@@ -3,7 +3,10 @@ import { ModeleGratuitError, getConfig, getFaitsReunion, getJobStatus, relancerF
 import { Badge } from '../design/primitives'
 import { useCloudUltra } from '../lib/cloudUltra'
 import { traduireEtape } from '../lib/i18n'
+import { LIBELLES, libelleAvecLieu } from '../lib/fournisseurs'
 import { useLang } from '../lib/langContext'
+import { useConfirmer } from '../design/Confirmation'
+import { phraseDErreur } from '../lib/erreurs'
 import type { MessageKey } from '../lib/messages'
 
 type Props = {
@@ -48,17 +51,6 @@ const MOTIFS: Record<string, MessageKey> = {
   incomplet: 'meeting.facts.stale.reason.incomplet',
 }
 
-/** Libellé lisible d'un fournisseur ; un fournisseur sans libellé garde son identifiant. */
-const NOMS: Record<string, MessageKey> = {
-  mlx: 'app.provider.mlxLocal',
-  mistral: 'app.provider.mistralCloud',
-  openai: 'app.provider.openaiCloud',
-  anthropic: 'app.provider.anthropicCloud',
-  compatible: 'app.provider.compatible',
-  openrouter: 'app.provider.openrouter',
-  groq: 'app.provider.groq',
-}
-
 /** Proposé d'abord pour relancer en cloud : Anthropic sert Sonnet pour les faits (`ECL_ANTHROPIC_MODEL`). */
 const CLOUD_PREFERE = 'anthropic'
 
@@ -78,6 +70,7 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
   const cloudUltra = useCloudUltra()
   const ultra = Boolean(ultraDocument) && !cloudUltra
   const { t, lang } = useLang()
+  const confirmer = useConfirmer()
   const [faits, setFaits] = useState<FaitEcl[] | null>(null)
   const [perimes, setPerimes] = useState<FaitEcl[]>([])
   const [erreur, setErreur] = useState('')
@@ -97,9 +90,9 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
         setFaits(corps.faits)
         setPerimes(corps.perimes ?? [])
       })
-      .catch((raison) => { if (courant) setErreur(String(raison)) })
+      .catch((raison) => { if (courant) setErreur(phraseDErreur(t, lang, raison, t('meeting.facts.error'))) })
     return () => { courant = false }
-  }, [meetingId, viewScope])
+  }, [meetingId, viewScope, t, lang])
 
   useEffect(() => { setFaits(null); return charger() }, [charger])
 
@@ -122,12 +115,12 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
   }, [lectureSeule, ultra])
 
   // Un serveur hébergé par l'utilisateur hors de cette machine est nommé « cloud privé ».
-  const nomDe = (p: string) => (NOMS[p] ? t(NOMS[p]) : p)
+  const nomDe = (p: string) => (LIBELLES[p] ? t(LIBELLES[p]) : p)
     + (prives.includes(p) ? ` (${t('app.mode.privateCloud')})` : '')
 
   async function relancer() {
     if (!choix) return
-    if (!locaux.includes(choix) && !window.confirm(t('meeting.facts.rerun.cloudConfirm', { provider: nomDe(choix) }))) return
+    if (!locaux.includes(choix) && !await confirmer({ titre: t('confirmation.envoiEnLigne.titre'), phrase: t('meeting.facts.rerun.cloudConfirm', { provider: nomDe(choix) }), libelleAction: t('confirmation.envoiEnLigne.action') })) return
     setEnCours(true)
     setEtat(t('meeting.facts.rerun.running'))
     try {
@@ -156,7 +149,7 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
       <label>
         {t('meeting.facts.rerun.provider')}{' '}
         <select className="mini-select" value={choix} onChange={(e) => setChoix(e.target.value)} disabled={enCours}>
-          {fournisseurs.map((p) => <option key={p} value={p}>{nomDe(p)}</option>)}
+          {fournisseurs.map((p) => <option key={p} value={p}>{libelleAvecLieu(p, locaux.includes(p) ? 'local' : prives.includes(p) ? 'cloud_prive' : 'en_ligne', t)}</option>)}
         </select>
       </label>{' '}
       <button type="button" className="btn" onClick={relancer} disabled={enCours || !choix}
@@ -194,7 +187,7 @@ export function EclFaits({ meetingId, viewScope, onSource, lectureSeule, ultra: 
     </section>
   )
 
-  if (erreur) return <>{relance}<p className="muted small">{t('meeting.facts.error', { reason: erreur })}</p></>
+  if (erreur) return <>{relance}<p className="muted small">{erreur}</p></>
   if (faits === null) return <p className="muted small">{t('meeting.facts.loading')}</p>
   if (faits.length === 0) return <>{relance}<p className="muted">{t('meeting.facts.empty')}</p>{sectionPerimes}</>
 

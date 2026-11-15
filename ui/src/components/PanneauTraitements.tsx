@@ -1,13 +1,17 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useRef, useState } from 'react'
 import { AnnulationError, annulerTraitement } from '../api'
 import type { ListeTraitements, Traitement } from '../api'
 import { traduireEtape } from '../lib/i18n'
 import type { MessageKey } from '../lib/messages'
 import { useLang } from '../lib/langContext'
+import { useConfirmer } from '../design/Confirmation'
+import { SessionContext } from '../lib/sessionContext'
+import { DetailTechnique } from './DetailTechnique'
 import { libelleProjet } from '../lib/libelleProjet'
 import { annulable, etatAffiche, separer, valeurDepuis } from '../lib/traitements'
 import type { EtatAffiche } from '../lib/traitements'
 import { ecrireUrl } from '../lib/urlState'
+import { EtatEchec } from '../design/primitives'
 import { Icon } from './Icon'
 
 /** Les natures qui ont un libellé ; « traitement », la nature générique, n'apprend rien sur une carte. */
@@ -34,6 +38,9 @@ function Ligne({ tr, maintenant, surOuvrirReunion, surAnnuler, annulationEnCours
   annulationEnCours: boolean
 }) {
   const { t, lang } = useLang()
+  // Le détail technique d'un échec n'est pas pour tous : sans session (installation sans compte) on garde la vue de l'administrateur.
+  const session = useContext(SessionContext)
+  const admin = session?.utilisateur?.admin ?? true
   const etat = etatAffiche(tr)
   const { cle, icone } = ETATS[etat]
   const titre = tr.titre || t(`traitements.nature.${tr.nature}` as MessageKey)
@@ -78,13 +85,8 @@ function Ligne({ tr, maintenant, surOuvrirReunion, surAnnuler, annulationEnCours
       {etat === 'echec' && (
         <div className="traitement-echec-bloc">
           <p>{messageEchec}</p>
-          {/* Le texte brut de l'exception n'est pas traduit : à part, sous un titre qui, lui, l'est. */}
-          {tr.erreur && (
-            <details className="traitement-echec-detail">
-              <summary>{t('traitements.failed.tech')}</summary>
-              <code>{tr.erreur}</code>
-            </details>
-          )}
+          {/* Le texte brut de l'exception n'est pas traduit : à part, sous un titre qui, lui, l'est, et pour l'administrateur seulement. */}
+          <DetailTechnique detail={tr.erreur ?? ''} admin={admin} titre={t('traitements.failed.tech')} />
         </div>
       )}
       {annulable(tr) && (
@@ -113,8 +115,10 @@ function Ligne({ tr, maintenant, surOuvrirReunion, surAnnuler, annulationEnCours
  * Le panneau des traitements : ce qui tourne, ce qui attend, ce qui vient de finir, depuis n'importe quel
  * écran. Les actifs d'abord, puis les cinq derniers terminés ; « Tout voir » déplie l'historique reçu.
  */
-export function PanneauTraitements({ liste, maintenant, surFermer, surOuvrirReunion, rafraichir, annuler = annulerTraitement }: {
+export function PanneauTraitements({ liste, etat = liste === null ? 'chargement' : 'ok', maintenant, surFermer, surOuvrirReunion, rafraichir, annuler = annulerTraitement }: {
   liste: ListeTraitements | null
+  /** Où en est la relève (voir `useTraitements`) ; sans lui : « chargement » tant qu'il n'y a pas de liste, « ok » ensuite. */
+  etat?: 'chargement' | 'ok' | 'echec'
   /** Secondes depuis l'époque ; injectable pour les tests. */
   maintenant?: number
   surFermer: () => void
@@ -125,9 +129,15 @@ export function PanneauTraitements({ liste, maintenant, surFermer, surOuvrirReun
   annuler?: (jobId: string) => Promise<void>
 }) {
   const { t } = useLang()
+  const confirmer = useConfirmer()
   const [tout, setTout] = useState(false)
   const [annulation, setAnnulation] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  // L'échec qui SUIT le « Réessayer » de la personne reçoit le focus (le bouton se remonte) ; un échec de relève en
+  // arrière-plan ne le prend jamais.
+  const [apresReprise, setApresReprise] = useState(false)
+  useEffect(() => { if (etat === 'ok') setApresReprise(false) }, [etat])
+  const reessayer = rafraichir ? () => { setApresReprise(true); rafraichir() } : undefined
   const titreId = useId()
   const racine = useRef<HTMLElement>(null)
   const titreRef = useRef<HTMLHeadingElement>(null)
@@ -151,7 +161,7 @@ export function PanneauTraitements({ liste, maintenant, surFermer, surOuvrirReun
   /** Annuler un traitement en attente : UNE confirmation, puis la liste est relevée et le résultat se dit. */
   async function surAnnuler(tr: Traitement) {
     if (annulation) return
-    if (!window.confirm(t('traitements.cancel.confirm'))) return
+    if (!await confirmer({ titre: t('traitements.cancel.titre'), phrase: t('traitements.cancel.confirm'), libelleAction: t('traitements.cancel.action'), libelleRefus: t('traitements.cancel.keep') })) return
     // Le focus se décide avant la requête : la ligne cliquée va quitter les actifs. La ligne suivante, sinon le
     // déclencheur du panneau (comme Échap).
     const index = actifs.findIndex((x) => x.id === tr.id)
@@ -189,7 +199,9 @@ export function PanneauTraitements({ liste, maintenant, surFermer, surOuvrirReun
     }
   }
 
-  const vide = actifs.length === 0 && termines.length === 0
+  const vide = liste !== null && actifs.length === 0 && termines.length === 0
+  const attente = liste === null && etat !== 'echec'
+  const echecInitial = liste === null && etat === 'echec'
   return (
     <aside className="panneau-traitements" ref={racine} role="dialog" aria-modal="false"
            aria-labelledby={titreId}>
@@ -200,7 +212,11 @@ export function PanneauTraitements({ liste, maintenant, surFermer, surOuvrirReun
         </button>
       </header>
       {/* Toujours présente : une zone d'état qui existe avant le message est annoncée par les lecteurs d'écran. */}
-      <p role="status" className="muted small panneau-traitements-etat">{message}</p>
+      <p role="status" className="muted small panneau-traitements-etat">
+        {[message, liste !== null && etat === 'echec' ? t('traitements.panel.staleList') : ''].filter(Boolean).join(' ')}
+      </p>
+      {attente && <p className="muted" role="status">{t('traitements.panel.loading')}</p>}
+      {echecInitial && <EtatEchec onRetry={reessayer} focusRetry={apresReprise}>{t('traitements.panel.loadFailed')}</EtatEchec>}
       {vide && <p className="muted">{t('traitements.panel.empty')}</p>}
       {actifs.length > 0 && (
         <>

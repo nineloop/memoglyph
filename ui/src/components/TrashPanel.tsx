@@ -7,10 +7,14 @@ import {
 import { useLatestRequest } from '../lib/latestRequest'
 import { displayDocumentTitle } from '../lib/meetings'
 import { Icon } from './Icon'
+import { EtatEchec } from '../design/primitives'
 import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
+import { useConfirmer } from '../design/Confirmation'
+import { phraseDErreur } from '../lib/erreurs'
 import { pluralKey } from '../lib/i18n'
 import type { Lang, Traduire } from '../lib/i18n'
+import { formaterJourHeure } from '../lib/dates'
 
 
 /** Titre lisible d'un élément de la corbeille, jamais le slug de son fichier. */
@@ -22,12 +26,9 @@ type Props = {
   onChanged?: () => void
 }
 
-function formatArchivedAt(value: string | null, t: Traduire): string {
+function formatArchivedAt(value: string | null, t: Traduire, lang: Lang): string {
   if (!value) return t('trash.archivedAtUnknown')
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value)
-  return match
-    ? `${match[3]}/${match[2]}/${match[1]} ${match[4]}:${match[5]}`
-    : value
+  return formaterJourHeure(value, lang) ?? value
 }
 
 // L'UNITÉ passe par le catalogue (« o / Ko / Mo » ou « B / KB / MB ») ; le
@@ -49,26 +50,39 @@ export function TrashPanel({
   viewScope, scopeLabel = 'la portée courante', onChanged,
 }: Props) {
   const { t, lang } = useLang()
+  const confirmer = useConfirmer()
   const [items, setItems] = useState<TrashItem[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  // `error` ne dit que l'échec d'une ACTION (restaurer, supprimer, vider) : la liste reste affichée.
   const [error, setError] = useState('')
+  // L'échec du CHARGEMENT remplace la liste : « Aucun élément archivé » ne s'affiche que quand le chargement a ABOUTI.
+  const [echecChargement, setEchecChargement] = useState(false)
+  // L'échec qui SUIT le « Réessayer » de la personne reçoit le focus (le bouton se remonte) ; un autre ne le prend pas.
+  const [apresReprise, setApresReprise] = useState(false)
   const [message, setMessage] = useState('')
   const [beginLoad, isCurrentLoad, invalidateLoad] = useLatestRequest()
 
-  const load = useCallback(async (clearError = true) => {
+  /** Recharge la corbeille ; rend le nombre d'éléments lus, ou `null` si la lecture échoue. */
+  const load = useCallback(async (clearError = true): Promise<number | null> => {
     const request = beginLoad()
     setLoading(true)
     if (clearError) setError('')
+    setEchecChargement(false)
     try {
       const result = await getTrash(viewScope)
-      if (isCurrentLoad(request)) setItems(result)
-    } catch (cause) {
-      if (isCurrentLoad(request)) setError(t('trash.error', { error: String(cause) }))
+      if (isCurrentLoad(request)) { setItems(result); setApresReprise(false) }
+      return result.length
+    } catch {
+      // Une liste périmée ne sert ni à vider ni à supprimer : elle part avec l'échec.
+      if (isCurrentLoad(request)) { setItems([]); setEchecChargement(true) }
+      return null
     } finally {
       if (isCurrentLoad(request)) setLoading(false)
     }
-  }, [beginLoad, isCurrentLoad, viewScope, t])
+  }, [beginLoad, isCurrentLoad, viewScope])
+
+  const reessayer = () => { setApresReprise(true); void load() }
 
   useEffect(() => {
     load()
@@ -91,14 +105,14 @@ export function TrashPanel({
       await load(false)
       onChanged?.()
     } catch (cause) {
-      setError(t('trash.restore.failed', { error: String(cause) }))
+      setError(phraseDErreur(t, lang, cause, t('trash.restore.failed')))
     } finally {
       setBusy(null)
     }
   }
 
   async function remove(item: TrashItem) {
-    const confirmed = window.confirm(t('trash.delete.confirm', { titre: titreDe(item) }))
+    const confirmed = await confirmer({ titre: t('trash.delete.titre', { titre: titreDe(item) }), phrase: t('trash.delete.confirm'), libelleAction: t('trash.delete.action') })
     if (!confirmed) return
     setBusy(item.name); setError(''); setMessage('')
     try {
@@ -108,7 +122,7 @@ export function TrashPanel({
       await load(false)
       onChanged?.()
     } catch (cause) {
-      setError(t('trash.delete.failed', { error: String(cause) }))
+      setError(phraseDErreur(t, lang, cause, t('trash.delete.failed')))
       await load(false)
     } finally {
       setBusy(null)
@@ -120,10 +134,13 @@ export function TrashPanel({
     const label = viewScope === 'all'
       ? t(pluralKey('trash.empty.label.all', items.length), { n: items.length })
       : t(pluralKey('trash.empty.label.project', items.length), { n: items.length, scope: scopeLabel })
-    const confirmed = window.confirm(
-      t('trash.empty.confirm', { label, size: formatSize(totalBytes, t, lang) }),
-    )
+    const confirmed = await confirmer({
+      titre: t('trash.empty.titre', { label }),
+      phrase: t('trash.empty.confirm', { size: formatSize(totalBytes, t, lang) }),
+      libelleAction: t('trash.empty.confirmAction'),
+    })
     if (!confirmed) return
+    const avant = items.length
     setBusy('__empty__'); setError(''); setMessage('')
     try {
       const result = await emptyTrash(viewScope)
@@ -133,8 +150,9 @@ export function TrashPanel({
       await load(false)
       onChanged?.()
     } catch (cause) {
-      setError(t('trash.empty.failed', { error: String(cause) }))
-      await load(false)
+      // « Nettoyage partiel » seulement si la corbeille a vraiment perdu des éléments ; sinon rien n'a été supprimé.
+      const apres = await load(false)
+      setError(phraseDErreur(t, lang, cause, t(apres !== null && apres >= avant ? 'trash.empty.failedNone' : 'trash.empty.failed')))
     } finally {
       setBusy(null)
     }
@@ -162,6 +180,7 @@ export function TrashPanel({
       {message && <p className="maintenance-message" role="status"><Icon name="check" /> {message}</p>}
 
       {loading && !items.length ? <p className="muted">{t('trash.loading')}</p>
+        : echecChargement ? <EtatEchec onRetry={reessayer} focusRetry={apresReprise}>{t('trash.loadFailed')}</EtatEchec>
         : !items.length ? (
           <p className="diagnostic-ok"><Icon name="check" /> {t('trash.none')}</p>
         ) : (
@@ -179,7 +198,7 @@ export function TrashPanel({
                   <div className="trash-item-meta">
                     <span>{item.type === 'report' ? t('common.docKind.report') : t('common.docKind.transcript')}</span>
                     <span>{libelleProjet(item.project || t('common.unclassified'), t)}</span>
-                    <span>{formatArchivedAt(item.archived_at, t)}</span>
+                    <span>{formatArchivedAt(item.archived_at, t, lang)}</span>
                     <span>{formatSize(item.size, t, lang)}</span>
                   </div>
                 </div>

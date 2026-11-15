@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { UsagePanel } from '../components/UsagePanel'
 import { LangProvider } from '../components/LangProvider'
@@ -87,13 +87,15 @@ describe('UsagePanel — états', () => {
   it('état vide quand aucune donnée', async () => {
     vi.mocked(getUsageRollup).mockResolvedValue({ group_by: 'cost_basis', scope: 'all', rows: [] })
     renderPanel()
-    expect(await screen.findByText('Aucune donnée d’usage dans cette portée.')).toBeTruthy()
+    expect(await screen.findByText('Les appels aux modèles s’afficheront ici.')).toBeTruthy()
+    expect(screen.getByText('Aucune donnée d’usage')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Usage et coût' })).toBeTruthy()
   })
 
   it('télémétrie indisponible sur échec', async () => {
     vi.mocked(getUsageRollup).mockRejectedValue(new Error('boom'))
     renderPanel()
-    expect(await screen.findByText('Télémétrie indisponible')).toBeTruthy()
+    expect(await screen.findByText('Suivi d’usage indisponible')).toBeTruthy()
   })
 })
 
@@ -129,4 +131,47 @@ describe('UsagePanel — drill-down borné', () => {
     expect(getUsageExecutionDetail).toHaveBeenCalledWith('P', 'EX1')
     expect(within(latency.closest('tr')!).getByText('extract')).toBeTruthy()
   })
+})
+
+
+it('l’écran a un seul titre de niveau 1', async () => {
+  vi.mocked(getUsageRollup).mockResolvedValue({ group_by: 'cost_basis', scope: 'all', rows: [] })
+  renderPanel()
+
+  expect(await screen.findByRole('heading', { level: 1, name: 'Usage et coût' })).toBeInTheDocument()
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+})
+
+
+it('chaque barre par jour a un nom accessible : le jour et le coût, pas seulement une info-bulle', async () => {
+  mockRollups()
+  renderPanel()
+  await screen.findAllByText('$0.0131 dérivé')
+
+  const barres = [...document.querySelectorAll('button.usage-day-bar')] as HTMLElement[]
+  expect(barres.length).toBe(2)
+  expect(barres[0]).toHaveAccessibleName('2026-08-09 · $0.0100 dérivé')
+  for (const b of barres) expect(b.getAttribute('aria-label')).toBe(b.getAttribute('title'))
+})
+
+
+it('les barres sont proportionnelles au plus gros coût réel, pas à un plancher de 1 $ ; sans coût, aucune hauteur absurde', async () => {
+  mockRollups()
+  renderPanel()
+  await screen.findAllByText('$0.0131 dérivé')
+
+  const largeurs = [...document.querySelectorAll('.usage-bar-fill')].map((x) => (x as HTMLElement).style.width)
+  expect(largeurs).toContain('100%')   // le plus gros poste remplit sa piste
+  const hauteurs = [...document.querySelectorAll('button.usage-day-bar')].map((x) => (x as HTMLElement).style.height)
+  expect(hauteurs).toContain('100%')   // le plus gros jour atteint le haut du graphique
+  expect(hauteurs).toContain('75%')    // 0.0075 / 0.010
+
+  cleanup()
+  vi.mocked(getUsageRollup).mockImplementation((_s: string, groupBy: UsageGroupBy) => Promise.resolve({ group_by: groupBy, scope: 'all', rows: [
+    row({ bucket: groupBy === 'day' ? '2026-08-09' : 'x', cost_basis: 'cloud_derived', cost: 0 })] }))
+  renderPanel()
+  await screen.findByRole('heading', { level: 1, name: 'Usage et coût' })
+  await waitFor(() => expect(document.querySelectorAll('button.usage-day-bar').length).toBeGreaterThan(0))
+  for (const x of document.querySelectorAll<HTMLElement>('button.usage-day-bar')) expect(x.style.height).not.toMatch(/NaN|Infinity/)
+  for (const x of document.querySelectorAll<HTMLElement>('.usage-bar-fill')) expect(x.style.width).not.toMatch(/NaN|Infinity/)
 })

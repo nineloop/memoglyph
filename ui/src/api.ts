@@ -1,4 +1,4 @@
-import { getLlmProvider } from './lib/llmProvider'
+import { FOURNISSEUR_LOCAL_DE_REPLI } from './lib/fournisseurs'
 import type { EtapeJob } from './lib/i18n'
 // Client API typé vers le backend FastAPI (proxifié sur /api par Vite).
 
@@ -26,6 +26,10 @@ export const porteeDocument = (projectId: string | null | undefined): string =>
 /** Ajoute la portée en query string ; une portée vide laisse le backend décider. */
 const withViewScope = (path: string, viewScope = '') =>
   path + (viewScope ? `?view_scope=${encodeURIComponent(viewScope)}` : '')
+
+export type LieuFournisseur = 'local' | 'en_ligne' | 'cloud_prive'
+export type EtatDuFournisseur = 'pret' | 'gratuit' | 'non_configure'
+export interface EtatFournisseur { lieu: LieuFournisseur; etat: EtatDuFournisseur }
 
 export interface AppConfig {
   engines: string[]
@@ -57,6 +61,8 @@ export interface AppConfig {
    */
   llm_ready?: Record<string, boolean>
   llm_models?: Record<string, string>
+  /** Où tourne chaque fournisseur et s'il est prêt, y compris ceux que `llm_providers` ne propose pas. Ni clé, ni modèle. */
+  llm_etats?: Record<string, EtatFournisseur>
   /**
    * Vocabulaire FERMÉ de sensibilité du document, du plus sensible au plus
    * ouvert. Piloté par le backend (`core/sensitivity`) : l'UI ne code aucune
@@ -286,7 +292,7 @@ export interface JobStatus {
 }
 
 async function j<T>(r: Response): Promise<T> {
-  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
+  if (!r.ok) throw new ErreurHttp(r.status, await r.text())
   return r.json() as Promise<T>
 }
 
@@ -321,10 +327,14 @@ const postJson = (url: string, corps: unknown) => fetch(url, {
 /** Message lisible d'un refus du backend (`detail` de FastAPI). */
 async function refus(r: Response): Promise<never> {
   let detail = `HTTP ${r.status}`
+  let code: string | null = null
   try {
     const corps = await r.json()
     if (typeof corps?.detail === 'string') detail = corps.detail
+    if (typeof corps?.code === 'string') code = corps.code
   } catch { /* corps non JSON : le statut suffit */ }
+  // Le code s'ajoute : le message reste la phrase du serveur (ce que lisent déjà les écrans pas encore migrés).
+  if (code) throw new ErreurAvecCode(code, detail)
   throw new Error(detail)
 }
 
@@ -385,6 +395,23 @@ export async function setCloudUltra(autorise: boolean): Promise<ReglageCloudUltr
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autorise }),
   })
   return r.ok ? (r.json() as Promise<ReglageCloudUltra>) : refus(r)
+}
+
+/** Les résultats voulus d'un traitement : ce qu'on retient comme valeurs par défaut. */
+export interface ResultatsVoulus { compte_rendu: boolean; titre_resume: boolean; locuteurs: boolean }
+/** Les réglages de traitement retenus PAR COMPTE (jamais par navigateur). */
+export interface ReglagesTraitement { fournisseur: string; langue: string; resultats: ResultatsVoulus; sensibilite?: string }
+
+export async function getReglagesTraitement(): Promise<{ reglages: ReglagesTraitement | null }> {
+  const r = await fetch('/api/compte/reglages-traitement')
+  return r.ok ? (r.json() as Promise<{ reglages: ReglagesTraitement | null }>) : refus(r)
+}
+
+export async function setReglagesTraitement(reglages: ReglagesTraitement): Promise<{ reglages: ReglagesTraitement }> {
+  const r = await fetch('/api/compte/reglages-traitement', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reglages),
+  })
+  return r.ok ? (r.json() as Promise<{ reglages: ReglagesTraitement }>) : refus(r)
 }
 
 export async function changerActivation(identifiant: string, actif: boolean): Promise<void> {
@@ -521,11 +548,11 @@ export type RagScope =
   | { mode: 'all' }
   | { mode: 'shared'; project_id?: string }
 
-export const ask = (question: string, scope: RagScope) =>
+export const ask = (question: string, scope: RagScope, fournisseur: string = FOURNISSEUR_LOCAL_DE_REPLI) =>
   fetch('/api/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, scope, llm_provider: getLlmProvider() }),
+    body: JSON.stringify({ question, scope, llm_provider: fournisseur }),
   }).then(leverModeleGratuit).then(async (r) => {
     if (r.ok) return r.json() as Promise<RagAnswer>
     // La phrase du serveur, sans l'enveloppe HTTP ; avec son code quand le serveur en donne un (un quota atteint).
@@ -792,7 +819,7 @@ export const makeReport = (name: string, viewScope: string, provider?: string) =
   fetch(withViewScope(`/api/transcript/${encodeURIComponent(name)}/report`, viewScope), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ llm_provider: provider || getLlmProvider() }),
+    body: JSON.stringify({ llm_provider: provider || FOURNISSEUR_LOCAL_DE_REPLI }),
   })
     .then(j<ReportResult>)
 
@@ -917,6 +944,31 @@ export class ErreurAvecCode extends Error {
   }
 }
 
+/**
+ * Une réponse en erreur lue par `j` : le message reste `HTTP <statut>: <corps>` (des écrans lisent le statut dans ce texte, la
+ * régénération par exemple), et le statut, le code et la phrase du serveur se lisent sans analyser ce texte. Le nom reste `Error` :
+ * `String(erreur)` ne change pas pour les écrans pas encore migrés.
+ */
+export class ErreurHttp extends Error {
+  readonly statut: number
+  readonly code: string | null
+  readonly detail: string | null
+
+  constructor(statut: number, brut: string) {
+    super(`HTTP ${statut}: ${brut}`)
+    this.statut = statut
+    let code: string | null = null
+    let detail: string | null = null
+    try {
+      const corps = JSON.parse(brut) as { detail?: unknown; code?: unknown } | null
+      if (typeof corps?.code === 'string') code = corps.code
+      if (typeof corps?.detail === 'string') detail = corps.detail
+    } catch { /* corps vide ou non JSON : ni code ni phrase */ }
+    this.code = code
+    this.detail = detail
+  }
+}
+
 /** Lève `ModeleGratuitError` si la réponse est ce refus ; tout autre statut ou corps passe à l'appelant, inchangé. */
 async function leverModeleGratuit(reponse: Response): Promise<Response> {
   if (reponse.status === 403) {
@@ -969,8 +1021,42 @@ export async function submitTranscribe(
     const corps = await reponse.clone().json().catch(() => null) as { code?: string; job_id?: string; titre?: string } | null
     if (corps?.code === 'transcribe.duplicate' && corps.job_id) throw new DoublonError(corps.job_id, corps.titre ?? '')
   }
+  // Tout autre refus AVANT le démarrage (400, 403 du nuage, 413, 422, 429...) : une erreur typée qui porte la phrase du
+  // serveur. Ni la session expirée (401) ni une panne (5xx) : celles-là gardent leur comportement d'avant.
+  if (!reponse.ok && reponse.status >= 400 && reponse.status < 500 && reponse.status !== 401) throw await refusDEnvoi(reponse)
   const { job_id } = await j<{ job_id: string }>(reponse)
   return job_id
+}
+
+/**
+ * Un envoi refusé avant que le traitement démarre. `detail` est la phrase du serveur quand le corps en porte une (une chaîne) ;
+ * `null` pour un corps vide, non JSON ou une liste de validation. Le texte interne reste `HTTP <statut>: <corps>` : l'écran ne le montre jamais.
+ */
+export class EnvoiRefuseError extends Error {
+  readonly statut: number
+  readonly detail: string | null
+  /** Le code stable du refus quand le serveur en donne un, sinon `null`. */
+  readonly code: string | null
+
+  constructor(statut: number, detail: string | null, brut: string, code: string | null = null) {
+    super(`HTTP ${statut}: ${brut}`)
+    this.name = 'EnvoiRefuseError'
+    this.statut = statut
+    this.detail = detail
+    this.code = code
+  }
+}
+
+async function refusDEnvoi(reponse: Response): Promise<EnvoiRefuseError> {
+  const brut = await reponse.text().catch(() => '')
+  let detail: string | null = null
+  let code: string | null = null
+  try {
+    const corps = JSON.parse(brut) as { detail?: unknown; code?: unknown } | null
+    if (typeof corps?.detail === 'string' && corps.detail.trim()) detail = corps.detail
+    if (typeof corps?.code === 'string') code = corps.code
+  } catch { /* corps vide ou non JSON : pas de phrase */ }
+  return new EnvoiRefuseError(reponse.status, detail, brut, code)
 }
 
 /** Pourquoi une annulation n'a pas eu lieu : le traitement a obtenu sa place entre-temps (`impossible`), ou le serveur l'a oublié. */

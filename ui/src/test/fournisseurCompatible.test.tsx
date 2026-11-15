@@ -30,21 +30,23 @@ describe('Serveur compatible OpenAI dans le sélecteur des faits', () => {
     vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx', 'compatible'], local_providers: ['mlx'],
       private_cloud_providers: ['compatible'], default_llm_provider: 'mlx' } as never)
     rendre()
-    expect(await screen.findByRole('option', { name: 'Serveur compatible OpenAI (Cloud privé)' })).toBeTruthy()
+    expect(await screen.findByRole('option', { name: 'Serveur compatible OpenAI · En ligne' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: /cloud privé|private cloud/i })).toBeNull()
   })
 
   it('sur la machine : proposé comme local, sans « cloud privé »', async () => {
     vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx', 'compatible'], local_providers: ['mlx', 'compatible'],
       private_cloud_providers: [], default_llm_provider: 'mlx' } as never)
     rendre()
-    expect(await screen.findByRole('option', { name: 'Serveur compatible OpenAI' })).toBeTruthy()
+    expect(await screen.findByRole('option', { name: 'Serveur compatible OpenAI · Local' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: /cloud privé|private cloud/i })).toBeNull()
   })
 
   it('non configuré (absent de llm_providers) : jamais proposé', async () => {
     vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx', 'mistral'], local_providers: ['mlx'],
       private_cloud_providers: [], default_llm_provider: 'mlx' } as never)
     rendre()
-    expect(await screen.findByRole('option', { name: 'MLX (local)' })).toBeTruthy()
+    expect(await screen.findByRole('option', { name: 'MLX · Local' })).toBeTruthy()
     expect(screen.queryByRole('option', { name: /compatible/i })).toBeNull()
   })
 

@@ -8,6 +8,7 @@ import { AskPanel } from '../components/AskPanel'
 import { DedupPanel } from '../components/DedupPanel'
 import { MeetingView } from '../components/MeetingView'
 import { SearchPanel } from '../components/SearchPanel'
+import { avecConfirmation, confirmer as confirmerLaFenetre } from './confirmation'
 
 /**
  * La portée d'ouverture d'un document vient du DOCUMENT, jamais du projet
@@ -94,7 +95,6 @@ it('Bibliothèque : archiver un document classé AILLEURS porte la portée du do
       documents: [{ name: 'reunion-b.md', title: 'Comité B', type: null, document_id: 'doc-b' }],
     },
   })
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
 
   render(
     <MeetingView
@@ -102,10 +102,12 @@ it('Bibliothèque : archiver un document classé AILLEURS porte la portée du do
       onBack={vi.fn()}
       onChanged={vi.fn()}
     />,
+    { wrapper: avecConfirmation },
   )
   await waitFor(() => expect(urlDe(appels, '/api/transcript/reunion-b.md')).toBeDefined())
 
   await user.click(screen.getByRole('button', { name: 'Archiver' }))
+  await confirmerLaFenetre(user)
   await waitFor(() => expect(urlDe(appels, '/api/transcript/reunion-b.md', 'DELETE')).toBeDefined())
 
   expect(urlDe(appels, '/api/transcript/reunion-b.md/archive-plan'))
@@ -177,7 +179,7 @@ it('Assistant : une source citée s’ouvre dans le projet qu’elle déclare', 
 
   render(<AskPanel viewScope={PROJET_COURANT} scopeLabel="Projet A" />)
   await user.type(
-    screen.getByPlaceholderText('Pose une question sur tes transcripts…'), 'Quelle décision ?')
+    screen.getByPlaceholderText('Poser une question sur vos transcripts…'), 'Quelle décision ?')
   await user.click(screen.getByRole('button', { name: 'Chercher dans tous mes projets' }))
   await user.click(screen.getByRole('button', { name: 'Demander' }))
 

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 
-import { creerPartage, getPartages, retirerPartage, type Partage } from '../api'
+import { creerPartage, getPartages, listerComptes, retirerPartage, type Partage } from '../api'
+import { useSession } from './AuthGate'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
 import { Icon } from './Icon'
 
 /**
@@ -22,17 +24,40 @@ export function PartageDialog({ type, cible, nom, onClose }: {
   nom: string
   onClose: () => void
 }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [partages, setPartages] = useState<Partage[] | null>(null)
   const [invite, setInvite] = useState('')
   const [erreur, setErreur] = useState('')
   const [enCours, setEnCours] = useState(false)
+  // Les comptes proposés dans le champ (le champ libre reste possible). L'administrateur lit la liste des comptes actifs, qu'il a déjà le droit
+  // de voir ; un membre n'a aucune route qui liste les comptes : on ne lui propose que ceux qu'il connaît déjà par ses partages.
+  const session = useSession()
+  const moi = session?.utilisateur?.identifiant ?? ''
+  const admin = session?.utilisateur?.admin === true
+  const idListe = useId()
+  const [comptesAdmin, setComptesAdmin] = useState<string[]>([])
+  const [comptesConnus, setComptesConnus] = useState<string[]>([])
+  useEffect(() => {
+    if (!admin) return
+    let vivant = true
+    listerComptes()
+      .then((comptes) => { if (vivant) setComptesAdmin(comptes.filter((c) => c.actif && c.identifiant !== moi).map((c) => c.identifiant)) })
+      .catch(() => { if (vivant) setComptesAdmin([]) })
+    return () => { vivant = false }
+  }, [admin, moi])
+  // Pas de proposition pour un compte avec qui cette cible est déjà partagée.
+  const dejaPartages = new Set((partages ?? []).map((p) => p.invite.toLowerCase()))
+  const suggestions = (admin ? comptesAdmin : comptesConnus).filter((c) => !dejaPartages.has(c.toLowerCase()))
 
   const charger = useCallback(() => {
     getPartages()
-      .then((tous) => setPartages(tous.donnes.filter((p) => p.type === type && p.cible === cible)))
-      .catch((e: Error) => setErreur(e.message))
-  }, [type, cible])
+      .then((tous) => {
+        setPartages(tous.donnes.filter((p) => p.type === type && p.cible === cible))
+        const connus = [...tous.donnes.map((p) => p.invite), ...tous.recus.map((p) => p.proprietaire)]
+        setComptesConnus([...new Set(connus)].filter((c) => c && c.toLowerCase() !== moi.toLowerCase()))
+      })
+      .catch((e: unknown) => setErreur(phraseDErreur(t, lang, e, t('repli.partagesCharger'))))
+  }, [type, cible, t, lang, moi])
   useEffect(() => { charger() }, [charger])
 
   // Échap ferme le dialogue où que soit le focus, comme celui des « Appareils » : un
@@ -53,7 +78,7 @@ export function PartageDialog({ type, cible, nom, onClose }: {
       setInvite('')
       charger()
     } catch (e) {
-      setErreur((e as Error).message)
+      setErreur(phraseDErreur(t, lang, e, t('repli.partageCreer')))
     } finally {
       setEnCours(false)
     }
@@ -65,7 +90,7 @@ export function PartageDialog({ type, cible, nom, onClose }: {
       await retirerPartage(partage.id)
       charger()
     } catch (e) {
-      setErreur((e as Error).message)
+      setErreur(phraseDErreur(t, lang, e, t('repli.partageRetirer')))
     }
   }
 
@@ -87,9 +112,13 @@ export function PartageDialog({ type, cible, nom, onClose }: {
           {/* Nom explicite, égal au texte visible : certains arbres d'accessibilité ne le
               tirent pas du label englobant. */}
           <input id="partage-invite" type="text" autoFocus autoComplete="off" value={invite}
-                 aria-label={t('share.field')}
+                 aria-label={t('share.field')} list={suggestions.length > 0 ? idListe : undefined}   /* lié à la liste seulement s'il y a des comptes à proposer */
                  disabled={enCours} onChange={(event) => setInvite(event.target.value)} />
         </label>
+
+        <datalist id={idListe}>
+          {suggestions.map((compte) => <option key={compte} value={compte} />)}
+        </datalist>
 
         {erreur && <p className="error" role="alert"><Icon name="error" /> {erreur}</p>}
 

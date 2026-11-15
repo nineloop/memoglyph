@@ -2,10 +2,13 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-import type { LibraryItem } from '../api'
+import type { AppConfig, LibraryItem, ListeTraitements } from '../api'
 import type { Reunion } from '../lib/meetings'
-import { archiveTranscript, getArchivePlan, getTranscript, makeReport } from '../api'
+import { archiveTranscript, getArchivePlan, getCloudUltra, getConfig, getFinopsSummary, getReglagesTraitement, getTranscript, lancerCompteRendu, makeReport } from '../api'
+import { LangProvider } from '../components/LangProvider'
 import { MeetingView } from '../components/MeetingView'
+import { TraitementsContext } from '../lib/traitementsContext'
+import { avecConfirmation, confirmer as confirmerLaFenetre, fenetreDeConfirmation, phraseDeLaFenetre, refuser } from './confirmation'
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>()
@@ -15,6 +18,11 @@ vi.mock('../api', async (importOriginal) => {
     makeReport: vi.fn(),
     archiveTranscript: vi.fn(),
     getArchivePlan: vi.fn(),
+    getConfig: vi.fn(),
+    getCloudUltra: vi.fn(),
+    getReglagesTraitement: vi.fn(),
+    getFinopsSummary: vi.fn(),
+    lancerCompteRendu: vi.fn(),
   }
 })
 
@@ -42,6 +50,14 @@ const reunion: Reunion = {
 }
 
 beforeEach(() => {
+  vi.mocked(getConfig).mockResolvedValue({
+    llm_etats: { mlx: { lieu: 'local', etat: 'pret' } }, local_providers: ['mlx'], default_llm_provider: 'mlx',
+    llm_models: { mlx: 'Qwen3-8B' },
+  } as unknown as AppConfig)
+  vi.mocked(getCloudUltra).mockResolvedValue({ autorise: false, modifie_le: null } as never)
+  vi.mocked(getReglagesTraitement).mockResolvedValue({ reglages: null })
+  vi.mocked(getFinopsSummary).mockResolvedValue({ available: false })
+  vi.mocked(lancerCompteRendu).mockResolvedValue({ job_id: 'j1' })
   vi.mocked(makeReport).mockResolvedValue({
     name: 'report-a.md', content: '# Nouveau compte-rendu', genre: 'town_hall',
   })
@@ -64,24 +80,32 @@ it('ajoute immédiatement un compte-rendu généré à la réunion ouverte', asy
   const user = userEvent.setup()
   const changed = vi.fn()
   const withoutReport = { ...reunion, comptesRendus: [], avertissements: 0 }
-  const { rerender } = render(
-    <MeetingView reunion={withoutReport} onBack={vi.fn()} onChanged={changed} />,
+  const fin: ListeTraitements = {
+    actifs: 0, en_attente: 0,
+    traitements: [{ id: 'j1', nature: 'compte-rendu', statut: 'done', en_attente: false, progression: 1, titre: 'weekly-team-sync',
+      projet_id: 'project-id', projet_nom: 'Non classé', etape: 3, etapes: 3, message_code: null, message_params: {}, debut: 0,
+      meeting: { name: 'report-a.md' }, erreur: null, erreur_code: null, erreur_params: {} } as never],
+  }
+  const rendu = (reunionCourante: Reunion, liste: ListeTraitements | null) => (
+    <TraitementsContext.Provider value={{ liste, rafraichir: vi.fn(), suivre: vi.fn() }}>
+      <MeetingView reunion={reunionCourante} onBack={vi.fn()} onChanged={changed} />
+    </TraitementsContext.Provider>
   )
+  const { rerender } = render(rendu(withoutReport, null))
   await screen.findByText('Transcript')
 
-  await user.click(screen.getByRole('button', { name: /Compte-rendu/ }))
+  // Le chemin de la personne : l'onglet Transcript, « Rédiger le compte rendu », le choix du fournisseur, le lancement.
+  await user.click(screen.getByRole('button', { name: 'Rédiger le compte rendu' }))
+  await user.click(await screen.findByRole('button', { name: 'Rédiger ce compte rendu' }))
+  expect(lancerCompteRendu).toHaveBeenCalledWith('transcript-a.md', 'project-id', 'mlx')
+  expect(makeReport).not.toHaveBeenCalled()                         // plus de route synchrone
 
-  expect(await screen.findByRole('heading', { name: 'Nouveau compte-rendu' })).toBeInTheDocument()
-  expect(changed).toHaveBeenCalledOnce()
+  // Le traitement se termine : la réunion est prévenue, une seule fois, et le nouveau compte rendu s'ajoute.
+  rerender(rendu(withoutReport, fin))
+  await waitFor(() => expect(changed).toHaveBeenCalledOnce())
 
-  rerender(
-    <MeetingView
-      reunion={{ ...withoutReport, comptesRendus: [reportA] }}
-      onBack={vi.fn()}
-      onChanged={changed}
-    />,
-  )
-  await user.click(screen.getByRole('tab', { name: /Compte-rendu 1/ }))
+  rerender(rendu({ ...withoutReport, comptesRendus: [reportA] }, fin))
+  await user.click(screen.getByRole('tab', { name: /Compte rendu 1/ }))
 
   expect(await screen.findByRole('heading', { name: 'Décisions', level: 2 })).toBeInTheDocument()
 })
@@ -96,7 +120,7 @@ it('rend le compte-rendu en Markdown et sépare les quatre espaces', async () =>
   expect(screen.getByText('Réunion plénière interne')).toBeInTheDocument()
   expect(screen.queryByText('# Synthèse')).not.toBeInTheDocument()
 
-  for (const tab of ['Compte-rendu', 'Transcript', 'Versions', 'Informations']) {
+  for (const tab of ['Compte rendu', 'Transcript', 'Versions', 'Informations']) {
     expect(screen.getByRole('tab', { name: new RegExp(tab) })).toBeInTheDocument()
   }
   expect(screen.getByLabelText('Actions de la réunion')).toBeInTheDocument()
@@ -107,7 +131,7 @@ it('distingue les versions par date et heure et ouvre le document choisi', async
   render(<MeetingView reunion={reunion} onBack={vi.fn()} />)
   await screen.findByRole('heading', { name: 'Décisions' })
 
-  const reportChoices = screen.getAllByRole('button', { name: /Afficher le compte-rendu \d du/ })
+  const reportChoices = screen.getAllByRole('button', { name: /Afficher le compte rendu \d du/ })
   expect(reportChoices).toHaveLength(2)
   expect(reportChoices[0]).not.toHaveAccessibleName(reportChoices[1].getAttribute('aria-label') || '')
 
@@ -127,7 +151,7 @@ it('rattache chaque réserve au document et à son heure exacts', async () => {
   await screen.findByRole('heading', { name: 'Décisions' })
 
   await user.click(screen.getByRole('button', { name: /1 réserve de qualité/ }))
-  expect(await screen.findByText(/Compte-rendu · 21\/07\/2026.*\d{2}:\d{2}:\d{2} · report-a\.md/)).toBeInTheDocument()
+  expect(await screen.findByText(/Compte rendu · 21\/07\/2026.*\d{2}:\d{2}:\d{2} · report-a\.md/)).toBeInTheDocument()
   expect(screen.getByText(/1 chiffre non retrouvé/)).toBeInTheDocument()
 })
 
@@ -136,17 +160,36 @@ it('permet d’archiver unitairement un compte-rendu ou un transcript', async ()
   const changed = vi.fn()
   vi.mocked(getArchivePlan).mockResolvedValue({ requested: 'report-a.md', documents: [{ name: 'report-a.md', title: 'report-a.md', type: 'report', document_id: 'doc-1' }] })
   vi.mocked(archiveTranscript).mockResolvedValue({ archived: 'report-a.md', documents: ['report-a.md'] })
-  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-  render(<MeetingView reunion={reunion} onBack={vi.fn()} onChanged={changed} />)
+  render(<MeetingView reunion={reunion} onBack={vi.fn()} onChanged={changed} />, { wrapper: avecConfirmation })
   await screen.findByRole('heading', { name: 'Décisions' })
 
-  await user.click(screen.getByRole('button', { name: 'Archiver ce compte-rendu' }))
-  expect(confirmSpy).toHaveBeenCalledOnce()
+  await user.click(screen.getByRole('button', { name: 'Archiver ce compte rendu' }))
+  expect(await fenetreDeConfirmation()).toHaveAccessibleName(/^Archiver .* « report-a\.md » \?$/)
+  expect(await phraseDeLaFenetre()).toBe('Le document sera placé dans la corbeille et pourra être supprimé dans l’onglet Maintenance.')
+  expect(archiveTranscript).not.toHaveBeenCalled()
+  await confirmerLaFenetre(user)
   expect(archiveTranscript).toHaveBeenCalledWith('report-a.md', 'project-id')
   expect(changed).toHaveBeenCalledOnce()
+})
 
-  confirmSpy.mockRestore()
+
+it('plusieurs documents archivés ensemble : leurs titres sont rendus en liste dans la fenêtre', async () => {
+  const user = userEvent.setup()
+  vi.mocked(getArchivePlan).mockResolvedValue({ requested: 'report-a.md', documents: [
+    { name: 'report-a.md', title: 'Compte rendu A', type: 'report', document_id: 'doc-1' },
+    { name: 'transcript-a.md', title: 'Transcript A', type: 'transcript', document_id: 'doc-2' },
+  ] })
+  render(<MeetingView reunion={reunion} onBack={vi.fn()} />, { wrapper: avecConfirmation })
+  await screen.findByRole('heading', { name: 'Décisions' })
+
+  await user.click(screen.getByRole('button', { name: 'Archiver ce compte rendu' }))
+  const fenetre = await fenetreDeConfirmation()
+
+  expect(await phraseDeLaFenetre()).toBe('Les documents suivants seront placés dans la corbeille :')
+  expect(within(within(fenetre).getByRole('list')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Compte rendu A', 'Transcript A'])
+  await refuser(user)
+  expect(archiveTranscript).not.toHaveBeenCalled()
 })
 
 /**
@@ -188,7 +231,7 @@ it('remonte le changement d’onglet au parent', () => {
 it('IGNORE un onglet inconnu et retombe sur le contenu disponible', () => {
   render(<MeetingView reunion={reunion} onBack={vi.fn()} initialTab="nimporte" />)
   const actif = document.querySelector('[role="tab"][aria-selected="true"]')
-  expect(actif?.textContent).toMatch(/Compte-rendu|Transcript/)
+  expect(actif?.textContent).toMatch(/Compte rendu|Transcript/)
 })
 
 /**
@@ -255,4 +298,86 @@ it('le bandeau de réserves SURVIT au mode compact', () => {
   render(<MeetingView reunion={reunion} onBack={vi.fn()} initialTab="transcript" />)
   expect(document.querySelector('.meeting-hero')).toHaveClass('compact')
   expect(screen.getByRole('button', { name: /1 réserve de qualité/ })).toBeInTheDocument()
+})
+
+
+it('en anglais, le jour de la réunion et la date de chaque version se lisent en anglais, jamais « jj/mm/aaaa » ni en français', async () => {
+  const user = userEvent.setup()
+  render(<LangProvider initiale="en"><MeetingView reunion={reunion} onBack={vi.fn()} initialTab="transcript" /></LangProvider>)
+  expect(document.querySelector('.meeting-hero-line')).toHaveTextContent('21 Jul 2026')
+
+  await user.click(screen.getByRole('tab', { name: /Versions/ }))
+  const panel = screen.getByRole('tabpanel', { name: 'Versions' })
+  expect(within(panel).getAllByText(/21 Jul 2026.*\d{2}:\d{2}:\d{2}/).length).toBeGreaterThan(0)
+  expect(panel.textContent).not.toMatch(/\d{2}\/07\/2026/)
+})
+
+
+it('l’échec d’un archivage dit la phrase du contexte : ni « HTTP », ni le texte de l’exception', async () => {
+  const user = userEvent.setup()
+  vi.mocked(getArchivePlan).mockResolvedValue({ requested: 'report-a.md', documents: [{ name: 'report-a.md', title: 'report-a.md', type: 'report', document_id: 'doc-1' }] })
+  vi.mocked(archiveTranscript).mockRejectedValue(new Error('HTTP 500: {"detail":"archivage-brut"}'))
+  render(<MeetingView reunion={reunion} onBack={vi.fn()} />, { wrapper: avecConfirmation })
+  await screen.findByRole('heading', { name: 'Décisions' })
+
+  await user.click(screen.getByRole('button', { name: 'Archiver ce compte rendu' }))
+  await confirmerLaFenetre(user)
+
+  expect(await screen.findByText('L’archivage n’a pas abouti.')).toBeInTheDocument()
+  expect(screen.getByRole('alert')).toHaveTextContent('L’archivage n’a pas abouti.')   // annoncée
+  expect(document.body.textContent).not.toMatch(/HTTP|archivage-brut/)
+})
+
+
+it('la fenêtre d’archivage nomme le document par son titre lisible, pas par le nom de son fichier', async () => {
+  const user = userEvent.setup()
+  vi.mocked(getArchivePlan).mockResolvedValue({ requested: 'report-a.md', documents: [{ name: 'report-a.md', title: 'Compte rendu du comité', type: 'report', document_id: 'doc-1' }] })
+  render(<MeetingView reunion={reunion} onBack={vi.fn()} />, { wrapper: avecConfirmation })
+  await screen.findByRole('heading', { name: 'Décisions' })
+
+  await user.click(screen.getByRole('button', { name: 'Archiver ce compte rendu' }))
+
+  expect(await fenetreDeConfirmation()).toHaveAccessibleName(/« Compte rendu du comité »/)
+  expect(await fenetreDeConfirmation()).not.toHaveAccessibleName(/report-a\.md/)
+  await refuser(user)
+})
+
+
+it('le nom du fichier n’est montré sous le titre que s’il apprend quelque chose', () => {
+  const { rerender } = render(<MeetingView reunion={{ ...reunion, titre: 'Comité budget', source: 'Comité budget.wav' }} onBack={vi.fn()} initialTab="info" />)
+  expect(document.querySelector('.meeting-hero-source')).toBeNull()   // le titre est déjà ce nom, à l'extension près
+
+  rerender(<MeetingView reunion={{ ...reunion, titre: 'Comité budget', source: 'enregistrement-0412.wav' }} onBack={vi.fn()} initialTab="info" />)
+  expect(document.querySelector('.meeting-hero-source')).toHaveTextContent('enregistrement-0412.wav')
+})
+
+
+it('les onglets de la réunion se parcourent aux flèches : la sélection et le focus suivent, un seul onglet reste dans l’ordre de tabulation', async () => {
+  const user = userEvent.setup()
+  render(<MeetingView reunion={reunion} onBack={vi.fn()} initialTab="cr" />)
+  const rendu = await screen.findByRole('tab', { name: /Compte rendu/ })
+  rendu.focus()
+
+  await user.keyboard('{ArrowRight}')
+  const transcript = screen.getByRole('tab', { name: /Transcript/ })
+  expect(transcript).toHaveAttribute('aria-selected', 'true')
+  expect(transcript).toHaveFocus()                                   // le focus suit la sélection
+  expect(rendu).toHaveAttribute('tabindex', '-1')
+  expect(transcript).toHaveAttribute('aria-controls', screen.getByRole('tabpanel', { name: 'Transcript' }).id)
+
+  await user.keyboard('{End}')
+  expect(screen.getByRole('tab', { name: /Informations/ })).toHaveFocus()
+})
+
+
+it('la carte « Usage et coût » dit qu’aucun usage n’est enregistré, au lieu de n’afficher que son titre', async () => {
+  const user = userEvent.setup()
+  render(<MeetingView reunion={reunion} onBack={vi.fn()} />)
+  await screen.findByRole('heading', { name: 'Décisions' })
+  await user.click(screen.getByRole('tab', { name: /Informations/ }))
+
+  const carte = (await screen.findByText('Usage et coût')).closest('.finops-card') as HTMLElement
+  expect(await within(carte).findAllByText('Aucun usage enregistré.')).toHaveLength(2)   // le compte rendu actif, puis la transcription
+  expect(within(carte).getByText('Compte rendu')).toBeInTheDocument()
+  expect(within(carte).getByText('Transcription')).toBeInTheDocument()
 })

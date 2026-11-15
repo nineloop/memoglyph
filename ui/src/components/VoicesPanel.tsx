@@ -4,11 +4,12 @@ import { getVoices, mergeVoices, renameVoice } from '../api'
 import { usePartage } from '../lib/partage'
 import { displayMeetingTitle } from '../lib/meetings'
 import { Icon } from './Icon'
-import { Badge } from '../design/primitives'
+import { Badge, EtatEchec } from '../design/primitives'
 import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
 import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
 import { pluralKey } from '../lib/i18n'
 import type { Traduire } from '../lib/i18n'
 
@@ -32,10 +33,15 @@ function VoiceSummary({ voice, compact = false }: { voice: Voice; compact?: bool
 }
 
 export function VoicesPanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [voices, setVoices] = useState<Voice[]>([])
   const [loading, setLoading] = useState(true)
+  // `error` ne dit que l'échec d'une ACTION (renommer, fusionner) : le registre reste affiché.
   const [error, setError] = useState('')
+  // L'échec du CHARGEMENT remplace le registre : « Aucune voix » ne s'affiche que quand le chargement a ABOUTI.
+  const [echecChargement, setEchecChargement] = useState(false)
+  // L'échec qui SUIT le « Réessayer » de la personne reçoit le focus (le bouton se remonte) ; un autre ne le prend pas.
+  const [apresReprise, setApresReprise] = useState(false)
   const [edit, setEdit] = useState<Record<number, string>>({})
   const [saving, setSaving] = useState<number | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -51,17 +57,19 @@ export function VoicesPanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
 
   const load = useCallback(async () => {
     const request = beginLoad()
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setEchecChargement(false)
     try {
       const value = await getVoices(viewScope)
-      if (isCurrentLoad(request)) setVoices(value)
-    } catch (cause) {
-      if (isCurrentLoad(request)) setError(String(cause))
+      if (isCurrentLoad(request)) { setVoices(value); setApresReprise(false) }
+    } catch {
+      // Un registre périmé ne sert ni à renommer ni à fusionner : il part avec l'échec.
+      if (isCurrentLoad(request)) { setVoices([]); setEchecChargement(true) }
     } finally {
       if (isCurrentLoad(request)) setLoading(false)
     }
   }, [beginLoad, isCurrentLoad, viewScope])
   useEffect(() => { load() }, [load])
+  const reessayer = () => { setApresReprise(true); void load() }
 
   /**
    * La voix sélectionnée, avec repli sur la première.
@@ -92,7 +100,7 @@ export function VoicesPanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
       setEdit((current) => ({ ...current, [id]: label }))
       await load()
     } catch (cause) {
-      setError(String(cause))
+      setError(phraseDErreur(t, lang, cause, t('repli.voixRenommer')))
     } finally {
       setSaving(null)
     }
@@ -118,7 +126,7 @@ export function VoicesPanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
       setMergeSourceId(null); setMergeTargetId(null)
       await load()
     } catch (cause) {
-      setError(String(cause))
+      setError(phraseDErreur(t, lang, cause, t('repli.voixFusionner')))
     } finally {
       setMerging(false)
     }
@@ -152,9 +160,11 @@ export function VoicesPanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
         </div>
       </div>
 
-      {error && <p className="error"><Icon name="error" /> {error}</p>}
+      {error && <p className="error" role="alert"><Icon name="error" /> {error}</p>}
       {loading ? (
         <p className="muted">{t('voices.loading')}</p>
+      ) : echecChargement ? (
+        <EtatEchec onRetry={reessayer} focusRetry={apresReprise}>{t('voices.loadFailed')}</EtatEchec>
       ) : voices.length === 0 ? (
         <div className="empty-state">
           <span className="empty-icon"><Icon name="volume" /></span>

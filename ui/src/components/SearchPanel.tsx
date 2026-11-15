@@ -10,11 +10,24 @@ import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
 import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
 import type { MessageKey } from '../lib/messages'
 
 // Le snippet FTS entoure les termes trouvés de STX (\u0002) / ETX (\u0003).
 // On les convertit en <mark> sans jamais injecter de HTML (XSS-safe).
-function renderSnippet(s: string): ReactNode[] {
+// Les marqueurs de citation `[source 00:01:36]` d'un compte rendu sont des repères pour le lecteur, pas du texte : l'extrait ne les montre pas.
+// L'espace qui précède le marqueur part avec lui (« budget [source 00:02:10]. » devient « budget. »).
+// La recherche peut entourer de STX/ETX un morceau du marqueur (« source », un chiffre) : le motif les accepte, et ils sont gardés (vides) pour
+// que la mise en évidence reste équilibrée.
+const SC = '[\\u0002\\u0003]*'
+const MARQUEUR_SOURCE = new RegExp(
+  `\\s*\\[${SC}source${SC}\\s+${SC}(?:none|\\d{1,2}${SC}:${SC}\\d{2}(?:${SC}:${SC}\\d{2})?)${SC}\\]`, 'g')
+function sansMarqueursSource(s: string): string {
+  return s.replace(MARQUEUR_SOURCE, (m) => m.replace(/[^\u0002\u0003]/g, ''))
+}
+
+function renderSnippet(brut: string): ReactNode[] {
+  const s = sansMarqueursSource(brut)
   const out: ReactNode[] = []
   let buf = ''
   let mark = false
@@ -74,11 +87,12 @@ export function SearchPanel({
   const [mode, setMode] = useState<SearchMode>('semantic')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  // L'erreur est gardée telle quelle et dite au rendu : la phrase suit la langue, et rien du texte brut n'est affiché.
+  const [error, setError] = useState<{ cause: unknown } | null>(null)
   const [opened, setOpened] = useState<OpenedPassage | null>(null)
   const [searchEverywhere, setSearchEverywhere] = useState(initialEverywhere)
   const [beginSearch, isCurrentSearch, invalidateSearch] = useLatestRequest()
-  const { t } = useLang()
+  const { t, lang } = useLang()
 
   /** Accorde un nombre. Le choix singulier/pluriel se fait ICI, en TypeScript :
    *  le catalogue ne porte jamais une phrase par combinaison d'état. */
@@ -119,15 +133,15 @@ export function SearchPanel({
 
   useEffect(() => {
     if (!dq.trim()) {
-      invalidateSearch(); setResults([]); setError(''); setLoading(false)
+      invalidateSearch(); setResults([]); setError(null); setLoading(false)
       return
     }
     const request = beginSearch()
-    setLoading(true); setError('')
+    setLoading(true); setError(null)
     search(dq, mode, activeScope)
       .then((value) => { if (isCurrentSearch(request)) setResults(value) })
       .catch((e) => {
-        if (isCurrentSearch(request)) { setError(String(e)); setResults([]) }
+        if (isCurrentSearch(request)) { setError({ cause: e }); setResults([]) }
       })
       .finally(() => { if (isCurrentSearch(request)) setLoading(false) })
     return () => invalidateSearch(request)
@@ -158,19 +172,23 @@ export function SearchPanel({
 
   if (opened) {
     return (
-      <TranscriptReader
-        name={opened.name}
-        documentScope={opened.scope}
-        title={opened.title}
-        initialTimestamp={opened.ts}
-        onBack={() => setOpened(null)}
-        backLabel={t('search.back')}
-      />
+      <>
+        <h1 className="sr-only">{t('app.nav.search')}</h1>
+        <TranscriptReader
+          name={opened.name}
+          documentScope={opened.scope}
+          title={opened.title}
+          initialTimestamp={opened.ts}
+          onBack={() => setOpened(null)}
+          backLabel={t('search.back')}
+        />
+      </>
     )
   }
 
   return (
     <section className="card query-card">
+      <h1 className="sr-only">{t('app.nav.search')}</h1>
       <ScopeControl
         allProjects={allProjects}
         viewScope={viewScope} onChangerPortee={onChangerPortee}
@@ -191,10 +209,10 @@ export function SearchPanel({
           premier et porte le défaut ; l'exacte reste offerte comme outil
           avancé — déterministe, explicable, et utilisable sans modèle
           d'embedding, donc c'est aussi le repli quand celui-ci est indisponible. */}
-      <div className="seg" style={{ alignSelf: 'flex-start' }}>
-        <button type="button" className={`seg-btn ${mode === 'semantic' ? 'on' : ''}`}
+      <div className="seg" role="group" aria-label={t('search.mode.aria')} style={{ alignSelf: 'flex-start' }}>
+        <button type="button" className={`seg-btn ${mode === 'semantic' ? 'on' : ''}`} aria-pressed={mode === 'semantic'}
                 onClick={() => setMode('semantic')}>{t('search.mode.smart')}</button>
-        <button type="button" className={`seg-btn seg-btn-secondary ${mode === 'fts' ? 'on' : ''}`}
+        <button type="button" className={`seg-btn seg-btn-secondary ${mode === 'fts' ? 'on' : ''}`} aria-pressed={mode === 'fts'}
                 onClick={() => setMode('fts')}>
           {t('search.mode.exact')}
           <span className="seg-btn-hint">{t('search.mode.exact.hint')}</span>
@@ -211,14 +229,13 @@ export function SearchPanel({
           <div>
             <strong>{t('search.unavailable.title')}</strong>
             <p>{t('search.unavailable.detail')}</p>
-            <p className="muted small">{t('search.unavailable.cause', { cause: error })}</p>
             <button type="button" className="btn" onClick={() => setMode('fts')}>
               {t('search.unavailable.action')}
             </button>
           </div>
         </div>
       ) : error ? (
-        <p className="error"><Icon name="error" /> {error}</p>
+        <p className="error" role="alert"><Icon name="error" /> {phraseDErreur(t, lang, error.cause, t('search.failed'))}</p>
       ) : !dq.trim() ? (
         /* Avant la première frappe, l'écran ne disait qu'une
            ligne d'aide. Il dit maintenant CE QU'IL Y A à chercher — et surtout
@@ -244,7 +261,7 @@ export function SearchPanel({
           ) : null}
         </div>
       ) : loading ? (
-        <p className="muted">{t('search.running')}</p>
+        <p className="muted" role="status">{t('search.running')}</p>
       ) : results.length === 0 ? (
         <div className="evidence-state evidence-empty">
           <Icon name="search" />
@@ -289,7 +306,6 @@ export function SearchPanel({
                             : t('search.open.aria', { titre: result.title })}
                         >
                           <span className="snippet">{renderSnippet(result.snippet)}</span>
-                          <span className="search-document">{result.name}</span>
                         </button>
                         <div className="badges">
                           {result.origine === 'compte-rendu' && (

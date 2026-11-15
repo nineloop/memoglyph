@@ -580,7 +580,9 @@ class CorpusValidationError(ValueError):
 
 
 # Ce que les générateurs accolent au titre de la réunion dans le titre d'un CR.
-_SUFFIXES_TITRE = (" — compte-rendu", " — rapport expérimental")
+# « compte-rendu » : la forme d'avant, gardée pour reconnaître les documents déjà écrits.
+_SUFFIXES_TITRE = (" — compte rendu", " — compte-rendu", " — rapport expérimental")
+_ANCIEN_SUFFIXE, _SUFFIXE_ACTUEL = " — compte-rendu", " — compte rendu"
 
 
 def _est_un_slug(titre: str, source_stem: str) -> bool:
@@ -597,11 +599,13 @@ def titre_lisible(titre: object, source: object = None, *, nom: object = None) -
     """Titre affichable d'un document : le titre saisi, sinon le nom de la source
     sans son extension, jamais le slug du fichier.
 
-    Un titre de CR (« <titre> — compte-rendu ») garde son suffixe autour de la
+    Un titre de CR (« <titre> — compte rendu ») garde son suffixe autour de la
     base rendue lisible ; `source` est alors celle du transcript dont il est
     tiré. Le Markdown n'est jamais réécrit : seul ce qui est rendu change.
     """
     texte = str(titre or "").strip()
+    if texte.endswith(_ANCIEN_SUFFIXE):      # lu au nouveau format : le `.md` garde le sien
+        texte = texte[: -len(_ANCIEN_SUFFIXE)] + _SUFFIXE_ACTUEL
     suffixe = next((s for s in _SUFFIXES_TITRE if texte.endswith(s)), "")
     base = texte[: len(texte) - len(suffixe)].strip() if suffixe else texte
     source_stem = Path(str(source)).stem.strip() if source else ""
@@ -612,20 +616,22 @@ def titre_lisible(titre: object, source: object = None, *, nom: object = None) -
 
 
 # H1 que les générateurs écrivent en tête d'un CR.
-_H1_RAPPORT = re.compile(r"^# (Compte-rendu|Report) — (.+)$")
+_H1_RAPPORT = re.compile(r"^# (Compte rendu|Compte-rendu|Report) — (.+)$")
 
 
 def h1_lisible(markdown: str, titre: object) -> str:
-    """Un CR écrit avant le titre lisible ouvre sur « # Compte-rendu — <slug> ».
-    À la LECTURE, ce premier H1 porte `titre` ; le fichier n'est pas réécrit et
-    un H1 qui n'est pas un slug (titre saisi, édition à la main) reste tel quel."""
+    """Un CR écrit avant le titre lisible ouvre sur « # Compte rendu — <slug> » (ou « Compte-rendu », avant).
+    À la LECTURE, ce premier H1 porte `titre` et l'ancien « Compte-rendu » se lit « Compte rendu » ; le fichier
+    n'est pas réécrit et le titre d'un H1 qui n'est pas un slug (titre saisi, édition à la main) reste tel quel."""
     lignes = markdown.split("\n")
     for i, ligne in enumerate(lignes):
         if not ligne.strip():
             continue
         h1 = _H1_RAPPORT.match(ligne.strip())
-        if h1 and titre and _est_un_slug(h1.group(2).strip(), ""):
-            lignes[i] = f"# {h1.group(1)} — {titre}"
+        if h1:
+            nom = "Compte rendu" if h1.group(1) == "Compte-rendu" else h1.group(1)    # lu au nouveau format
+            reste = titre if titre and _est_un_slug(h1.group(2).strip(), "") else h1.group(2)
+            lignes[i] = f"# {nom} — {reste}"
         break
     return "\n".join(lignes)
 

@@ -1,9 +1,10 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 import type { AppConfig, Partage, Project } from './api'
 import { PORTEE_PARTAGES, PORTEE_TOUS, createProject, getConfig, getPartages, getProjects, getTrash } from './api'
 import { PartageContext } from './lib/partage'
+import { LIBELLES } from './lib/fournisseurs'
 import { destinationParDefaut, ecrireDestination, ecrirePanneauReplie, lireDestination, lirePanneauReplie } from './lib/navigationEtat'
 import { PartageDialog } from './components/PartageDialog'
 import { ecrireUrl, lireUrl } from './lib/urlState'
@@ -29,9 +30,11 @@ import { useTraitements } from './lib/useTraitements'
 import { TraitementsContext } from './lib/traitementsContext'
 import { libelleProjet } from './lib/libelleProjet'
 import { useLang } from './lib/langContext'
+import { phraseDErreur } from './lib/erreurs'
 import type { MessageKey } from './lib/messages'
 import { ThemeProvider } from './design/theme'
 import { AudioProvider } from './audio/AudioProvider'
+import { ConfirmationProvider } from './design/Confirmation'
 import { MiniPlayer } from './audio/MiniPlayer'
 
 /**
@@ -48,42 +51,27 @@ type Tab =
   | 'usage' | 'dedup' | 'trash' | 'maintenance'
 
 /**
- * `section` — « Corbeille » et « Doublons » étaient enfouis dans Maintenance : deux clics en
- * desktop, trois en mobile, et rien dans le mot « Maintenance » n'annonçait qu'une corbeille
- * s'y trouvait. Or restaurer un document supprimé est un geste d'utilisateur ordinaire, pas une
- * opération technique : une section DONNÉES les sépare des outils de diagnostic.
- *
- * Le « rôle » du sélecteur de portée (destination, consultation, action) a disparu avec le
- * sélecteur : la destination se choisit dans Transcrire, la consultation dans le panneau.
+ * Le dock garde QUATRE entrées (les usages quotidiens) et « Plus », au bureau comme sur mobile.
+ * Sous « Plus » : Voix, Usage et Maintenance. Doublons et Corbeille n'ont plus d'entrée à eux : ce sont des onglets de la Maintenance
+ * (un seul chemin), qu'un membre voit avec ses deux onglets seulement. Les adresses `?vue=dedup` et `?vue=trash` restent valides.
+ * Ce qu'un compte peut atteindre ne change pas : seul l'endroit où on le cherche change.
  */
 const NAV_ITEMS: {
   id: Tab
   key: MessageKey
   icon: IconName
-  section: 'workspace' | 'data'
 }[] = [
-  { id: 'transcribe', key: 'app.nav.transcribe', icon: 'upload',
-    section: 'workspace' },
-  { id: 'library', key: 'app.nav.library', icon: 'folder',
-    section: 'workspace' },
-  { id: 'search', key: 'app.nav.search', icon: 'search',
-    section: 'workspace' },
-  { id: 'ask', key: 'app.nav.ask', icon: 'sparkles',
-    section: 'workspace' },
-  { id: 'voices', key: 'app.nav.voices', icon: 'volume',
-    section: 'workspace' },
-  { id: 'usage', key: 'app.nav.usage', icon: 'monitor',
-    section: 'data' },
-  { id: 'dedup', key: 'app.nav.dedup', icon: 'report',
-    section: 'data' },
-  { id: 'trash', key: 'app.nav.trash', icon: 'trash',
-    section: 'data' },
-  { id: 'maintenance', key: 'app.nav.maintenance', icon: 'settings',
-    section: 'data' },
+  { id: 'transcribe', key: 'app.nav.transcribe', icon: 'upload' },
+  { id: 'library', key: 'app.nav.library', icon: 'folder' },
+  { id: 'search', key: 'app.nav.search', icon: 'search' },
+  { id: 'ask', key: 'app.nav.ask', icon: 'sparkles' },
+  { id: 'voices', key: 'app.nav.voices', icon: 'volume' },
+  { id: 'usage', key: 'app.nav.usage', icon: 'monitor' },
+  { id: 'maintenance', key: 'app.nav.maintenance', icon: 'settings' },
 ]
 
-/** Les quatre entrées du dock mobile ; les autres s'ouvrent sous « Plus » (au bureau, tout reste visible). */
-const VUES_DU_DOCK_MOBILE: ReadonlySet<Tab> = new Set<Tab>(['transcribe', 'library', 'search', 'ask'])
+/** Les quatre entrées du dock ; Voix, Usage et Maintenance s'ouvrent sous « Plus ». */
+const VUES_DU_DOCK: ReadonlySet<Tab> = new Set<Tab>(['transcribe', 'library', 'search', 'ask'])
 
 /** Vues réservées au propriétaire : absentes de la lecture seule. */
 const VUES_DU_PROPRIETAIRE: ReadonlySet<Tab> = new Set<Tab>(['usage', 'dedup', 'trash', 'maintenance'])
@@ -98,9 +86,11 @@ export default function App() {
     <ThemeProvider>
       <AudioProvider>
         <LangProvider>
-          <AuthGate>
-            <AppShell />
-          </AuthGate>
+          <ConfirmationProvider>
+            <AuthGate>
+              <AppShell />
+            </AuthGate>
+          </ConfirmationProvider>
         </LangProvider>
       </AudioProvider>
     </ThemeProvider>
@@ -108,7 +98,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   // La maintenance de toute la bibliothèque est réservée aux administrateurs ;
   // le serveur la refuse aux autres. Sans session connue (backend
   // injoignable), l'onglet reste : il dira lui-même la panne.
@@ -116,8 +106,8 @@ function AppShell() {
   const estAdmin = session?.utilisateur?.admin ?? true
   const moi = session?.utilisateur?.identifiant
   const [config, setConfig] = useState<AppConfig | null>(null)
-  const [error, setError] = useState('')
-  // Distinct d'`error`, qui est rendu comme « Backend injoignable : … ».
+  const [error, setError] = useState(false)
+  // Distinct d'`error`, qui est rendu comme « Le serveur est injoignable. ».
   // Un lien périmé n'est pas une panne du serveur : le dire ainsi enverrait
   // l'utilisateur chercher un problème d'infrastructure qui n'existe pas.
   const [avisPortee, setAvisPortee] = useState('')
@@ -167,7 +157,7 @@ function AppShell() {
   const [destinationChoisie, setDestinationChoisie] = useState<string | null>(destinationMemorisee)
   // Les traitements du compte, relevés à leur rythme (3 s actif, 15 s au repos, suspendus onglet masqué).
   // Le panneau s'ouvre par `?traitements=1` : un lien ou un rechargement le retrouve.
-  const { liste: traitements, rafraichir: rafraichirTraitements } = useTraitements()
+  const { liste: traitements, etat: etatTraitements, rafraichir: rafraichirTraitements } = useTraitements()
   const [traitementsOuvert, setTraitementsOuvert] = useState(etatInitial.traitements ?? false)
   const [quickSearch, setQuickSearch] = useState(etatInitial.q ?? '')
   const [searchRequest, setSearchRequest] = useState(
@@ -197,7 +187,7 @@ function AppShell() {
       // encore reçue » et l'écriture d'URL en dépend — la remplir dès le
       // premier rendu court-circuiterait ce signal.
       setViewScope((current) => current ?? etatInitial.projet ?? porteeParDefaut(value))
-    }).catch((e) => setError(String(e)))
+    }).catch(() => setError(true))
   }, [etatInitial.projet])
 
   // « Liste reçue », et non « liste non vide » : un corpus VIDE est justement
@@ -373,7 +363,7 @@ function AppShell() {
       // l'utilisateur peut corriger le nom qu'on vient de lui refuser.
       setNouveauProjet((etat) => etat && {
         ...etat,
-        erreur: t('app.project.createFailed', { erreur: String(e) }),
+        erreur: phraseDErreur(t, lang, e, t('app.project.createFailed')),
         enCours: false,
       })
     }
@@ -384,7 +374,9 @@ function AppShell() {
   // Le dock défile horizontalement sur mobile (8 destinations) : l'espace
   // courant peut être hors écran. On l'amène en vue à chaque changement de vue,
   // pour qu'aucune destination ne devienne invisible faute d'être atteinte.
-  const entreesDuDock = NAV_ITEMS.filter((item) => (estAdmin || item.id !== 'maintenance')
+  // Sous « Plus » : un compte en lecture seule ne voit que Voix ; un membre voit aussi Usage et la Maintenance (ses onglets Doublons et Corbeille).
+  const entreesDuDock = NAV_ITEMS.filter((item) => VUES_DU_DOCK.has(item.id))
+  const entreesDePlus = NAV_ITEMS.filter((item) => !VUES_DU_DOCK.has(item.id)
     && !(lectureSeule && VUES_DU_PROPRIETAIRE.has(item.id)))
   const dockActifRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => {
@@ -430,21 +422,13 @@ function AppShell() {
     // DÉRIVÉ du registre : ce bloc nommait deux moteurs en dur, si bien que MLX
     // pouvait être servi par le backend et rester invisible dans l'en-tête.
     //
-    // Le libellé lisible est un CONFORT, pas une source de vérité : un
-    // fournisseur sans entrée dans le catalogue s'affiche sous son identifiant.
+    // Le libellé lisible vient de la table UNIQUE des fournisseurs (`lib/fournisseurs`) : un
+    // fournisseur sans entrée s'affiche sous son identifiant.
     // La liste ne peut donc jamais MASQUER un moteur, seulement le nommer moins
     // joliment — c'est le bon sens de la dégradation.
-    const joli: Record<string, string> = {
-      ollama: t('app.provider.ollamaLocal'),
-      mlx: t('app.provider.mlxLocal'),
-      mistral: t('app.provider.mistralCloud'),
-      openai: t('app.provider.openaiCloud'),
-      anthropic: t('app.provider.anthropicCloud'),
-      compatible: t('app.provider.compatible'),
-    }
     const dispo = Object.entries(config.llm_ready || {})
       .filter(([, pret]) => pret)
-      .map(([nom]) => joli[nom] || nom)
+      .map(([nom]) => (LIBELLES[nom] ? t(LIBELLES[nom]) : nom))
     return dispo.length
       ? t('app.status.llmAvailable', { fournisseurs: dispo.join(' + ') })
       : t('app.status.llmNone')
@@ -553,10 +537,20 @@ function AppShell() {
     //
     // On ne tranche donc pas. Le provisoire reste affiché, rien n'est écrit, et
     // le premier clic de l'utilisateur met fin à l'attente par `navigate`.
-    if (!attenteVue.current || !projetsRecus || scopeCountAll === undefined) return
+    //
+    // Les partages reçus se chargent à part : on les attend aussi (`recusCharges`), sinon un compte qui n'a rien à lui mais un projet partagé
+    // avec lui serait décidé trop tôt, sur Transcrire.
+    if (!attenteVue.current || !projetsRecus || scopeCountAll === undefined || !recusCharges) return
     finirAttenteVue()
+    // Un compte sans document propre, avec un projet partagé : la Bibliothèque s'ouvre sur « Partagés avec moi », seule vue utile
+    // (ni adresse ni vue mémorisée : c'est ce que dit `attenteVue`).
+    if (scopeCountAll === 0 && projetsPartages.length > 0) {
+      setTab('library')
+      setViewScope(PORTEE_PARTAGES)
+      return
+    }
     setTab(vueDeDepart(etatInitial.vue, vueMemorisee, scopeCountAll === 0))
-  }, [projetsRecus, scopeCountAll, etatInitial.vue, vueMemorisee, finirAttenteVue])
+  }, [projetsRecus, scopeCountAll, recusCharges, projetsPartages, etatInitial.vue, vueMemorisee, finirAttenteVue])
 
   /** La reprise ne vaut que pour les vues de travail — `memoriserVue` filtre. */
   useEffect(() => {
@@ -681,7 +675,7 @@ function AppShell() {
           }
         />
         {traitementsOuvert && (
-          <PanneauTraitements liste={traitements} surFermer={() => basculerTraitements(false)}
+          <PanneauTraitements liste={traitements} etat={etatTraitements} surFermer={() => basculerTraitements(false)}
                               surOuvrirReunion={ouvrirReunionDuTraitement} rafraichir={rafraichirTraitements} />
         )}
 
@@ -690,7 +684,7 @@ function AppShell() {
         {/* La Bibliothèque et ses réunions prennent toute la largeur (le transcript surtout) ; les autres écrans
             gardent la largeur pour laquelle ils sont dessinés. */}
         <main className={`app-main ${tab === 'library' ? 'app-main--bibliotheque' : ''}`}>
-        {error && <div className="error banner">{t('app.backendDown', { erreur: error })}</div>}
+        {error && <div className="error banner" role="alert">{t('app.backendDown')}</div>}
         {avisPortee && (
           <div className="warn banner" role="status">
             <Icon name="alert" /> {avisPortee}
@@ -876,30 +870,21 @@ function AppShell() {
           un seul landmark. Les intitulés de groupe restent dans le DOM pour les
           lecteurs d'écran ; le compteur de corbeille reste discret. */}
       <nav className="dock" aria-label={t('app.nav.main')}>
-        {(['workspace', 'data'] as const).map((groupe) => (
-          <Fragment key={groupe}>
-            <span className="nav-caption">
-              {t(groupe === 'workspace' ? 'app.nav.workspace' : 'app.nav.data')}
-            </span>
-            {entreesDuDock.filter((item) => item.section === groupe).map((item) => (
-              <button key={item.id} type="button"
-                      ref={tab === item.id ? dockActifRef : undefined}
-                      aria-current={tab === item.id ? 'page' : undefined}
-                      className={`dock-item ${tab === item.id ? 'on' : ''} ${VUES_DU_DOCK_MOBILE.has(item.id) ? '' : 'dock-secondaire'}`}
-                      onClick={() => navigate(item.id)}>
-                <span className="dock-glyph"><Icon name={item.icon} /></span>
-                <span className="dock-label">{t(item.key)}</span>
-                {item.id === 'trash' && trashCount > 0 && (
-                  <span className="nav-badge">{trashCount}</span>
-                )}
-              </button>
-            ))}
-          </Fragment>
+        {entreesDuDock.map((item) => (
+          <button key={item.id} type="button"
+                  ref={tab === item.id ? dockActifRef : undefined}
+                  aria-current={tab === item.id ? 'page' : undefined}
+                  className={`dock-item ${tab === item.id ? 'on' : ''}`}
+                  onClick={() => navigate(item.id)}>
+            <span className="dock-glyph"><Icon name={item.icon} /></span>
+            <span className="dock-label">{t(item.key)}</span>
+          </button>
         ))}
-        <BoutonPlus courant={tab} surChoisir={(id) => navigate(id as Tab)}
-                    entrees={entreesDuDock.filter((item) => !VUES_DU_DOCK_MOBILE.has(item.id)).map((item) => ({
+        {/* Le nombre d'éléments en corbeille se lit sur « Plus » et sur la Maintenance, où se trouve la Corbeille. */}
+        <BoutonPlus courant={tab === 'dedup' || tab === 'trash' ? 'maintenance' : tab} surChoisir={(id) => navigate(id as Tab)}
+                    entrees={entreesDePlus.map((item) => ({
                       id: item.id, label: t(item.key), icon: item.icon,
-                      badge: item.id === 'trash' ? trashCount : undefined }))} />
+                      badge: item.id === 'maintenance' ? trashCount : undefined }))} />
       </nav>
 
       <MiniPlayer />

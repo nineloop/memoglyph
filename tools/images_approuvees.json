@@ -5,75 +5,51 @@
       "chemin": "docs/assets/brand/memoglyph-partage-github.png"
     },
     {
-      "sha256": "474fc487a666ac2e142d38eee11709de1e3e5bda553b657610d81c5238a18ea9",
+      "sha256": "187f99d0602cd8d640205cb06e0d6b62f4c2824809c4de3a5ab9f588b90c84fc",
       "chemin": "docs/assets/screenshots/library-fr.png"
     },
     {
-      "sha256": "e75b0721f611384bb61cd564ded16d311cc80ed6f43d93fe71e849579f369fcc",
-      "chemin": "docs/assets/screenshots/library-fr.png"
-    },
-    {
-      "sha256": "172e286c3850bd4fc7c74ccfc309af4d993a0aa7ee312463a6c75410236564fc",
+      "sha256": "68ef3dd8cae66a563803155840c8db301c946cea8e1dc0d8f8192858f7b02b16",
       "chemin": "docs/assets/screenshots/library.png"
     },
     {
-      "sha256": "f628be1c6869e66b204a6ca9c2e735536ecdc27b150fa4d74e475ee78b0d7f2e",
-      "chemin": "docs/assets/screenshots/library.png"
-    },
-    {
-      "sha256": "b92e63df0c697b360ad85e952eed010424dac205c99fe5bcdb8b186796a27c69",
+      "sha256": "a0cdb08e9fe7427ba162e722a3fc863ad849cedd9e6cf1680e3d130b0f90cf5e",
       "chemin": "docs/assets/screenshots/meeting-transcript-fr.png"
     },
     {
-      "sha256": "c05b6802bd7f2a02e7d6f8681512170902f18d39f7fc54fc2aae68959c8886e7",
-      "chemin": "docs/assets/screenshots/meeting-transcript-fr.png"
-    },
-    {
-      "sha256": "1c165ab9aea94c5b3bc1a6b733c6f711670273f094e1ea3e5336e93ff999aefe",
+      "sha256": "02179b2a8b900d2590ff6c57a38f1e740f75908e5239aadafd42cc3bba218ccb",
       "chemin": "docs/assets/screenshots/meeting-transcript.png"
     },
     {
-      "sha256": "6a5b1a8a31434fa077608e8d49685d1b3b5c8d56bf12bf9d30744104ed792dda",
-      "chemin": "docs/assets/screenshots/meeting-transcript.png"
-    },
-    {
-      "sha256": "4e254b8b43a2f076c950cf3a1ed4366ca0c587ad4ee8eaec67f412a77ebd5993",
+      "sha256": "0caa0f898450a76d484a8695854198804cf1027aa144becc3f443e9fda41c3ec",
       "chemin": "docs/assets/screenshots/report-citations-fr.png"
     },
     {
-      "sha256": "919f0c3c211c612d6d1133ca74c762f2bdafeaba15a13aa9a9361634848fe6d9",
-      "chemin": "docs/assets/screenshots/report-citations-fr.png"
-    },
-    {
-      "sha256": "1dccb916d2a8090aa14a2a749d19555099ee3c3dba690efe1943b89435b10575",
+      "sha256": "c955949b685c1234d155ebccde0567b40febef61dd0f7e7ab68839e0e6e32e48",
       "chemin": "docs/assets/screenshots/report-citations.png"
     },
     {
-      "sha256": "b153f3f2324b4374eb8398506d93d3189f43f05ded0e128ff14b400719334122",
-      "chemin": "docs/assets/screenshots/report-citations.png"
-    },
-    {
-      "sha256": "7cc299a9affde1ae08334358b819958c0d56241d1f4d81a587b51bb11c4a5d1e",
+      "sha256": "db35fd69109d85a461eee16d85b0452fb4083b954b42b4c06b1d4eed76c2670d",
       "chemin": "docs/assets/screenshots/transcribe-fr.png"
     },
     {
-      "sha256": "c2324fda34919d90a38720b0d822086db92f40996eaadab871a5522bc1d1ec7b",
+      "sha256": "d1b0216ec241ae0f2e488951b16fe459583611040070393ff123fe34a8aecbda",
       "chemin": "docs/assets/screenshots/transcribe.png"
     },
     {
-      "sha256": "ce746c3bba77c9289ff51e44ca66b586b7df9c5bad6a6603c86371a994717b98",
+      "sha256": "84d00e119a178eebeb8c8f80732615f6d14487544f6f12f0556b9a2b22fe607e",
       "chemin": "docs/ui/screenshots/reference/desktop/dark/01-transcribe.png"
     },
     {
-      "sha256": "5ce3823c0239bfbd77597c4cd87f2fc050483fa4e3926a537779afe22142b1a6",
+      "sha256": "1a443b96517eb5a9155a745661c6e16d19bdfac35b9fb46d70ca8c8d25680e5b",
       "chemin": "docs/ui/screenshots/reference/desktop/dark/02-library.png"
     },
     {
-      "sha256": "f8960c2948b6116dab6bc1ed9df782fbfd8a01bf650fcaebcbbf8e555f94cebc",
+      "sha256": "acf7995ebba7f3b0e80bf56326cc07f2d7d8e8e8ca2e93547814b2c8b6b194ce",
       "chemin": "docs/ui/screenshots/reference/desktop/dark/03-meeting-report.png"
     },
     {
-      "sha256": "42045c91b234c9395f0d3207ab227e5da71022c91307721fc07f2060e498a12c",
+      "sha256": "3d8adbe259c03109c2bda9163b52399d3e1e3448f32de8768b4fe884781431b1",
       "chemin": "docs/ui/screenshots/reference/desktop/dark/04-transcript-player.png"
     },
     {
@@ -81,75 +57,75 @@
       "chemin": "docs/ui/screenshots/reference/desktop/light/00-connexion.png"
     },
     {
-      "sha256": "8cbbb4707522ab51fde6502402cd7aa1a0b098feb1d2ec10ed9a3db426906648",
+      "sha256": "05d3b4865b7cd3b13352935139f4c039e39c33fd5a4e5a7305e6d3b815432b9f",
       "chemin": "docs/ui/screenshots/reference/desktop/light/01-transcribe.png"
     },
     {
-      "sha256": "d1543dfe3a9759582269146bb7c5758354f468af68c793472700e5c5793e82f1",
+      "sha256": "93dadf30b189c436e6738052aacefc90d794e8cf2d7dcb9f8d4a7399c2d5a9d8",
       "chemin": "docs/ui/screenshots/reference/desktop/light/02-library.png"
     },
     {
-      "sha256": "23a906464d201f371403a67ee1285a936c6e6bc77101f7319353d147fea85663",
+      "sha256": "1037aa5fcc21a6b4c493d0273d968c41fed48ad65200a8b9372b397e8ea88557",
       "chemin": "docs/ui/screenshots/reference/desktop/light/03-meeting-report.png"
     },
     {
-      "sha256": "2460bae8f317b16ec018e40733d55629279a5553473cd2e00973a322409c2b2a",
+      "sha256": "73ab6159469059f18888d12b01316326edb328be65d9283f07ce242f0c339e5c",
       "chemin": "docs/ui/screenshots/reference/desktop/light/04-transcript-player.png"
     },
     {
-      "sha256": "e7dc956db9093cf01f3ad834448152e8f26f90257964709fba24490ca4cb3070",
+      "sha256": "f1c42d84f180be586eb75914019b25a0686f2901b4a873d1230fcd7eadbca2cd",
       "chemin": "docs/ui/screenshots/reference/desktop/light/05-search.png"
     },
     {
-      "sha256": "8084f2d2a3ba30abf3e9d4bef16846cb469f04086e4f6ad5040d61db4eb18ced",
+      "sha256": "5f92c7fbc757052b22ebf0b1c74430783bc8b638a6baf679f1fc970a96fac459",
       "chemin": "docs/ui/screenshots/reference/desktop/light/06-assistant.png"
     },
     {
-      "sha256": "84ee2db9735be381905aee4e9300fc147da6698b73f8130cdf71f8677b1456c9",
+      "sha256": "11cf5c7e56072b607192fe7dff6fcf775a579ca89f073eaff237151bed0ab659",
       "chemin": "docs/ui/screenshots/reference/desktop/light/07-voices.png"
     },
     {
-      "sha256": "30fdfd972fe3ed7b04f3d9a8b2ac001c3dbf08e71e7dbf439821c5542a994658",
+      "sha256": "2adaee7c0a39b413afa61249d890ff2ee85303b8df308b1f06e9853dfd24c19f",
       "chemin": "docs/ui/screenshots/reference/desktop/light/08-duplicates.png"
     },
     {
-      "sha256": "513bf8406cb65fde0e75fae03c371163cdd9be2f98159ee9187426fca9e6b591",
+      "sha256": "d6b558c3c149d9bf5b8376d30049655234e55d1e50b6ae520d0d9520ef06e778",
       "chemin": "docs/ui/screenshots/reference/desktop/light/09-trash.png"
     },
     {
-      "sha256": "225b9ca79b163f0f85eb74df3c6074f431fb51264dca42b0d9783e1f2e5c7ece",
+      "sha256": "2a82c779fd8fdd2a694fd0c49d567df7545ad93b2b85245580ad98f88028180f",
       "chemin": "docs/ui/screenshots/reference/desktop/light/10-maintenance.png"
     },
     {
-      "sha256": "f66b85d33cfd7075766d3e095e0683b36742a39541184d0c9944e9b00a5ddae3",
+      "sha256": "8af058e80c7208e43b4d0e1a92896b3bc39426c532210c3c7d68d30af2afc579",
       "chemin": "docs/ui/screenshots/reference/desktop/light/11-versions.png"
     },
     {
-      "sha256": "acb3442d3ce66f222cb05222ec648fd19d6e44cb188b832dc30b422028a63d21",
+      "sha256": "2d826058cb445844a49f2dae7e01a85a9ff360da638dcefc7f50a88b9d96a259",
       "chemin": "docs/ui/screenshots/reference/desktop/light/12-information.png"
     },
     {
-      "sha256": "a0eee91893ed023f300aa7bcc62e6a922816f8f1f472929cc754bfda1c9d324a",
+      "sha256": "7ceb7103c2ab87224633050c370d430fd765ef5ba05441ae31318874973b3759",
       "chemin": "docs/ui/screenshots/reference/desktop/light/13-library-empty.png"
     },
     {
-      "sha256": "5d4f0fdf109515892f0a249814e8384f59fbbdd5415217a5c15f4aaa4f09a567",
+      "sha256": "fb8cf608d6bc6fbd8317de1d446c793053c6c7f743cff60e843b3f36201bf2fb",
       "chemin": "docs/ui/screenshots/reference/desktop/light/15-share.png"
     },
     {
-      "sha256": "1e5e8c4ab94cc662c7075925b04c957e4962c459fe713d61db0851debdff9520",
-      "chemin": "docs/ui/screenshots/reference/mobile/light/00-dock.png"
-    },
-    {
-      "sha256": "ad01394ea4c43b2c23abade3148c131cb0249fa2c2e9b2874dd4c3c8a1415d04",
+      "sha256": "f560941cdf676ffb7f21322819ac907af998517af03a5639291ecb028ea66992",
       "chemin": "docs/ui/screenshots/reference/mobile/light/01-transcribe.png"
     },
     {
-      "sha256": "89f47b77f7cc5db5f2b01f05941ea4989123595431f4d7916ee078da1bba1f5b",
+      "sha256": "6773073f62d8e231251b6255db5984aca9627ee48f3fd20819496bb7cf7ed9de",
+      "chemin": "docs/ui/screenshots/reference/mobile/light/02-library.png"
+    },
+    {
+      "sha256": "33db0270ee14d84061c0187f2cc5bd80c4ba2453538372c83e5ee398756aaab5",
       "chemin": "docs/ui/screenshots/reference/mobile/light/03-meeting-report.png"
     },
     {
-      "sha256": "f44fade1bebb9922a3c9db8526b1b2b69d8535d414deec110b312111cc309222",
+      "sha256": "188dba24f48542735c857f3479a926cd6977635810cd7aaf1ac4fae3aeb3a609",
       "chemin": "docs/ui/screenshots/reference/mobile/light/04-transcript-player.png"
     },
     {

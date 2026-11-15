@@ -62,6 +62,8 @@ export function intervalleReleve(liste: ListeTraitements | null): number {
 type OptionsReleve = {
   recuperer: () => Promise<ListeTraitements>
   surListe: (liste: ListeTraitements) => void
+  /** Appelé quand un tour échoue (jamais sur un succès) ; la dernière liste reste affichée et le rythme ne change pas. */
+  surEchec?: () => void
   /** Injectable pour les tests ; le navigateur par défaut. */
   doc?: Document
 }
@@ -75,7 +77,7 @@ type OptionsReleve = {
  * - **Suspendue onglet masqué** : aucune requête ; au retour (`visibilitychange`), relève immédiate.
  * - Une erreur réseau garde la dernière liste et réessaie au rythme du repos.
  */
-export function demarrerReleve({ recuperer, surListe, doc = document }: OptionsReleve): {
+export function demarrerReleve({ recuperer, surListe, surEchec, doc = document }: OptionsReleve): {
   arreter: () => void
   rafraichir: () => void
 } {
@@ -98,6 +100,7 @@ export function demarrerReleve({ recuperer, surListe, doc = document }: OptionsR
       delai = intervalleReleve(derniere)
     } catch {
       /* la dernière liste reste affichée ; on réessaie au rythme du repos */
+      if (!arrete) surEchec?.()
     } finally {
       enCours = false
     }

@@ -1,4 +1,5 @@
 import { LienChangerPortee } from './PorteeEnLecture'
+import { Icon } from './Icon'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getUsageRollup, getUsageExecutions, getUsageExecutionDetail,
@@ -65,12 +66,13 @@ function HBars({ rows, valueOf, labelOf, onPick, t }: {
   onPick?: (r: UsageRollupRow) => void
   t: ReturnType<typeof useLang>['t']
 }) {
-  const max = Math.max(1, ...rows.map(valueOf))
+  // L'échelle est le plus gros coût RÉEL : un plancher fixe écrasait tout coût inférieur à 1 $ à presque rien.
+  const max = Math.max(0, ...rows.map(valueOf))
   return (
     <ul className="usage-bars">
       {rows.map((r, i) => {
         const v = valueOf(r)
-        const pct = Math.round((v / max) * 100)
+        const pct = max > 0 ? Math.round((v / max) * 100) : 0
         return (
           <li key={i}>
             <button type="button" className="usage-bar-row"
@@ -96,7 +98,7 @@ function DayBars({ rows, onPick, t }: {
   t: ReturnType<typeof useLang>['t']
 }) {
   const priced = rows.filter((r) => r.cost !== null)
-  const max = Math.max(1, ...priced.map((r) => r.cost as number))
+  const max = Math.max(0, ...priced.map((r) => r.cost as number))
   const days = [...new Set(rows.map((r) => r.bucket))].sort()
   return (
     <div className="usage-days">
@@ -108,9 +110,9 @@ function DayBars({ rows, onPick, t }: {
               {dayRows.map((r, i) => (
                 <button key={i} type="button"
                   className={`usage-day-bar ${basisClass(r.cost_basis)}`}
-                  title={`${day} · ${formatCost(r, t)}`}
+                  title={`${day} · ${formatCost(r, t)}`} aria-label={`${day} · ${formatCost(r, t)}`}
                   disabled={!onPick} onClick={() => onPick?.(r)}
-                  style={{ height: `${r.cost === null ? 4 : Math.max(3, Math.round(((r.cost as number) / max) * 100))}%` }} />
+                  style={{ height: `${r.cost === null || max <= 0 ? (r.cost === null ? 4 : 3) : Math.max(3, Math.round(((r.cost as number) / max) * 100))}%` }} />
               ))}
             </span>
             <span className="usage-day-label">{(day ?? '').slice(5)}</span>
@@ -169,12 +171,18 @@ export function UsagePanel({ viewScope, scopeLabel, onChangerPortee }: Props) {
   return (
     <div className="usage-panel">
       <header className="usage-head">
-        <h2>{t('usage.title')}</h2>
+        <h1>{t('usage.title')}</h1>
         <span className="usage-scope">{viewScope === 'all' ? t('usage.scope.global') : scopeLabel}</span>
         {changer}
       </header>
 
-      {isEmpty && <p className="muted usage-empty">{t('usage.empty')}</p>}
+      {isEmpty && (
+        <div className="empty-state usage-empty">
+          <span className="empty-icon"><Icon name="monitor" /></span>
+          <strong>{t('usage.empty.title')}</strong>
+          <p className="muted">{t('usage.empty')}</p>
+        </div>
+      )}
 
       {!isEmpty && (
         <>

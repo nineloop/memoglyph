@@ -80,7 +80,7 @@ it('régénérer depuis la réunion : la nouvelle version s’ajoute et devient 
   expect(screen.getByText('Nouvelle version prête.')).toBeInTheDocument()
   const lu = document.querySelector('.report-view') as HTMLElement
   expect(within(lu).getByText('Qwen3-8B')).toBeInTheDocument()     // le modèle servi, écrit dans la version lue
-  expect(screen.getAllByRole('button', { name: /Afficher le compte-rendu \d du/ })).toHaveLength(2)   // aucune version perdue
+  expect(screen.getAllByRole('button', { name: /Afficher le compte rendu \d du/ })).toHaveLength(2)   // aucune version perdue
 })
 
 it('en lecture seule (réunion partagée), aucun bouton « Régénérer »', async () => {

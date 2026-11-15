@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { LangContext, useLang } from '../lib/langContext'
 import type { LangValue } from '../lib/langContext'
@@ -18,6 +18,11 @@ export function LangProvider({ children, initiale }: { children: ReactNode; init
     setLangState(suivante)
     setLangOverride(suivante)
   }, [])
+  // La page porte la langue choisie : `lang` (lecteurs d'écran, césure, correcteur) et le titre de l'onglet.
+  useEffect(() => {
+    document.documentElement.lang = lang
+    document.title = translate(lang, 'app.title')
+  }, [lang])
   const valeur = useMemo<LangValue>(
     () => ({ lang, setLang, t: (key, params) => translate(lang, key, params) }),
     [lang, setLang],

@@ -77,3 +77,14 @@ it('un échec rétablit le niveau effectif précédent et le dit', async () => {
   await waitFor(() => expect(choix.value).toBe('ultra_confidential'))
   expect(await screen.findByText(/Sensibilité non enregistrée/)).toBeInTheDocument()
 })
+
+
+it('un échec dit la phrase du contexte : ni « HTTP », ni le texte de l’exception', async () => {
+  vi.mocked(updateSensitivity).mockRejectedValue(new Error('HTTP 500: {"detail":"refus-brut-de-la-sensibilite"}'))
+  const { user, choix } = await ouvrirInformations()
+  await waitFor(() => expect(choix.value).toBe('ultra_confidential'))
+  await user.selectOptions(choix, 'standard')
+
+  expect(await screen.findByText('Sensibilité non enregistrée.')).toBeInTheDocument()
+  expect(document.body.textContent).not.toMatch(/HTTP|refus-brut/)
+})

@@ -47,7 +47,7 @@ Légende : **✅** attendu · **❌** signal d'échec · *Auto* = aussi couvert 
 ### 0. Démarrage à FROID — premier téléchargement de modèles
 *Précondition : cache HF vide (voir ci-dessus).*
 - [ ] Lancer `./start.sh`, ouvrir l'URL affichée.
-- [ ] Importer un média court, garder Compte-rendu coché, lancer.
+- [ ] Importer un média court, garder « Compte rendu automatique » coché, lancer.
 - **✅** Une étape/état **explicite** dit qu'un modèle se **télécharge/charge**
   (texte et/ou progression), pas seulement une barre à 11 %.
 - **❌** Barre figée vers 11 %, « Transcribing with Whisper… » sans autre signal
@@ -63,8 +63,9 @@ Légende : **✅** attendu · **❌** signal d'échec · *Auto* = aussi couvert 
 
 ### 2. Importer un média
 - [ ] Déposer un audio/vidéo dans **Transcrire**.
-- **✅** Les blocs 01/02/03 apparaissent, « Lancer » est actif ; les options
-  Local/Cloud/Locuteurs/Profilage/CR sont compréhensibles.
+- **✅** Les réglages du traitement (à gauche) et le fichier source (à droite) apparaissent,
+  « Lancer la transcription » est actif ; les réglages (Local ou En ligne, langue parlée,
+  sensibilité, locuteurs, résumé et thèmes, compte rendu automatique) sont compréhensibles.
 - **❌** Rejet silencieux d'un fichier valide ; option cochable qui mène à une
   impasse. *Auto (import).*
 
@@ -105,8 +106,8 @@ Légende : **✅** attendu · **❌** signal d'échec · *Auto* = aussi couvert 
 
 ### 7. Supprimer (archiver)
 - [ ] Archiver un transcript ou un CR, confirmer.
-- **✅** L'élément part dans la **Corbeille** (item de nav propre).
-- **❌** La confirmation renvoie vers « Maintenance ». *Auto (API).*
+- **✅** L'élément part dans la **Corbeille** (onglet de la **Maintenance**, sous « Plus »).
+- **❌** La confirmation promet la récupération ailleurs que dans la Corbeille.
 
 ### 8. Restaurer
 - [ ] Restaurer depuis la Corbeille.

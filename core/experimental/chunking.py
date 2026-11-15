@@ -141,7 +141,7 @@ def verifier_citable(body: str) -> None:
     """
     if not transcript_lines(body)[0]:
         raise TranscriptNonCitable(
-            "Ce transcript n'a pas d'horodatage : un compte-rendu ne pourrait rien citer. "
+            "Ce transcript n'a pas d'horodatage : un compte rendu ne pourrait rien citer. "
             "Retranscrivez avec les horodatages activés.")
 
 

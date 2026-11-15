@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ReportResult, TranscriptDetail } from '../api'
-import { audioUrl, downloadUrl, getConfig, getTranscript, makeReport } from '../api'
-import { getLlmProvider } from '../lib/llmProvider'
+import type { TranscriptDetail } from '../api'
+import { audioUrl, downloadUrl, getTranscript } from '../api'
 import { Icon } from './Icon'
 import { MarkdownView } from './MarkdownView'
-import { ReportView } from './ReportView'
 import { useLatestRequest } from '../lib/latestRequest'
 import { decouperEnTours, locuteursDe, reperesDe } from '../lib/transcriptTurns'
 import { SpeakerDot } from '../design/primitives'
+import { etiquetteLocuteur } from '../lib/locuteurGenerique'
 import { useAudio } from '../audio/AudioProvider'
 import { Waveform } from '../audio/Waveform'
-import { useCloudUltra } from '../lib/cloudUltra'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
 import { usePartage } from '../lib/partage'
 
 type Props = { name: string
@@ -36,8 +35,10 @@ type Props = { name: string
   initialTimestamp?: string | null
   /** Une citation : se placer ET lancer la lecture (un passage de recherche se place seulement). */
   lancer?: boolean
-  /** Notifie la vue réunion afin qu'elle recharge son agrégat après création. */
-  onReportCreated?: (name: string) => void
+  /** L'action « compte rendu » de cette réunion : rédiger (aucun compte rendu) ou régénérer. Un seul chemin : le panneau de l'onglet Compte rendu. */
+  actionCompteRendu?: { libelle: string; onClick: () => void }
+  /** Dit à la vue réunion, une fois le détail chargé, si ce transcript est SANS horodatage (aucun compte rendu n'y serait citable). */
+  surHorodatage?: (sansHorodatage: boolean) => void
   /** Action d'archivage unitaire du document. */
   onArchive?: (name: string) => void
 }
@@ -57,15 +58,13 @@ function timestampSeconds(value?: string | null): number | null {
 
 export function TranscriptReader({
   name, documentScope, title, onBack, backLabel, hideBack = false,
-  embedded = false, initialTimestamp = null, lancer = false, onReportCreated, onArchive,
+  embedded = false, initialTimestamp = null, lancer = false, actionCompteRendu, surHorodatage, onArchive,
 }: Props) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   // Un compte-rendu s'écrit dans le projet du propriétaire : jamais en lecture seule.
   const { lectureSeule } = usePartage()
   const [detail, setDetail] = useState<TranscriptDetail | null>(null)
-  const [report, setReport] = useState<ReportResult | null>(null)
   const [reportTimestamp, setReportTimestamp] = useState<string | null>(null)
-  const [generating, setGenerating] = useState(false)
   // Le rail des locuteurs et des repères est replié par défaut sur petit écran (voir `.rail-contenu` dans App.css).
   const [railOuvert, setRailOuvert] = useState(false)
   const [error, setError] = useState('')
@@ -74,7 +73,7 @@ export function TranscriptReader({
   // global, mais SEULEMENT quand c'est bien ce document qui est chargé.
   const {
     track: audioTrack, currentTime: audioTime, duration: audioDuration,
-    play: audioPlay, seek: audioSeek,
+    play: audioPlay, seek: audioSeek, lectureDemandee, erreur: audioErreur,
   } = useAudio()
   const estCourant = audioTrack?.name === name
   const playhead = estCourant ? audioTime : -1
@@ -90,14 +89,10 @@ export function TranscriptReader({
   const lineRefs = useRef<(HTMLElement | null)[]>([])
   const positionedPassage = useRef('')
   const [beginDetail, isCurrentDetail, invalidateDetail] = useLatestRequest()
-  const [beginReport, isCurrentReport, invalidateReport] = useLatestRequest()
 
   useEffect(() => {
-    // `generating` était OUBLIÉ ici : changer de document pendant une
-    // génération laissait le bouton bloqué sur « Génération… » pour toujours.
-    setDetail(null); setReport(null); setReportTimestamp(null)
-    setError(''); setGenerating(false)
-    invalidateReport()
+    setDetail(null); setReportTimestamp(null)
+    setError('')
     positionedPassage.current = ''
     // Sans ce catch explicite, une erreur laissait « Chargement… » à l'écran
     // indéfiniment, sans jamais dire ce qui n'allait pas.
@@ -105,11 +100,11 @@ export function TranscriptReader({
     getTranscript(name, documentScope)
       .then((value) => { if (isCurrentDetail(request)) setDetail(value) })
       .catch((e) => {
-        if (isCurrentDetail(request)) setError(t('reader.openError', { error: String(e) }))
+        if (isCurrentDetail(request)) setError(phraseDErreur(t, lang, e, t('reader.openError')))
       })
     return () => invalidateDetail(request)
   }, [
-    beginDetail, documentScope, invalidateDetail, invalidateReport, isCurrentDetail, name, t,
+    beginDetail, documentScope, invalidateDetail, isCurrentDetail, name, t, lang,
   ])
 
   const audioOk = Boolean(detail?.has_audio)
@@ -117,44 +112,14 @@ export function TranscriptReader({
   const sansHorodatage = (detail?.meta?.pipeline as { stt?: { timestamps?: boolean } } | undefined)
     ?.stt?.timestamps === false
 
+  useEffect(() => { surHorodatage?.(detail ? sansHorodatage : false) }, [detail, sansHorodatage, surHorodatage])
+
   // Ce document devient l'objet d'écoute courant dès qu'il s'ouvre AVEC audio :
   // chargé et repositionné à la reprise, mais PAS lancé (ouvrir n'est pas
   // écouter). Le mini-lecteur global le reflète alors.
   useEffect(() => {
     if (audioOk && !estCourant) audioPlay(monTrack, { autoplay: false })
   }, [audioOk, estCourant, monTrack, audioPlay])
-
-  // Un document ultra-confidentiel ne part vers aucun fournisseur cloud, sauf si le
-  // compte l'autorise (panneau Confidentialité) : sinon son CR se génère avec le
-  // fournisseur choisi s'il est local, ou avec le local par défaut.
-  const cloudUltra = useCloudUltra()
-  // La sensibilité EFFECTIVE, celle de la réunion : un CR d'une réunion
-  // ultra-confidentielle l'est aussi, quel que soit son propre niveau stocké.
-  const ultra = (detail?.sensitivity_effective ?? detail?.meta?.sensitivity) === 'ultra_confidential' && !cloudUltra
-
-  async function fournisseurDuCR(): Promise<string | undefined> {
-    if (!ultra) return undefined
-    const config = await getConfig()
-    const choisi = getLlmProvider(config.default_llm_provider || 'mlx')
-    return (config.local_providers || ['mlx']).includes(choisi) ? choisi : (config.default_llm_provider || 'mlx')
-  }
-
-  async function generate() {
-    const request = beginReport()
-    setGenerating(true); setError('')
-    try {
-      const local = await fournisseurDuCR()
-      const value = await (local ? makeReport(name, documentScope, local) : makeReport(name, documentScope))
-      if (isCurrentReport(request)) {
-        setReport(value)
-        onReportCreated?.(value.name)
-      }
-    } catch (e) {
-      if (isCurrentReport(request)) setError(String(e))
-    } finally {
-      if (isCurrentReport(request)) setGenerating(false)
-    }
-  }
 
   // Découpe le document en lignes, en repérant celles qui portent un timestamp.
   const lines = useMemo(() => {
@@ -282,7 +247,7 @@ export function TranscriptReader({
   /** Le nom d'usage d'un locuteur, quand une empreinte vocale l'a identifié. */
   function nomAffiche(locuteur: string): string {
     const voix = detail?.voices?.[locuteur]
-    if (!voix) return locuteur
+    if (!voix) return etiquetteLocuteur(locuteur, t)
     if (voix.label) return voix.label
     // Une voix anonyme : le libellé de la langue de l'interface, au numéro du
     // « Speaker N » de ce transcript. Le numéro du registre est global : lu ici, il
@@ -300,38 +265,15 @@ export function TranscriptReader({
     ? detail.meta?.type === 'report'
     : /-cr(-\d+)?\.md$/i.test(name)
 
-  if (report) {
-    return (
-      <section className={`card transcript-reader ${embedded ? 'embedded' : ''}`}>
-        <div className="row">
-          <button className="btn" onClick={() => setReport(null)}>{t('reader.backTranscript')}</button>
-          <strong>{report.name}</strong>
-          {/* Le compte-rendu naît dans le projet de son transcript : même portée. */}
-          <a className="btn" href={downloadUrl(report.name, documentScope)}>{t('common.download')}</a>
-        </div>
-        <p className="muted small">{t('reader.savedToLibrary')}</p>
-        <ReportView
-          content={report.content}
-          genre={report.genre}
-          onTimestamp={(timestamp) => {
-            setReportTimestamp(timestamp)
-            setReport(null)
-          }}
-        />
-      </section>
-    )
-  }
-
   return (
     <section className={`card transcript-reader ${embedded ? 'embedded' : ''}`}>
       <div className="row document-toolbar">
         {!hideBack && <button className="btn" onClick={onBack}>{backLabel ?? t('reader.back')}</button>}
         <span className="document-label"><span className="action-scope">{t('common.activeDocument')}</span><strong>{name}</strong></span>
-        {!isReport && !lectureSeule && (
-          <button className="btn accent llm" onClick={generate} disabled={generating || !detail || sansHorodatage}
-                  title={sansHorodatage ? t('reader.generate.needsTimestamps')
-                    : ultra ? t('reader.generate.localOnly') : undefined}>
-            {!generating && <Icon name="report" />}{generating ? t('reader.generating') : t('reader.generate')}
+        {actionCompteRendu && !isReport && !lectureSeule && (
+          <button type="button" className="btn accent" onClick={actionCompteRendu.onClick} disabled={!detail || sansHorodatage}
+                  title={sansHorodatage ? t('reader.generate.needsTimestamps') : undefined}>
+            <Icon name="report" />{actionCompteRendu.libelle}
           </button>
         )}
         <a className="btn" href={downloadUrl(name, documentScope)}>{t('common.download')}</a>
@@ -342,12 +284,7 @@ export function TranscriptReader({
         )}
       </div>
 
-      {error && <p className="error"><Icon name="error" /> {error}</p>}
-      {generating && (
-        <p className="muted small">
-          {t('reader.generatingHint')}
-        </p>
-      )}
+      {error && <p className="error" role="alert"><Icon name="error" /> {error}</p>}
 
       {detail?.language_unstable && (
         <p className="warn small">
@@ -371,8 +308,19 @@ export function TranscriptReader({
         </div>
       )}
 
+      {detail && !audioOk && (
+        <p className="muted small player-hint"><Icon name="volume" /> {t('reader.noAudio')}</p>
+      )}
+
       {audioOk && (
         <>
+          {/* Le mini-lecteur n'apparaît qu'une fois l'écoute demandée : ce bouton la demande (reprise à la position sauvegardée).
+              Une fois l'écoute demandée, il se retire sans rendre sa place : la frise ne remonte pas. */}
+          <div className="player-ecouter" style={estCourant && (lectureDemandee || audioErreur) ? { visibility: 'hidden' } : undefined}>
+            <button type="button" className="btn sm" onClick={() => audioPlay(monTrack, { autoplay: true })}>
+              <Icon name="play" /> {t('reader.listen')}
+            </button>
+          </div>
           <Waveform
             url={audioUrl(name, documentScope)}
             actif={audioOk}

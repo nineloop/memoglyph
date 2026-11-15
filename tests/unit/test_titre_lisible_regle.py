@@ -23,7 +23,7 @@ def test_un_titre_reste_slug_devient_le_nom_de_la_source_sans_extension() -> Non
 
 
 def test_un_titre_de_compte_rendu_garde_son_suffixe_autour_de_la_base_lisible() -> None:
-    assert library.titre_lisible(f"{SLUG} — compte-rendu", SOURCE) == f"{LISIBLE} — compte-rendu"
+    assert library.titre_lisible(f"{SLUG} — compte rendu", SOURCE) == f"{LISIBLE} — compte rendu"
 
 
 @pytest.mark.parametrize("titre", ["Comité de pilotage", "Q3 — revue", "Budget"])
@@ -46,10 +46,35 @@ def test_sans_titre_ni_source_le_nom_du_fichier_reste_le_seul_repli() -> None:
 def test_le_premier_h1_slug_d_un_cr_porte_le_titre_lisible_a_la_lecture() -> None:
     corps = f"\n# Compte-rendu — {SLUG}\n\n## Décisions\n\n# Report — {SLUG}\n"
     lu = library.h1_lisible(corps, LISIBLE)
-    assert lu.splitlines()[1] == f"# Compte-rendu — {LISIBLE}"
+    assert lu.splitlines()[1] == f"# Compte rendu — {LISIBLE}"
     assert lu.splitlines()[-1] == f"# Report — {SLUG}"  # seul le premier bloc
 
 
 def test_un_h1_saisi_n_est_pas_remplace() -> None:
+    corps = "# Compte rendu — Comité de pilotage\n\nTexte."
+    assert library.h1_lisible(corps, LISIBLE) == corps
+
+
+# --- « compte rendu » sans trait d'union : les anciens documents restent reconnus -----------------------------------------
+
+@pytest.mark.parametrize("suffixe", [" — compte rendu", " — compte-rendu"], ids=["actuel", "ancien"])
+def test_les_deux_suffixes_de_titre_se_lisent_au_nouveau_format(suffixe) -> None:
+    """Les documents déjà écrits gardent leur suffixe sur le disque ; à la lecture, il s'affiche sans trait d'union."""
+    assert library.titre_lisible(f"{SLUG}{suffixe}", SOURCE) == f"{LISIBLE} — compte rendu"
+    assert library.titre_lisible(f"Comité de pilotage{suffixe}", SOURCE) == "Comité de pilotage — compte rendu"
+
+
+@pytest.mark.parametrize("nom", ["Compte rendu", "Compte-rendu"], ids=["actuel", "ancien"])
+def test_les_deux_h1_de_cr_portent_le_titre_lisible_a_la_lecture(nom) -> None:
+    lu = library.h1_lisible(f"\n# {nom} — {SLUG}\n\nTexte.", LISIBLE)
+    assert lu.splitlines()[1] == f"# Compte rendu — {LISIBLE}"
+
+
+def test_un_ancien_h1_saisi_se_lit_sans_trait_d_union_et_garde_son_titre() -> None:
     corps = "# Compte-rendu — Comité de pilotage\n\nTexte."
+    assert library.h1_lisible(corps, LISIBLE) == "# Compte rendu — Comité de pilotage\n\nTexte."
+
+
+def test_un_h1_saisi_au_nouveau_format_n_est_pas_remplace() -> None:
+    corps = "# Compte rendu — Comité de pilotage\n\nTexte."
     assert library.h1_lisible(corps, LISIBLE) == corps

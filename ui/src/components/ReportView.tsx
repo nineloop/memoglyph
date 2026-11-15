@@ -26,7 +26,7 @@ function withoutFrontmatter(content: string): string {
   return end >= 0 ? normalized.slice(end + 5).trimStart() : normalized
 }
 
-// Le générateur ouvre le compte-rendu par un H1 (« Compte-rendu — <slug> »,
+// Le générateur ouvre le compte-rendu par un H1 (« Compte rendu — <slug> », « Compte-rendu — » avant,
 // « Report — <slug> ») qui répète, en moins lisible, le titre de la réunion déjà
 // affiché dans l'en-tête. Il n'est retiré de l'AFFICHAGE que s'il est le premier
 // bloc et que du contenu le suit : un H1 plus bas reste, et le `.md` téléchargé

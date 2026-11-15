@@ -45,6 +45,19 @@ def _transcript_fingerprint(monkeypatch) -> dict:
     )
 
 
+def test_transcript_fingerprint_records_the_profiling_prompt_cache_size_when_profiled(monkeypatch) -> None:
+    _fixed_build(monkeypatch)
+    commun = dict(engine="whisper", model="mlx-community/test", language_requested=None, timestamps=True,
+                  diarized=True, input_pcm_sha256="c" * 64, **_ARTEFACTS_CONTROLES)
+    avec = provenance.transcript_fingerprint(**commun, profiled=True, profiling_prompt_cache_size=4)
+    sans_profil = provenance.transcript_fingerprint(**commun, profiled=False, profiling_prompt_cache_size=4)
+    autre_moteur = provenance.transcript_fingerprint(**commun, profiled=True)
+
+    assert avec["profiling"]["prompt_cache_size"] == 4
+    assert "prompt_cache_size" not in sans_profil["profiling"]   # pas de profilage : pas de cache à consigner
+    assert "prompt_cache_size" not in autre_moteur["profiling"]   # un autre moteur : l'empreinte reste ce qu'elle était
+
+
 def test_transcript_fingerprint_records_effective_content_settings(monkeypatch) -> None:
     fingerprint = _transcript_fingerprint(monkeypatch)
 
@@ -129,6 +142,25 @@ def test_transcript_fingerprint_rejects_unverifiable_input(monkeypatch) -> None:
             input_pcm_sha256="c" * 64,
             derived_from_document_id="not-an-ulid",
         )
+
+
+def test_le_cache_de_prompts_n_existe_que_pour_le_moteur_local() -> None:
+    from core import llm
+
+    assert llm.taille_cache_prompts("mlx") == 4
+    assert llm.taille_cache_prompts("mistral") is None
+    assert llm.taille_cache_prompts("openrouter") is None
+
+
+def test_report_fingerprint_records_the_prompt_cache_size_for_mlx_only() -> None:
+    commun = dict(source_pipeline=None, model="qwen:test", language="fr", genre="interview",
+                  num_ctx=4096, questions=["What happened?"])
+    local = provenance.report_fingerprint(**commun, prompt_cache_size=4)
+    autre = provenance.report_fingerprint(**commun)
+
+    assert local["llm"]["prompt_cache_size"] == 4
+    assert "prompt_cache_size" not in autre["llm"]   # un autre moteur : l'empreinte reste ce qu'elle était
+    assert local["fingerprint"] != autre["fingerprint"]
 
 
 def test_report_links_source_fingerprint_and_marks_legacy(monkeypatch) -> None:

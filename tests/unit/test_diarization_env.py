@@ -28,6 +28,19 @@ def test_le_token_du_env_est_charge_a_la_demande(tmp_path, monkeypatch):
         return "pipeline"
 
     monkeypatch.setattr(diarization, "_build_pipeline", faux_pipeline, raising=False)
+    # Le chargement pyannote lui-même n'est pas testé ici, et ne doit JAMAIS joindre le réseau : sans ce faux module,
+    # un venv où `pyannote.audio` est installé va jusqu'au vrai `Pipeline.from_pretrained` (garde réseau : refus).
+    import sys
+    import types
+
+    class _PipelineFactice:
+        @staticmethod
+        def from_pretrained(*args, **kwargs):
+            raise RuntimeError("arrêt volontaire du faux chargement")
+
+    faux = types.ModuleType("pyannote.audio")
+    faux.Pipeline = _PipelineFactice
+    monkeypatch.setitem(sys.modules, "pyannote.audio", faux)
     try:
         diarization.load_pipeline(None)
     except Exception:
@@ -45,3 +58,38 @@ def test_sans_token_nulle_part_l_erreur_reste_explicite(tmp_path, monkeypatch):
         diarization.load_pipeline(None)
     assert "HF_TOKEN" in str(exc.value)
     assert "huggingface.co" in str(exc.value), "le message doit pointer vers les conditions du modèle"
+
+
+def test_la_telemetrie_de_pyannote_est_coupee_aux_deux_chargements_meme_si_elle_etait_activee(monkeypatch):
+    """`pyannote.audio` envoie par défaut des statistiques d'usage à un hôte tiers : la promesse « aucune télémétrie »
+    exige que la variable soit « false » AU MOMENT où le paquet charge un modèle, même si l'utilisateur l'avait posée à « true »."""
+    import os
+    import sys
+    import types
+
+    monkeypatch.setenv("PYANNOTE_METRICS_ENABLED", "true")
+    monkeypatch.setattr(diarization, "_MODELE_EMPREINTE", None)
+    vu: dict[str, str | None] = {}
+
+    class Pipeline:
+        @staticmethod
+        def from_pretrained(*args, **kwargs):
+            vu["pipeline"] = os.environ.get("PYANNOTE_METRICS_ENABLED")
+            raise RuntimeError("arrêt volontaire du faux chargement")
+
+    class Model:
+        @staticmethod
+        def from_pretrained(*args, **kwargs):
+            vu["empreinte"] = os.environ.get("PYANNOTE_METRICS_ENABLED")
+            raise RuntimeError("arrêt volontaire du faux chargement")
+
+    faux = types.ModuleType("pyannote.audio")
+    faux.Pipeline, faux.Model, faux.Inference = Pipeline, Model, object
+    monkeypatch.setitem(sys.modules, "pyannote.audio", faux)
+
+    with pytest.raises(diarization.DiarizationError):
+        diarization.load_pipeline("jeton")
+    with pytest.raises(RuntimeError):
+        diarization._modele_empreinte("jeton")
+
+    assert vu == {"pipeline": "false", "empreinte": "false"}

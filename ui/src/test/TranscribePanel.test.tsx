@@ -6,7 +6,7 @@ import type { AppConfig } from '../api'
 import { TranscribePanel } from '../components/TranscribePanel'
 import { LangProvider, LangSelector } from '../components/LangProvider'
 import type { Lang } from '../lib/i18n'
-import { DoublonError, streamJob, submitTranscribe } from '../api'
+import { DoublonError, getReglagesTraitement, setReglagesTraitement, streamJob, submitTranscribe } from '../api'
 import { documentBody, STICK_MARGIN_PX, isAtBottom } from '../lib/transcription'
 
 
@@ -16,6 +16,8 @@ vi.mock('../api', async (importOriginal) => {
     ...actual,
     submitTranscribe: vi.fn(),
     streamJob: vi.fn(),
+    getReglagesTraitement: vi.fn(),
+    setReglagesTraitement: vi.fn(),
   }
 })
 
@@ -37,8 +39,23 @@ const config: AppConfig = {
 beforeEach(() => {
   vi.mocked(submitTranscribe).mockReset()
   vi.mocked(streamJob).mockReset()
+  // Les réglages du COMPTE (jamais le navigateur) : aucun par défaut ; un test qui en veut les pose.
+  vi.mocked(getReglagesTraitement).mockReset().mockResolvedValue({ reglages: null })
+  vi.mocked(setReglagesTraitement).mockReset()
 })
 
+/** Les réglages retenus par le compte, avec ce fournisseur. */
+const retenu = (fournisseur: string) => ({
+  reglages: { fournisseur, langue: '', resultats: { compte_rendu: true, titre_resume: true, locuteurs: false } },
+})
+
+
+/** Le sélecteur de fournisseur : « En ligne » est replié tant que le choix est local ; on l'ouvre puis on coche le fournisseur. */
+async function choisirEnLigne(user: ReturnType<typeof userEvent.setup>, nom: RegExp) {
+  const bascule = screen.getByRole('button', { name: /^En ligne/ })
+  if (bascule.getAttribute('aria-expanded') !== 'true') await user.click(bascule)
+  await user.click(screen.getByRole('radio', { name: nom }))
+}
 
 function selectFile(container: HTMLElement, file: File) {
   const input = container.querySelector('input[type="file"]') as HTMLInputElement
@@ -58,6 +75,17 @@ it('refuse immédiatement un format non supporté', () => {
 })
 
 
+it('la barre d’envoi dit quel fichier part, à côté de « Lancer la transcription »', () => {
+  const { container } = render(<TranscribePanel config={config} onCompleted={vi.fn()} />)
+
+  selectFile(container, new File(['x'], 'reunion-budget.wav', { type: 'audio/wav' }))
+
+  const barre = container.querySelector('[data-ligne="envoi"]') as HTMLElement
+  expect(within(barre).getByText('reunion-budget.wav')).toBeInTheDocument()
+  expect(within(barre).getByRole('button', { name: 'Lancer la transcription' })).toBeInTheDocument()
+})
+
+
 it('affiche la destination et désactive les enrichissements indisponibles', () => {
   const { container } = render(
     <TranscribePanel
@@ -72,8 +100,8 @@ it('affiche la destination et désactive les enrichissements indisponibles', () 
   // « Ranger dans » est visible dès l'ouverture et affiche la destination courante.
   expect(screen.getByRole('combobox', { name: /ranger dans|save to/i })).toHaveValue('Produit')
   expect(screen.getByRole('checkbox', { name: /Identifier les locuteurs/ })).toBeDisabled()
-  expect(screen.getByRole('checkbox', { name: /Profilage LLM/ })).toBeDisabled()
-  expect(screen.getByRole('checkbox', { name: /Compte-rendu automatique/ })).toBeDisabled()
+  expect(screen.getByRole('checkbox', { name: /Résumé et thèmes/ })).toBeDisabled()
+  expect(screen.getByRole('checkbox', { name: /Compte rendu automatique/ })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Lancer la transcription' })).toBeEnabled()
 })
 
@@ -110,8 +138,8 @@ it('mode local avec MLX éteint : aucune case ne reste cochée ET figée', () =>
   )
   selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-  const profil = screen.getByRole('checkbox', { name: /Profilage LLM/ })
-  const cr = screen.getByRole('checkbox', { name: /Compte-rendu automatique/ })
+  const profil = screen.getByRole('checkbox', { name: /Résumé et thèmes/ })
+  const cr = screen.getByRole('checkbox', { name: /Compte rendu automatique/ })
 
   // Le défaut exact : cochée ET désactivée. L'une ou l'autre est acceptable,
   // les deux ensemble enferment l'utilisateur dans un choix intenable.
@@ -156,19 +184,15 @@ it('nomme le modèle MLX réellement servi, pas celui d’Ollama', () => {
 })
 
 
-it('un fournisseur PÉRIMÉ dans le stockage retombe sur le défaut, et le stockage est corrigé', async () => {
-  // LE risque du retrait d'Ollama : le type de fournisseur est FERMÉ
-  // côté backend et refuse toute valeur inconnue (voir `api/main.py`,
-  // `_fournisseur_valide`).
-  // Retirer `ollama` transforme donc un choix HIER VALIDE — persisté dans le
-  // `localStorage`, il survit au déploiement — en erreur dure.
+it('un fournisseur PÉRIMÉ dans les réglages du compte retombe sur le défaut, sans rien écrire au compte', async () => {
+  // LE risque du retrait d'Ollama : le type de fournisseur est FERMÉ côté backend et refuse toute valeur
+  // inconnue (voir `api/main.py`, `_fournisseur_valide`). Un réglage retenu hier valide est périmé aujourd'hui.
   //
-  // On retombe sur le défaut annoncé par l'API, et on RÉÉCRIT le stockage :
-  // sans la réécriture, la correction serait à refaire à chaque chargement.
+  // On retombe sur le défaut annoncé par l'API : ce fournisseur-là n'est PAS envoyé. Le compte, lui, n'est pas
+  // réécrit (le serveur garde ce qui a été écrit : le réglage redevient valable si le fournisseur revient).
   //
-  // Pas d'alias `ollama → mlx` côté backend : il ferait tourner un autre moteur
-  // que celui demandé, en silence.
-  localStorage.setItem('memoglyph.llmProvider', 'ollama')
+  // Pas d'alias `ollama → mlx` côté backend : il ferait tourner un autre moteur que celui demandé, en silence.
+  vi.mocked(getReglagesTraitement).mockResolvedValue(retenu('ollama'))
   vi.mocked(submitTranscribe).mockResolvedValue('job-1')
   vi.mocked(streamJob).mockImplementation(() => vi.fn())
 
@@ -176,9 +200,7 @@ it('un fournisseur PÉRIMÉ dans le stockage retombe sur le défaut, et le stock
     <TranscribePanel config={configMlxEteint} onCompleted={vi.fn()} />,
   )
   selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
-
-  await waitFor(() =>
-    expect(localStorage.getItem('memoglyph.llmProvider')).toBe('mlx'))
+  await waitFor(() => expect(getReglagesTraitement).toHaveBeenCalled())
 
   await userEvent.setup().click(
     screen.getByRole('button', { name: 'Lancer la transcription' }))
@@ -186,20 +208,26 @@ it('un fournisseur PÉRIMÉ dans le stockage retombe sur le défaut, et le stock
   expect(vi.mocked(submitTranscribe).mock.calls[0][1]).toMatchObject({
     llm_provider: 'mlx',
   })
+  expect(setReglagesTraitement).not.toHaveBeenCalled()
 })
 
 
-it('un fournisseur ENCORE VALIDE n’est pas écrasé par le défaut', () => {
-  // Le pendant du test précédent : la correction ne doit pas confisquer un
-  // choix légitime. Mistral est au registre, il reste sélectionné.
-  localStorage.setItem('memoglyph.llmProvider', 'mistral')
+it('un fournisseur retenu ENCORE VALIDE n’est pas écrasé par le défaut, et rien n’est écrit au compte', async () => {
+  // Le pendant du test précédent : le repli ne doit pas confisquer un choix légitime.
+  // Mistral est au registre et prêt : il reste le fournisseur, le défaut (MLX) n'est pas appliqué.
+  vi.mocked(getReglagesTraitement).mockResolvedValue(retenu('mistral'))
+  vi.mocked(submitTranscribe).mockResolvedValue('job-1')
+  vi.mocked(streamJob).mockImplementation(() => vi.fn())
+  const config = { ...configMlxEteint, llm_ready: { ...configMlxEteint.llm_ready, mistral: true } }
 
-  const { container } = render(
-    <TranscribePanel config={configMlxEteint} onCompleted={vi.fn()} />,
-  )
+  const { container } = render(<TranscribePanel config={config} onCompleted={vi.fn()} />)
   selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-  expect(localStorage.getItem('memoglyph.llmProvider')).toBe('mistral')
+  await waitFor(() => expect(screen.getByRole('radio', { name: /Mistral/ })).toBeChecked())
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+  await waitFor(() => expect(submitTranscribe).toHaveBeenCalled())
+  expect(vi.mocked(submitTranscribe).mock.calls[0][1]).toMatchObject({ llm_provider: 'mistral' })
+  expect(setReglagesTraitement).not.toHaveBeenCalled()
 })
 
 
@@ -226,28 +254,20 @@ const configCloudDuo: AppConfig = {
 
 
 describe('choix du fournisseur cloud (Mistral / OpenAI)', () => {
-  // Le choix persiste dans le `localStorage` : sans remise à zéro, un test
-  // teindrait le suivant. On ne touche QUE la clé fournisseur — `setup.ts` y a
-  // posé la langue de référence, qu'un `clear()` global effacerait.
-  beforeEach(() => localStorage.removeItem('memoglyph.llmProvider'))
-
-  it('en cloud multi-fournisseur, un sélecteur SECONDAIRE Mistral / OpenAI apparaît', async () => {
+  it('plusieurs fournisseurs en ligne prêts : « En ligne » les range tous sous leur nom, repliés tant que le choix est local', async () => {
     const user = userEvent.setup()
     const { container } = render(
       <TranscribePanel config={configCloudDuo} onCompleted={vi.fn()} />,
     )
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-    // Le sélecteur n'existe qu'EN cloud : en local, aucun fournisseur à départager.
-    expect(screen.queryByText('Fournisseur cloud')).not.toBeInTheDocument()
+    // En local, aucun fournisseur en ligne à départager : la section est repliée.
+    expect(screen.queryByRole('radio', { name: /OpenAI/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByText('Traitement cloud').closest('button')!)
-    // « Mistral » apparaît AUSSI dans le détail de la tuile cloud (Voxtral +
-    // Mistral Chat) : on borne la recherche au sélecteur pour ne mesurer QUE
-    // les tuiles de fournisseur.
-    const selecteur = screen.getByText('Fournisseur cloud').closest('.cloud-provider-select') as HTMLElement
-    expect(within(selecteur).getByRole('button', { name: /Mistral/ })).toBeInTheDocument()
-    expect(within(selecteur).getByRole('button', { name: /OpenAI/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^En ligne/ }))
+    const selecteur = screen.getByRole('group', { name: 'Où traiter' })
+    expect(within(selecteur).getByRole('radio', { name: /Mistral/ })).toBeInTheDocument()
+    expect(within(selecteur).getByRole('radio', { name: /OpenAI/ })).toBeInTheDocument()
   })
 
   it('choisir OpenAI règle le RAPPORT sans activer un STT OpenAI : whisper reste', async () => {
@@ -259,8 +279,7 @@ describe('choix du fournisseur cloud (Mistral / OpenAI)', () => {
     )
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-    await user.click(screen.getByText('Traitement cloud').closest('button')!)
-    await user.click(screen.getByRole('button', { name: /OpenAI/ }))
+    await choisirEnLigne(user, /OpenAI/)
     await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
 
     await waitFor(() => expect(submitTranscribe).toHaveBeenCalled())
@@ -269,7 +288,8 @@ describe('choix du fournisseur cloud (Mistral / OpenAI)', () => {
     expect(vi.mocked(submitTranscribe).mock.calls[0][1]).toMatchObject({
       engine: 'whisper', llm_provider: 'openai',
     })
-    expect(localStorage.getItem('memoglyph.llmProvider')).toBe('openai')
+    // Choisir un fournisseur pour CET envoi n'écrit rien au compte : seul « Retenir » le fait.
+    expect(setReglagesTraitement).not.toHaveBeenCalled()
   })
 
   it('Anthropic est proposé comme les autres : CR et Assistant par Claude, whisper reste', async () => {
@@ -285,25 +305,26 @@ describe('choix du fournisseur cloud (Mistral / OpenAI)', () => {
     const { container } = render(<TranscribePanel config={configTrio} onCompleted={vi.fn()} />)
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-    await user.click(screen.getByText('Traitement cloud').closest('button')!)
-    const selecteur = screen.getByText('Fournisseur cloud').closest('.cloud-provider-select') as HTMLElement
-    const tuile = within(selecteur).getByRole('button', { name: /Anthropic \(Claude\)/ })
-    expect(within(tuile).getByText('claude-haiku-5-5')).toBeInTheDocument()
-    await user.click(tuile)
+    await user.click(screen.getByRole('button', { name: /^En ligne/ }))
+    // Son modèle est dit à côté de son nom, dans la même ligne du sélecteur.
+    expect(screen.getByRole('radio', { name: /Anthropic Claude/ })).toHaveAccessibleName(/claude-haiku-5-5/)
+    await choisirEnLigne(user, /Anthropic Claude/)
     await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
 
     await waitFor(() => expect(submitTranscribe).toHaveBeenCalled())
     expect(vi.mocked(submitTranscribe).mock.calls[0][1]).toMatchObject({
       engine: 'whisper', llm_provider: 'anthropic',
     })
-    // L'Assistant lit ce même choix (`getLlmProvider`).
-    expect(localStorage.getItem('memoglyph.llmProvider')).toBe('anthropic')
+    // Choisir un fournisseur pour CET envoi n'écrit rien au compte : seul « Retenir » le fait.
+    expect(setReglagesTraitement).not.toHaveBeenCalled()
   })
 
-  it('clé OpenAI absente : l’enrichissement nomme CE fournisseur, pas un repli', () => {
-    // Fournisseur ENREGISTRÉ mais NON prêt : il reste sélectionné (le registre le
-    // connaît), et le manque se dit avec SON nom — ni « Mistral », ni « local ».
-    localStorage.setItem('memoglyph.llmProvider', 'openai')
+  it('clé OpenAI absente : le manque se dit avec SON nom, et le repli est Local, pas un autre fournisseur', async () => {
+    // Un fournisseur retenu par le compte mais NON prêt n'est plus « sélectionné » : l'envoi part en Local, et l'écran le dit en
+    // une ligne, avec le nom du fournisseur — ni « Mistral », ni repli silencieux.
+    vi.mocked(getReglagesTraitement).mockResolvedValue(retenu('openai'))
+    vi.mocked(submitTranscribe).mockResolvedValue('job-1')
+    vi.mocked(streamJob).mockImplementation(() => vi.fn())
     const { container } = render(
       <TranscribePanel
         config={{ ...configCloudDuo, llm_ready: { mlx: true, mistral: true, openai: false } }}
@@ -312,12 +333,14 @@ describe('choix du fournisseur cloud (Mistral / OpenAI)', () => {
     )
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-    expect(
-      screen.getAllByText('OpenAI — clé API absente du .env').length,
-    ).toBeGreaterThan(0)
+    expect(await screen.findByText(
+      'OpenAI, retenu pour votre compte, n’est pas configuré : le traitement se fera en Local.')).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Lancer la transcription' }))
+    await waitFor(() => expect(submitTranscribe).toHaveBeenCalled())
+    expect(vi.mocked(submitTranscribe).mock.calls[0][1]).toMatchObject({ llm_provider: 'mlx', engine: 'whisper' })
   })
 
-  it('un seul fournisseur cloud prêt : aucun sélecteur imposé', async () => {
+  it('un seul fournisseur en ligne prêt : l\'autre est dit « Non configuré », sans case à cocher', async () => {
     const user = userEvent.setup()
     const { container } = render(
       <TranscribePanel
@@ -326,35 +349,36 @@ describe('choix du fournisseur cloud (Mistral / OpenAI)', () => {
       />,
     )
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
-    await user.click(screen.getByText('Traitement cloud').closest('button')!)
+    await user.click(screen.getByRole('button', { name: /^En ligne/ }))
 
-    // Mistral seul prêt : pas de tuiles jumelles de poids égal à départager.
-    expect(screen.queryByText('Fournisseur cloud')).not.toBeInTheDocument()
+    // Mistral seul prêt : OpenAI s'affiche en grisé, et ne se coche pas (jamais un repli silencieux sur un autre).
+    expect(screen.getByRole('radio', { name: /Mistral/ })).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /OpenAI/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Non configuré')).toBeInTheDocument()
   })
 })
 
 
-describe('mode cloud retrouvé au rechargement', () => {
-  // Mistral mémorisé par une session précédente : la tuile cloud s'allume au
+describe('mode cloud retrouvé à l’ouverture', () => {
+  // Mistral retenu par le compte : la tuile cloud s'allume au
   // chargement, sans clic. Le moteur STT doit suivre, sinon l'écran annonce
   // Voxtral pendant que l'audio part vers whisper local.
   const configVoxtral: AppConfig = {
     ...configCloudDuo,
     engines: ['whisper', 'mistral'],
   }
-  beforeEach(() => localStorage.removeItem('memoglyph.llmProvider'))
 
-  it('Mistral mémorisé : la transcription part vers Voxtral sans nouveau clic', async () => {
+  it('Mistral retenu par le compte : la transcription part vers Voxtral sans nouveau clic', async () => {
     const user = userEvent.setup()
     vi.mocked(submitTranscribe).mockResolvedValue('job-1')
     vi.mocked(streamJob).mockImplementation(() => vi.fn())
-    localStorage.setItem('memoglyph.llmProvider', 'mistral')
+    vi.mocked(getReglagesTraitement).mockResolvedValue(retenu('mistral'))
     const { container } = render(
       <TranscribePanel config={configVoxtral} onCompleted={vi.fn()} />,
     )
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
 
-    expect(screen.getByText('Traitement cloud').closest('button')).toHaveClass('on')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Mistral/ })).toBeChecked())
     await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
 
     await waitFor(() => expect(submitTranscribe).toHaveBeenCalled())
@@ -363,15 +387,16 @@ describe('mode cloud retrouvé au rechargement', () => {
     })
   })
 
-  it('OpenAI mémorisé : whisper reste, OpenAI n’a pas de STT', async () => {
+  it('OpenAI retenu par le compte : whisper reste, OpenAI n’a pas de STT', async () => {
     const user = userEvent.setup()
     vi.mocked(submitTranscribe).mockResolvedValue('job-1')
     vi.mocked(streamJob).mockImplementation(() => vi.fn())
-    localStorage.setItem('memoglyph.llmProvider', 'openai')
+    vi.mocked(getReglagesTraitement).mockResolvedValue(retenu('openai'))
     const { container } = render(
       <TranscribePanel config={configVoxtral} onCompleted={vi.fn()} />,
     )
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
+    await waitFor(() => expect(screen.getByRole('radio', { name: /OpenAI/ })).toBeChecked())
     await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
 
     await waitFor(() => expect(submitTranscribe).toHaveBeenCalled())
@@ -380,15 +405,16 @@ describe('mode cloud retrouvé au rechargement', () => {
     })
   })
 
-  it('Mistral mémorisé sans moteur Voxtral déclaré : whisper, pas un moteur absent', async () => {
+  it('Mistral retenu par le compte sans moteur Voxtral déclaré : whisper, pas un moteur absent', async () => {
     const user = userEvent.setup()
     vi.mocked(submitTranscribe).mockResolvedValue('job-1')
     vi.mocked(streamJob).mockImplementation(() => vi.fn())
-    localStorage.setItem('memoglyph.llmProvider', 'mistral')
+    vi.mocked(getReglagesTraitement).mockResolvedValue(retenu('mistral'))
     const { container } = render(
       <TranscribePanel config={configCloudDuo} onCompleted={vi.fn()} />,
     )
     selectFile(container, new File(['audio'], 'sample.mp3', { type: 'audio/mpeg' }))
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Mistral/ })).toBeChecked())
     await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
 
     await waitFor(() => expect(submitTranscribe).toHaveBeenCalled())
@@ -457,7 +483,7 @@ it('soumet les choix puis affiche la progression et le résultat', async () => {
     code: 'step.diarization', params: {}, message: 'Identifying speakers…',
   }))
   expect(screen.getByLabelText('Progression 30 %')).toBeInTheDocument()
-  expect(screen.getByText('Diarisation (qui parle)…')).toBeInTheDocument()
+  expect(screen.getByText('Reconnaissance des locuteurs…')).toBeInTheDocument()
   expect(screen.getByText('Transcription').closest('li')).toHaveClass('current')
 
   act(() => jobHandlers?.onPartial?.('Bonjour à tous.'))
@@ -469,7 +495,7 @@ it('soumet les choix puis affiche la progression et le résultat', async () => {
   }))
   expect(completed).toHaveBeenCalledOnce()
   expect(screen.getByText('result.md')).toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: 'Résultat', level: 1 })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Résultat', level: 2 })).toBeInTheDocument()
   expect(screen.queryByText('id: abc')).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Télécharger' })).toHaveAttribute(
     'href',
@@ -592,19 +618,19 @@ const LIBELLES: Record<Lang, {
 }> = {
   fr: {
     lancer: 'Lancer la transcription',
-    profilage: /Profilage LLM/,
+    profilage: /Résumé et thèmes/,
     locuteurs: /Identifier les locuteurs/,
     langueParlee: 'Langue parlée',
-    empreintesLocales: /Voxtral \(cloud\)[^.]*EN LOCAL/i,
-    sansEmpreintes: /sans HF_TOKEN, pas d’empreintes, donc pas de rapprochement/i,
+    empreintesLocales: /Voxtral \(cloud\)[^.]*calculés en local/i,
+    sansEmpreintes: /Sans jeton Hugging Face, pas de profils de voix : les réunions ne sont pas rapprochées/i,
   },
   en: {
     lancer: 'Start the transcription',
-    profilage: /LLM profiling/,
+    profilage: /Summary and themes/,
     locuteurs: /Identify the speakers/,
     langueParlee: 'Spoken language',
-    empreintesLocales: /Voxtral \(cloud\)[^.]*LOCALLY/i,
-    sansEmpreintes: /without HF_TOKEN, no fingerprints, so no matching across meetings/i,
+    empreintesLocales: /Voxtral \(cloud\)[^.]*computed locally/i,
+    sansEmpreintes: /Without a Hugging Face token there are no voice profiles: meetings are not matched/i,
   },
 }
 
@@ -636,6 +662,10 @@ describe.each(LANGUES)('libellés fidèles au mode choisi (%s)', (lang) => {
 
     expect(screen.getByText('mistral-chat-test')).toBeTruthy()
     expect(screen.queryByText('qwen-test')).toBeNull()
+    // Le détail de l'étape « Analyse » de la frise nomme le modèle du fournisseur choisi, et jamais celui d'Ollama.
+    const analyse = lang === 'fr' ? 'Résumé et profils via mistral-chat-test' : 'Summary and profiles via mistral-chat-test'
+    expect(screen.getByText(analyse)).toBeTruthy()
+    expect(screen.queryByText(/via qwen-test/)).toBeNull()
   })
 
   it('dit que les empreintes sont calculées en LOCAL même en mode cloud', () => {
@@ -764,11 +794,11 @@ it('suit un changement de langue EN COURS de traitement', async () => {
   act(() => jobHandlers?.onProgress?.(0.5, 'Profiling with qwen…', {
     code: 'step.profiling', params: { model: 'qwen' }, message: 'Profiling with qwen…',
   }))
-  expect(screen.getByText('Profilage avec qwen…')).toBeInTheDocument()
+  expect(screen.getByText('Analyse avec qwen…')).toBeInTheDocument()
 
   fireEvent.change(screen.getByLabelText('Langue de l’interface'), { target: { value: 'en' } })
-  expect(screen.getByText('Profiling with qwen…')).toBeInTheDocument()
-  expect(screen.queryByText('Profilage avec qwen…')).not.toBeInTheDocument()
+  expect(screen.getByText('Analyzing with qwen…')).toBeInTheDocument()
+  expect(screen.queryByText('Analyse avec qwen…')).not.toBeInTheDocument()
 })
 
 
@@ -1080,8 +1110,9 @@ it('un envoi qui ÉCHOUE ne vide pas le choix : le fichier reste, rien n’est c
 
     await user.click(screen.getByRole('button', { name: 'Lancer la transcription' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 500')
-    expect(screen.getByText('premier.mp3')).toBeInTheDocument()                       // le fichier est toujours là
+    expect(await screen.findByRole('alert')).toHaveTextContent('L’envoi n’a pas pu aboutir. Réessayez dans un moment.')
+    expect(document.body.textContent).not.toMatch(/HTTP|boum/)
+    expect(screen.getAllByText('premier.mp3')[0]).toBeInTheDocument()                       // le fichier est toujours là
     expect(screen.getByRole('button', { name: 'Lancer la transcription' })).toBeEnabled()   // on peut réessayer
     expect(screen.queryByRole('status', { name: 'Envoi accepté' })).not.toBeInTheDocument()
     expect(ouvrir).not.toHaveBeenCalled()
@@ -1124,7 +1155,7 @@ describe('un fichier déjà en cours de traitement', () => {
       expect(alerte).toHaveTextContent('Ce fichier est déjà en cours de traitement.')
       expect(alerte).toHaveTextContent('Point prix')                              // le traitement existant
       expect(alerte).not.toHaveTextContent(/HTTP|409|duplicate/)                  // ni code ni texte brut
-      expect(screen.getByText('visio.mp3')).toBeInTheDocument()                    // le choix n'est pas vidé
+      expect(screen.getAllByText('visio.mp3')[0]).toBeInTheDocument()                    // le choix n'est pas vidé
       expect(screen.queryByRole('status', { name: 'Envoi accepté' })).not.toBeInTheDocument()
 
       await user.click(within(alerte).getByRole('button', { name: 'Suivre' }))
@@ -1163,7 +1194,7 @@ describe('le suivi du traitement lancé', () => {
   it('« Retirer ce fichier » (un second fichier choisi) ne coupe NI le suivi du premier traitement NI la confirmation', async () => {
     const { user, arreter, container } = await envoyerUnFichier()
     selectFile(container, new File(['audio'], 'second.mp3', { type: 'audio/mpeg' }))
-    expect(screen.getByText('second.mp3')).toBeInTheDocument()
+    expect(screen.getAllByText('second.mp3')[0]).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Retirer ce fichier' }))
 

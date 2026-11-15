@@ -170,7 +170,7 @@ média → media.to_wav16k (WAV 16k mono, transitoire)
       → diarisation pyannote (audio ENTIER : cohérence globale des locuteurs)
       → merge (SPEAKER_00 → « Speaker 1 », ordre d'apparition DANS LE TEXTE
                produit, pas dans les tours de diarisation)
-      → profiling LLM (optionnel : type, résumé, rôle/ton/points clés)
+      → profiling LLM (optionnel : type, résumé, rôle/points clés ; le ton, demandé au modèle, n'est pas écrit dans le document)
       → writer_md → output/<projet>/<nom>.md
       → indexation : library.sync_file + semantic + voiceprint
       → artefacts durables : archive audio + empreintes
@@ -227,9 +227,14 @@ contenir une URL, une clé ou un chemin). Un échec cloud rend HTTP 503.
 
 `GET /api/config` expose `llm_providers`, `local_providers`
 (= fournisseurs où `est_local`), `default_llm_provider`, et la disponibilité
-déclarée par fournisseur. L'UI persiste **seulement** la chaîne du fournisseur
-(`localStorage: memoglyph.llmProvider`) ; aucune clé n'est stockée côté client
-(elles restent dans `.env`, côté serveur). Choisir un fournisseur cloud couple le
+déclarée par fournisseur. Le fournisseur choisi n'est pas gardé par le navigateur :
+il fait partie des réglages de traitement du compte (`GET` et `PUT
+/api/compte/reglages-traitement` : fournisseur, langue, résultats, et sensibilité
+quand elle est plus stricte que celle de l'instance), enregistrés par le bouton
+« Retenir comme réglages par défaut ». L'écran Transcrire, « Régénérer » et
+l'Assistant partent de ces réglages, ou du fournisseur local quand rien n'est retenu
+ou que le fournisseur retenu n'est plus disponible. Aucune clé n'est stockée côté
+client (elles restent dans `.env`, côté serveur). Choisir un fournisseur cloud couple le
 STT : Mistral amène Voxtral, les autres cloud (OpenAI) retombent sur Whisper local.
 
 Les **embeddings restent toujours locaux** (`MEMOGLYPH_EMBED_BACKEND=local`,
@@ -249,7 +254,7 @@ petit catalogue maison, **sans bibliothèque i18n** : `ui/src/lib/messages.ts`
 (catalogues typés) + `ui/src/lib/i18n.ts` (résolution + interpolation `{param}`) +
 `ui/src/components/LangProvider.tsx` (contexte). La langue est détectée depuis le
 navigateur puis surchargée par un choix utilisateur persisté
-(`localStorage: memoglyph.lang`, même convention que `llmProvider`). Règle de
+(`localStorage: memoglyph.lang`). Règle de
 conception : ce qui **décrit** un état reste dérivé en TypeScript ; le catalogue ne
 porte jamais une phrase par combinaison d'état — la partie variable passe par des
 paramètres. Toutes les surfaces UI sont traduisibles. Les messages d'erreur du

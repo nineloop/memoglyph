@@ -59,7 +59,8 @@ def test_preflight_verifies_everything_without_importing_mlx(
     # `mlx_lm` de même, pour `tests/ml/test_llm_mlx_reel.py`.
     # La sonde `ollama` a disparu de la liste avec le retrait d'Ollama : plus
     # aucun module ML n'en dépend, ni pour le profilage ni pour les embeddings.
-    assert events == ["mlx_whisper", "transformers", "mlx_lm"]
+    # `pyannote.audio` de même, pour la diarisation de `tests/ml/test_ami_reponse_connue.py`.
+    assert events == ["mlx_whisper", "transformers", "mlx_lm", "pyannote.audio"]
 
 
 def test_optional_mode_runs_eligible_modules_and_skips_the_rest(capsys) -> None:
@@ -190,7 +191,7 @@ def test_les_prerequis_sont_associes_par_CHEMIN_et_non_par_position(tmp_path) ->
             root=tmp_path, env={}, hf_token=None, mlx_available=True,
             transformers_available=True,
             mlx_lm_available=True, mlx_llm_model="org/modele",
-            mlx_llm_model_present=True,
+            mlx_llm_model_present=True, pyannote_audio_available=True,
         )
         return {p.path: p for p in run_ml_tests.preflight(**{**base, **faits})}
 
@@ -213,6 +214,14 @@ def test_les_prerequis_sont_associes_par_CHEMIN_et_non_par_position(tmp_path) ->
     # Sans cette dernière assertion, tout ce qui précède passerait sur un
     # préflight qui ne rendrait JAMAIS de prérequis.
     assert sans_transformers["tests/unit/test_embed.py"].missing != ()
+
+    # Sans `pyannote.audio`, le module de réponse connue (diarisation) est refusé, avec la raison nommée ;
+    # les autres modules ne bougent pas.
+    sans_pyannote = plans(pyannote_audio_available=False)
+    ami = sans_pyannote["tests/ml/test_ami_reponse_connue.py"].missing
+    assert any("pyannote.audio" in raison for raison in ami), ami
+    assert sans_pyannote["tests/unit/test_embed.py"].missing == ()
+    assert not any("pyannote.audio" in raison for raison in sans_pyannote["tests/ml/test_stt_real.py"].missing)
 
 
 # ---------- Motif nº3 : aucune sortie de secours muette ----------

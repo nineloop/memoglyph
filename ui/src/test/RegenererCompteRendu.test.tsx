@@ -1,17 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RegenererCompteRendu } from '../components/RegenererCompteRendu'
 import { modelesPrets } from '../lib/modelesPrets'
-import { getLlmProvider, setLlmProvider } from '../lib/llmProvider'
 import { LangProvider } from '../components/LangProvider'
 import { TraitementsContext } from '../lib/traitementsContext'
-import { getCloudUltra, getConfig, lancerCompteRendu, type ListeTraitements, type Traitement } from '../api'
+import { getCloudUltra, getConfig, getReglagesTraitement, lancerCompteRendu, setReglagesTraitement, type ListeTraitements, type Traitement } from '../api'
 import { CATALOGUES } from '../lib/messages'
+import { aucuneFenetreDeConfirmation, avecConfirmation, confirmer as confirmerLaFenetre, fenetreDeConfirmation, phraseDeLaFenetre, refuser } from './confirmation'
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api')
-  return { ...actual, getConfig: vi.fn(), lancerCompteRendu: vi.fn(), getCloudUltra: vi.fn() }
+  return { ...actual, getConfig: vi.fn(), lancerCompteRendu: vi.fn(), getCloudUltra: vi.fn(), getReglagesTraitement: vi.fn(), setReglagesTraitement: vi.fn() }
+})
+
+const RETENU = (fournisseur: string) => ({
+  reglages: { fournisseur, langue: '', resultats: { compte_rendu: true, titre_resume: true, locuteurs: false } },
 })
 
 const CONFIG = {
@@ -39,7 +43,7 @@ function monter(options: { liste?: ListeTraitements | null; rafraichir?: () => v
       </TraitementsContext.Provider>
     </LangProvider>
   )
-  const vue = render(rendu(options.liste ?? null))
+  const vue = render(rendu(options.liste ?? null), { wrapper: avecConfirmation })
   return { ...vue, rafraichir, suivre, avec: (liste: ListeTraitements | null) => vue.rerender(rendu(liste)) }
 }
 
@@ -47,7 +51,8 @@ beforeEach(() => {
   vi.mocked(getConfig).mockReset().mockResolvedValue(CONFIG as never)
   vi.mocked(lancerCompteRendu).mockReset().mockResolvedValue({ job_id: 'j1' })
   vi.mocked(getCloudUltra).mockReset().mockResolvedValue({ autorise: false } as never)
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  vi.mocked(getReglagesTraitement).mockReset().mockResolvedValue({ reglages: null })
+  vi.mocked(setReglagesTraitement).mockReset()
 })
 
 describe('modelesPrets', () => {
@@ -64,7 +69,7 @@ describe('modelesPrets', () => {
 })
 
 describe('RegenererCompteRendu', () => {
-  it('montre exactement les modèles prêts, avec leur modèle configuré, et jamais un fournisseur non configuré', async () => {
+  it('montre les modèles prêts avec leur modèle configuré ; un fournisseur non configuré est GRISÉ, sans bouton', async () => {
     monter()
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     const choix = await screen.findAllByRole('radio')
@@ -72,7 +77,12 @@ describe('RegenererCompteRendu', () => {
     expect(screen.getByText('Qwen3-8B')).toBeTruthy()
     expect(screen.getByText('mistral-small-latest')).toBeTruthy()
     expect(screen.getByText('claude-sonnet-5-5')).toBeTruthy()
-    expect(screen.queryByText(/OpenAI/)).toBeNull()
+    // Les fournisseurs non configurés se montrent, en grisé, avec une aide d'une ligne (jamais un bouton à choisir).
+    for (const nom of ['OpenAI', 'Serveur compatible OpenAI']) {
+      const ligne = screen.getByText(nom).closest('li') as HTMLElement
+      expect(ligne).toHaveAttribute('aria-disabled', 'true')
+      expect(ligne).toHaveTextContent('Non configuré')
+    }
     // Les choix sont de vrais boutons radio dans un groupe nommé.
     expect(screen.getByRole('group', { name: 'Régénérer avec le modèle' })).toBeTruthy()
   })
@@ -82,7 +92,10 @@ describe('RegenererCompteRendu', () => {
     monter()
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     expect(await screen.findAllByRole('radio')).toHaveLength(1)
-    expect(screen.getByText(/saisissez sa clé dans le fichier \.env/)).toBeTruthy()
+    expect(screen.getByText(/Seul le modèle local est proposé/)).toBeTruthy()
+    // Pas de lien externe : `tests/unit/test_aucune_telemetrie.py` interdit toute URL absolue dans l'interface.
+    expect(screen.getByText(/Ajouter un fournisseur : voir la page Local et en ligne de la documentation/)).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /fournisseur/ })).toBeNull()
   })
 
   it('aucun modèle prêt : une phrase, pas de bouton de lancement', async () => {
@@ -100,7 +113,7 @@ describe('RegenererCompteRendu', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
     expect(lancerCompteRendu).toHaveBeenCalledWith('reunion.md', 'all', 'mlx')
     expect(rafraichir).toHaveBeenCalledTimes(1)
-    expect(await screen.findByText(/Régénération lancée avec MLX \(local\)/)).toBeTruthy()
+    expect(await screen.findByText(/Régénération lancée avec MLX/)).toBeTruthy()
     await userEvent.click(screen.getByRole('button', { name: 'Suivre' }))
     expect(suivre).toHaveBeenCalledTimes(1)
   })
@@ -109,11 +122,13 @@ describe('RegenererCompteRendu', () => {
     monter()
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     await userEvent.click(await screen.findByRole('radio', { name: /Mistral/ }))
-    vi.mocked(window.confirm).mockReturnValueOnce(false)
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Mistral (cloud)'))
+    expect(await phraseDeLaFenetre()).toContain('Mistral')
+    expect(within(await fenetreDeConfirmation()).getByRole('button', { name: 'Envoyer le transcript' })).toBeInTheDocument()
+    await refuser(userEvent)
     expect(lancerCompteRendu).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
+    await confirmerLaFenetre(userEvent)
     expect(lancerCompteRendu).toHaveBeenCalledWith('reunion.md', 'all', 'mistral')
   })
 
@@ -134,15 +149,14 @@ describe('RegenererCompteRendu', () => {
     expect(parValeur.mlx.getAttribute('aria-describedby')).toBeNull()
   })
 
-  it('en ultra, le local est présélectionné même si le fournisseur habituel est en ligne, et rien ne demande de confirmation', async () => {
-    setLlmProvider('anthropic')
+  it('en ultra, le local est présélectionné même si le fournisseur retenu par le compte est en ligne, et rien ne demande de confirmation', async () => {
+    vi.mocked(getReglagesTraitement).mockResolvedValue(RETENU('anthropic'))
     monter({ ultra: true })
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     expect(((await screen.findByRole('radio', { name: /MLX/ })) as HTMLInputElement).checked).toBe(true)
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
-    expect(window.confirm).not.toHaveBeenCalled()
+    aucuneFenetreDeConfirmation()
     expect(lancerCompteRendu).toHaveBeenCalledWith('reunion.md', 'all', 'mlx')
-    setLlmProvider('mlx')
   })
 
   it('si le compte autorise le cloud pour son ultra-confidentiel, les fournisseurs en ligne redeviennent choisissables', async () => {
@@ -174,22 +188,31 @@ describe('RegenererCompteRendu', () => {
     expect(bouton).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('le choix vaut pour cette régénération seulement : le fournisseur par défaut du compte ne change pas', async () => {
-    setLlmProvider('mlx')
+  it('le choix vaut pour cette régénération seulement : les réglages du compte ne sont jamais écrits', async () => {
     monter()
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     await userEvent.click(await screen.findByRole('radio', { name: /Mistral/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
+    await confirmerLaFenetre(userEvent)
     expect(lancerCompteRendu).toHaveBeenCalledWith('reunion.md', 'all', 'mistral')
-    expect(getLlmProvider()).toBe('mlx')       // les prochains envois, le CR à la demande et l'Assistant restent locaux
+    expect(setReglagesTraitement).not.toHaveBeenCalled()      // les prochains envois, le CR à la demande et l'Assistant restent où le compte les a mis
   })
 
-  it('préselectionne le fournisseur habituel s’il est prêt', async () => {
-    setLlmProvider('anthropic')
+  it('présélectionne le fournisseur retenu par le compte s’il est prêt', async () => {
+    vi.mocked(getReglagesTraitement).mockResolvedValue(RETENU('anthropic'))
     monter()
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     expect((await screen.findByRole('radio', { name: /Anthropic/ }) as HTMLInputElement).checked).toBe(true)
-    setLlmProvider('mlx')
+  })
+
+  it('retombe sur « Local » quand le fournisseur retenu n’est plus prêt (clé retirée) ou n’existe plus', async () => {
+    for (const retenu of ['openai', 'disparu']) {
+      vi.mocked(getReglagesTraitement).mockResolvedValue(RETENU(retenu))
+      const { unmount } = monter()
+      await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
+      expect((await screen.findByRole('radio', { name: /MLX/ }) as HTMLInputElement).checked).toBe(true)
+      unmount()
+    }
   })
 
   it('le refus de la règle d’envoi s’affiche en une phrase, sans le texte brut du serveur', async () => {
@@ -199,9 +222,21 @@ describe('RegenererCompteRendu', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     await userEvent.click(await screen.findByRole('radio', { name: /Anthropic/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
+    await confirmerLaFenetre(userEvent)
     const alerte = await screen.findByRole('alert')
-    expect(alerte.textContent).toBe('Cette réunion est ultra-confidentielle : elle ne part vers aucun fournisseur en ligne. Choisissez le modèle de cette machine.')
+    expect(alerte.textContent).toBe('Cette réunion est ultra-confidentielle : elle ne part vers aucun fournisseur en ligne. Choisir le modèle local.')
     expect(alerte.textContent).not.toMatch(/HTTP|detail/)
+  })
+
+  it('une panne sans code connu dit la phrase du contexte : ni « HTTP », ni le texte de l’exception', async () => {
+    vi.mocked(lancerCompteRendu).mockRejectedValue(new Error('HTTP 500: {"detail":"regeneration-brute"}'))
+    monter()
+    await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
+    await screen.findAllByRole('radio')
+    await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('La régénération n’a pas pu démarrer.')
+    expect(document.body.textContent).not.toMatch(/HTTP|regeneration-brute/)
   })
 
   it('trop de travail : une phrase claire', async () => {
@@ -210,7 +245,7 @@ describe('RegenererCompteRendu', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
     await screen.findAllByRole('radio')
     await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('La machine fait déjà un autre travail : réessayez quand il sera fini.')
+    expect((await screen.findByRole('alert')).textContent).toBe('Un autre traitement est en cours : réessayer à sa fin.')
   })
 
   it('le bouton est bloqué tant que le traitement tourne, puis la nouvelle version est annoncée', async () => {
@@ -235,12 +270,63 @@ describe('RegenererCompteRendu', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('La régénération a échoué. Le détail est dans la vue des traitements.')
   })
 
+  it('après un échec de régénération, « Suivre » reste affiché à côté du message et ouvre la vue des traitements', async () => {
+    const suivre = vi.fn()
+    const vue = monter({ suivre })
+    await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
+    await screen.findAllByRole('radio')
+    await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
+    vue.avec({ traitements: [traitement({ statut: 'error', erreur: 'boom' })], actifs: 0, en_attente: 0 })
+    await screen.findByRole('alert')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Suivre' }))
+    expect(suivre).toHaveBeenCalledTimes(1)
+    // Le bouton n'est pas dans la zone annoncée : « Suivre » n'est pas lu comme faisant partie du message d'échec.
+    expect(screen.getByRole('alert')).not.toContainElement(screen.getByRole('button', { name: 'Suivre' }))
+  })
+
+  it('le lancement suivant remet l’échec à zéro : un refus de départ n’affiche pas « Suivre »', async () => {
+    const vue = monter()
+    await userEvent.click(screen.getByRole('button', { name: 'Régénérer' }))
+    await screen.findAllByRole('radio')
+    await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
+    vue.avec({ traitements: [traitement({ statut: 'error', erreur: 'boom' })], actifs: 0, en_attente: 0 })
+    await screen.findByRole('button', { name: 'Suivre' })
+
+    vi.mocked(lancerCompteRendu).mockRejectedValue(new Error('HTTP 429: {"detail":"1 traitement(s) déjà en cours"}'))
+    await userEvent.click(screen.getByRole('button', { name: 'Régénérer ce compte rendu' }))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('Un autre traitement est en cours : réessayer à sa fin.')
+    expect(screen.queryByRole('button', { name: 'Suivre' })).toBeNull()
+  })
+
+  it('en anglais, le bouton de suivi après un échec est « Follow »', async () => {
+    const vue = monter({ langue: 'en' })
+    await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
+    await screen.findAllByRole('radio')
+    await userEvent.click(screen.getByRole('button', { name: 'Regenerate this report' }))
+    vue.avec({ traitements: [traitement({ statut: 'error', erreur: 'boom' })], actifs: 0, en_attente: 0 })
+    expect((await screen.findByRole('alert')).textContent).toBe('Regeneration failed. Details are in the processing view.')
+    expect(screen.getByRole('button', { name: 'Follow' })).toBeTruthy()
+  })
+
+  it('aucun message de l’interface n’invite à une action qui n’existe plus (lancer Ollama, renseigner une clé dans Maintenance)', () => {
+    const impasses = [/lanc\w+ Ollama/i, /run Ollama/i, /cl[ée][^.]*Maintenance/i, /Maintenance[^.]*cl[ée]/i, /key[^.]*Maintenance/i, /Maintenance[^.]*key/i]
+    const fautes: string[] = []
+    for (const langue of ['fr', 'en'] as const) {
+      for (const [cle, valeur] of Object.entries(CATALOGUES[langue])) {
+        if (impasses.some((re) => re.test(valeur))) fautes.push(`${langue} ${cle}`)
+      }
+    }
+    expect(fautes).toEqual([])
+  })
+
   it('tout existe en anglais', async () => {
     monter({ langue: 'en' })
     await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
     expect(await screen.findByRole('group', { name: 'Regenerate with the model' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Regenerate this report' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /MLX \(local\)/ })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /MLX/ })).toBeTruthy()
   })
 
   it('les libellés ont les mêmes clés en français et en anglais, sans répétition de texte français', () => {

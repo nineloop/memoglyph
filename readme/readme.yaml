@@ -3,7 +3,7 @@
 # (anglais) et README.fr.md (français) ; les modifier à la main n'a aucun effet durable.
 # `version` égale la première entrée de CHANGELOG.md (un test le vérifie) et s'affiche par {{version}}.
 # `regles_strictes: true` : coupe d'un paragraphe par ligne, ton, longueur et attribution sont imposés.
-version: v1.2.1
+version: v1.3.0
 regles_strictes: true
 langues:
 - en
@@ -63,11 +63,11 @@ captures:
       en: docs/assets/screenshots/transcribe.png
       fr: docs/assets/screenshots/transcribe-fr.png
     alt:
-      en: 'The Transcribe screen: a file drop area, the project to save to, and the processing steps'
-      fr: 'L''écran Transcrire : la zone de dépôt du fichier, le projet de destination et les étapes du traitement'
+      en: 'The Transcribe screen: the processing settings (local or online, spoken language, document sensitivity), a file drop area, the project to save to, and the processing steps'
+      fr: 'L''écran Transcrire : les réglages du traitement (local ou en ligne, langue parlée, sensibilité du document), la zone de dépôt du fichier, le projet de destination et les étapes du traitement'
     legende:
-      en: 'The Transcribe screen: file, project and processing steps.'
-      fr: 'L''écran Transcrire : fichier, projet et étapes du traitement.'
+      en: 'The Transcribe screen: processing settings, file, project and processing steps.'
+      fr: 'L''écran Transcrire : réglages du traitement, fichier, projet et étapes du traitement.'
   transcript:
     corpus_ami: true
     chemin:

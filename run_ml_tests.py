@@ -190,6 +190,7 @@ def preflight(
     mlx_lm_available: bool,
     mlx_llm_model: str,
     mlx_llm_model_present: bool,
+    pyannote_audio_available: bool,
 ) -> list[ModulePlan]:
     """Construit le plan sans importer ``mlx_whisper`` ni ``mlx``.
 
@@ -226,6 +227,11 @@ def preflight(
         ami_missing.append("HF_TOKEN absent")
     if not mlx_available:
         ami_missing.append("package mlx_whisper absent")
+    # La diarisation est le cœur de ce test (quatre locuteurs, rôles) : sans `pyannote.audio` (groupe
+    # `diar`, optionnel), le pipeline consigne l'échec dans le document et le test rougit pour une cause
+    # d'environnement. Le mode strict doit le refuser AVANT de charger quoi que ce soit.
+    if not pyannote_audio_available:
+        ami_missing.append("package pyannote.audio absent (groupe diar : uv pip install -r requirements-diar.txt)")
 
     # `tests/unit/test_embed.py` : le test d'un module orphelin, et le seul des
     # trois de `ml-gate.json` dont personne n'avait déclaré le prérequis.
@@ -317,6 +323,8 @@ def runtime_preflight(*, strict: bool, root: Path = ROOT) -> list[ModulePlan]:
     # Même précaution pour `mlx_lm` : `find_spec` LOCALISE sans exécuter le code
     # natif, donc sans charger Metal dans le processus de préflight.
     mlx_lm_available = importlib.util.find_spec("mlx_lm") is not None
+    # Même précaution : `find_spec` localise sans exécuter le code (pas de chargement de torch ici).
+    pyannote_audio_available = importlib.util.find_spec("pyannote.audio") is not None
     return preflight(
         root=root,
         env=os.environ,
@@ -326,6 +334,7 @@ def runtime_preflight(*, strict: bool, root: Path = ROOT) -> list[ModulePlan]:
         mlx_lm_available=mlx_lm_available,
         mlx_llm_model=config.MLX_LLM_MODEL,
         mlx_llm_model_present=modele_mlx_dans_le_cache(config.MLX_LLM_MODEL, os.environ),
+        pyannote_audio_available=pyannote_audio_available,
     )
 
 

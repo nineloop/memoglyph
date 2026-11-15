@@ -932,7 +932,7 @@ def test_le_compte_rendu_reserve_la_ressource_lourde(
 
     client.post("/api/transcript/note.md/report", params={"view_scope": inbox.id})
 
-    assert "compte-rendu" in appels, (
+    assert "compte rendu" in appels, (
         "l'endpoint /report doit réserver un créneau de calcul lourd"
     )
 

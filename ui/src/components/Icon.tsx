@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export type IconName =
-  | 'alert' | 'archive' | 'arrow-left' | 'check' | 'clock' | 'close' | 'cpu' | 'error'
+  | 'alert' | 'archive' | 'arrow-left' | 'check' | 'chevron-down' | 'chevron-up' | 'clock' | 'close' | 'cpu' | 'error'
   | 'feather' | 'folder' | 'menu' | 'monitor' | 'moon' | 'more' | 'plus' | 'refresh'
   | 'pause' | 'play' | 'report' | 'search' | 'settings' | 'sparkles' | 'sun'
   | 'trash' | 'upload' | 'users' | 'volume'
@@ -11,6 +11,8 @@ const glyphs: Record<IconName, ReactNode> = {
   archive: <><path d="M4 7h14v11H4z"/><path d="M3 3h16v4H3z"/><path d="M9 11h4"/></>,
   'arrow-left': <><path d="m12 5-6 6 6 6"/><path d="M6 11h12"/></>,
   check: <path d="m4 11 4 4 10-10"/>,
+  'chevron-down': <path d="m5 8 6 6 6-6"/>,
+  'chevron-up': <path d="m5 14 6-6 6 6"/>,
   clock: <><circle cx="11" cy="11" r="8"/><path d="M11 6v5l3 2"/></>,
   close: <><path d="m5 5 12 12"/><path d="M17 5 5 17"/></>,
   cpu: <><rect x="5" y="5" width="12" height="12" rx="2"/><path d="M8 2v3M14 2v3M8 17v3M14 17v3M2 8h3M2 14h3M17 8h3M17 14h3"/></>,

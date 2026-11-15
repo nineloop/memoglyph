@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 
 import type { JetonAppareil, LibraryItem } from '../api'
-import { creerJeton, getEtatAuth, getTranscript, listerJetons, retirerJeton } from '../api'
+import { ErreurAvecCode, creerJeton, getEtatAuth, getTranscript, listerJetons, retirerJeton } from '../api'
 import { AppareilsPanel, BoutonAppareils } from '../components/AppareilsPanel'
 import { AuthGate } from '../components/AuthGate'
 import { LangProvider } from '../components/LangProvider'
@@ -91,10 +91,10 @@ it('retire un jeton et affiche le refus du serveur tel quel', async () => {
   expect(await screen.findByText('Jeton « MacBook » retiré.')).toBeInTheDocument()
   expect(await screen.findByText('Aucun jeton pour l’instant.')).toBeInTheDocument()
 
-  vi.mocked(creerJeton).mockRejectedValue(new Error('Nom d’appareil invalide'))
+  vi.mocked(creerJeton).mockRejectedValue(new ErreurAvecCode('device.name.invalid', 'Nom d’appareil invalide'))
   await user.type(screen.getByLabelText('Nom de l’appareil'), 'x')
   await user.click(screen.getByRole('button', { name: 'Créer le jeton' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Nom d’appareil invalide')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Ce nom d’appareil n’est pas valide')
 })
 
 // ---------- (3) Provenance d'une capture dans l'onglet Information ----------

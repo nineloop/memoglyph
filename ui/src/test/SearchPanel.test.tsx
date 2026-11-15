@@ -43,7 +43,7 @@ it('groupe les passages par identité de réunion et élargit volontairement la 
   const user = userEvent.setup()
   render(<SearchPanel viewScope="project-1" scopeLabel="Client" />)
 
-  expect(screen.getByText('Portée : Projet Client')).toBeInTheDocument()
+  expect(screen.getByText('Dans : Projet Client')).toBeInTheDocument()
   await user.type(screen.getByRole('searchbox', { name: 'Recherche détaillée' }), 'décision')
 
   expect(await screen.findByText('2 passages dans 1 réunion')).toBeInTheDocument()
@@ -183,8 +183,8 @@ describe('hiérarchie des modes de recherche', () => {
 
     const secours = await screen.findByText('Recherche intelligente indisponible')
     expect(secours).toBeInTheDocument()
-    // La cause technique reste VISIBLE : on explique, on ne masque pas.
-    expect(screen.getByText(/HTTP 503/)).toBeInTheDocument()
+    // On nomme le problème en une phrase ; ni le code HTTP, ni le texte de l'exception, ni une « cause technique » ne s'affichent.
+    expect(document.body.textContent).not.toMatch(/HTTP|Index sémantique incompatible|Cause technique/)
 
     // Et le repli est offert, pas imposé — rien ne bascule en silence.
     expect(search).toHaveBeenCalledTimes(1)
@@ -208,15 +208,15 @@ it('dit ce que contient la portée avant la première frappe', async () => {
 
 it('distingue une portée VIDE d’un champ vide', async () => {
   render(<SearchPanel viewScope="p" scopeLabel="Client" scopeCount={0} />)
-  expect(screen.getByText('Cette portée ne contient aucun document')).toBeInTheDocument()
-  expect(screen.getByText(/Aucune recherche ne rendra de résultat dans Client/))
+  expect(screen.getByText('Aucun document')).toBeInTheDocument()
+  expect(screen.getByText(/Rien à rechercher ici/))
     .toBeInTheDocument()
 })
 
 it('se TAIT sur le compte tant que les projets ne sont pas chargés', async () => {
   render(<SearchPanel viewScope="p" scopeLabel="Client" />)
   expect(screen.queryByText(/documents dans Client/)).not.toBeInTheDocument()
-  expect(screen.queryByText('Cette portée ne contient aucun document')).not.toBeInTheDocument()
+  expect(screen.queryByText('Aucun document')).not.toBeInTheDocument()
 })
 
 
@@ -234,11 +234,11 @@ it('n’annonce plus une portée VIDE quand la recherche a été élargie', asyn
   render(<SearchPanel viewScope="p" scopeLabel="Client" scopeCount={0}
                       scopeCountAll={12} scopeLabelAll="Tous mes projets" />)
 
-  expect(screen.getByText('Cette portée ne contient aucun document')).toBeInTheDocument()
+  expect(screen.getByText('Aucun document')).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /tous mes projets/i }))
 
-  expect(screen.queryByText('Cette portée ne contient aucun document')).not.toBeInTheDocument()
+  expect(screen.queryByText('Aucun document')).not.toBeInTheDocument()
   expect(screen.getByText(/12 documents dans Tous mes projets/)).toBeInTheDocument()
 })
 
@@ -281,4 +281,79 @@ it('sans libellé de portée du parent, la réception se dit dans la langue de l
   expect(screen.getByText(/Unclassified/)).toBeInTheDocument()
   expect(screen.queryByText(/Non classé/)).not.toBeInTheDocument()
   localStorage.setItem('memoglyph.lang', 'fr')
+})
+
+
+describe('une recherche exacte qui échoue', () => {
+  it('dit la phrase du contexte : ni « HTTP », ni le texte de l’exception', async () => {
+    vi.mocked(search).mockRejectedValue(new Error('HTTP 500: {"detail":"recherche-brute"}'))
+    render(<LangProvider initiale="fr"><SearchPanel viewScope="p1" scopeLabel="Projet" /></LangProvider>)
+    await userEvent.click(screen.getByRole('button', { name: /^Texte exact/ }))
+    fireEvent.change(screen.getByLabelText('Recherche détaillée'), { target: { value: 'décision' } })
+
+    expect(await screen.findByText('La recherche n’a pas pu aboutir.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/HTTP|recherche-brute/)
+  })
+
+  it('annonce l’échec comme une alerte, comme les autres lignes d’erreur', async () => {
+    vi.mocked(search).mockRejectedValue(new Error('HTTP 500: {"detail":"recherche-brute"}'))
+    render(<LangProvider initiale="fr"><SearchPanel viewScope="p1" scopeLabel="Projet" /></LangProvider>)
+    await userEvent.click(screen.getByRole('button', { name: /^Texte exact/ }))
+    fireEvent.change(screen.getByLabelText('Recherche détaillée'), { target: { value: 'décision' } })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('La recherche n’a pas pu aboutir.')
+  })
+})
+
+
+it('un extrait de compte rendu ne montre ni le marqueur de citation brut ni le nom du fichier', async () => {
+  const user = userEvent.setup()
+  vi.mocked(search).mockResolvedValue([{
+    ...results[1], origine: 'compte-rendu',
+    snippet: 'Décision prise \u0002[source\u0003 00:01:36] sur le budget [source 00:02:10].',
+  }])
+  render(<SearchPanel viewScope="project-1" scopeLabel="Client" />)
+  await user.type(screen.getByRole('searchbox', { name: 'Recherche détaillée' }), 'budget')
+
+  expect(await screen.findByText(/Décision prise/)).toBeInTheDocument()
+  expect(document.querySelector('.snippet')).toHaveTextContent(/^Décision prise sur le budget\.$/)   // sans espace orpheline avant le point
+  expect(document.body.textContent).not.toMatch(/\[source|\]|00:01:36 \]/)
+  expect(document.body.textContent).not.toContain('comite-cr.md')
+})
+
+
+it('l’écran a un titre de niveau 1 (masqué) et annonce la recherche en cours', async () => {
+  const user = userEvent.setup()
+  vi.mocked(search).mockReturnValue(new Promise(() => {}))
+  render(<SearchPanel viewScope="project-1" scopeLabel="Client" />)
+
+  expect(screen.getByRole('heading', { level: 1, name: 'Recherche' })).toBeInTheDocument()
+  await user.type(screen.getByRole('searchbox', { name: 'Recherche détaillée' }), 'décision')
+  expect(await screen.findByRole('status')).toHaveTextContent('Recherche…')
+})
+
+
+it('un résultat ouvert garde le titre de niveau 1 de l’écran', async () => {
+  const user = userEvent.setup()
+  render(<SearchPanel viewScope="project-1" scopeLabel="Client" />)
+  await user.type(screen.getByRole('searchbox', { name: 'Recherche détaillée' }), 'décision')
+  await user.click(await screen.findByRole('button', { name: 'Ouvrir le passage à 00:12' }))
+
+  await waitFor(() => expect(getTranscript).toHaveBeenCalledWith('comite.md', 'project-1'))
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Recherche')
+})
+
+
+it('les deux modes de recherche forment un groupe nommé et disent lequel est actif (aria-pressed)', async () => {
+  const user = userEvent.setup()
+  render(<SearchPanel viewScope="project-1" scopeLabel="Client" />)
+
+  const groupe = screen.getByRole('group', { name: 'Mode de recherche' })
+  const [intelligent, exact] = [...groupe.querySelectorAll('button')] as HTMLElement[]
+  expect(intelligent).toHaveAttribute('aria-pressed', 'true')
+  expect(exact).toHaveAttribute('aria-pressed', 'false')
+  await user.click(exact)
+  expect(exact).toHaveAttribute('aria-pressed', 'true')
+  expect(intelligent).toHaveAttribute('aria-pressed', 'false')
 })

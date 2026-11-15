@@ -62,8 +62,8 @@ export function BarreHaute({ llm, diarisation, llmEtat, servicesInconnus = false
         {indicateur}
         {!servicesInconnus && (
           <div className="status-dots" aria-label={t('app.status.services')}>
-            <span className={llm ? 'dot ok' : 'dot off'} title={llmEtat}>LLM</span>
-            <span className={diarisation ? 'dot ok' : 'dot off'} title={t('app.status.diarization')}>Diar</span>
+            <span className={llm ? 'dot ok' : 'dot off'} title={llmEtat}>{t('app.pill.model')}</span>
+            <span className={diarisation ? 'dot ok' : 'dot off'} title={t('app.status.diarization')}>{t('app.pill.speakers')}</span>
           </div>
         )}
         <MenuReglages />

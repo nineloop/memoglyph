@@ -562,7 +562,7 @@ def _generer_sous_contrat(
 
     _noter(reparation_json.FAIL, TENTATIVES_CONTRAT)
     raise llm.LLMError(
-        f"Réponse de compte-rendu hors contrat après {TENTATIVES_CONTRAT} "
+        f"Réponse de compte rendu hors contrat après {TENTATIVES_CONTRAT} "
         f"tentatives : {derniere}"
     ) from derniere
 
@@ -570,7 +570,7 @@ def _generer_sous_contrat(
 def demote_headings(markdown: str) -> str:
     """Rétrograde les titres de niveau 1 du modèle en niveau 2.
 
-    Le gabarit écrit déjà un `#` (« Compte-rendu — <titre> ») et le modèle en
+    Le gabarit écrit déjà un `#` (« Compte rendu — <titre> ») et le modèle en
     produit un autre : le document sortait avec deux H1 consécutifs. On
     rétrograde plutôt que de supprimer, car l'intitulé du modèle est souvent plus
     informatif que le nôtre — et la hiérarchie des titres reste valide.
@@ -842,7 +842,7 @@ def map_summarize_chunks(
     for index, chunk in enumerate(chunks, 1):
         frac = (index - 1) / len(chunks)
         msg = (
-            f"Compte-rendu : analyse Tranche {index}/{len(chunks)}…"
+            f"Compte rendu : analyse Tranche {index}/{len(chunks)}…"
             if lang == "fr"
             else f"Report: analyzing Chunk {index}/{len(chunks)}…"
         )
@@ -1053,7 +1053,7 @@ def make_report(
     fm = {
         "id": docid.nouveau(),
         **_identity_fields(meta),
-        "title": f"{title} — compte-rendu",
+        "title": f"{title} — compte rendu",
         "date": now.strftime("%Y-%m-%d"),
         "type": "report",
         "source_transcript": name,
@@ -1087,9 +1087,10 @@ def make_report(
             genre=genre,
             num_ctx=4096,
             questions=asked,
+            prompt_cache_size=llm.taille_cache_prompts(provider),
         ),
     }
-    heading = "Compte-rendu" if (language or "fr").lower() == "fr" else "Report"
+    heading = "Compte rendu" if (language or "fr").lower() == "fr" else "Report"
     content = (
         writer_md._yaml_frontmatter(fm)
         + f"\n\n# {heading} — {title}\n\n{cr_body.strip()}\n"
@@ -1118,7 +1119,7 @@ def make_report(
         # pipeline principal sait déjà remonter ce genre de dégradation dans
         # les warnings de job ; ce chemin-ci obtient le même contrat.
         avertissements.append(
-            f"Compte-rendu écrit mais absent de la recherche par le sens : {exc}"
+            f"Compte rendu écrit mais absent de la recherche par le sens : {exc}"
         )
         print(f"[report] indexation sémantique ignorée : {exc}")
 

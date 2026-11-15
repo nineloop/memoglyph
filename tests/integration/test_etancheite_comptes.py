@@ -55,7 +55,8 @@ ROUTES_D_AUTHENTIFICATION = frozenset({
 # Route qui crée un objet du compte appelant, ou règle ce compte, sans désigner aucun
 # objet existant : A doit rester intact (son réglage compris), et rien de A ne doit revenir.
 ROUTES_SANS_OBJET = frozenset({("POST", "/api/projects"), ("POST", "/api/jetons"),
-                               ("PUT", "/api/compte/cloud-ultra")})
+                               ("PUT", "/api/compte/cloud-ultra"),
+                               ("PUT", "/api/compte/reglages-traitement")})
 
 MARQUEUR = "zorglubzephyr"            # réunions de A non partagées
 MARQUEUR_PARTAGE = "quokkapartage"     # le projet partagé avec B

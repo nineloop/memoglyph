@@ -112,6 +112,7 @@
 .kw-empty__title { font-size: 17px; }
 .kw-empty__body { color: var(--muted); line-height: 1.55; }
 .kw-empty__action { margin-top: var(--space-2); }
+.kw-empty--echec .kw-empty__icon { background: var(--red-100); color: var(--err); }
 
 /* ------------------------------------------------------------------ WaveBars */
 .kw-wave { display: flex; align-items: center; gap: 2px; height: 100%; width: 100%; color: var(--accent); }

@@ -109,7 +109,7 @@ describe('FinopsSection — profilage d’un transcript', () => {
   it('montre le profilage sous la transcription : fournisseur, modèle, jetons, coût', async () => {
     vi.mocked(getFinopsSummary).mockResolvedValue({ ...STT, profile: PROFIL })
     const { container } = render(<FinopsSection name="t.md" viewScope="all" label="Transcription" />)
-    const titre = await screen.findByText('Profilage')
+    const titre = await screen.findByText('Analyse')
     expect(container.querySelectorAll('.finops-block')).toHaveLength(2)
     const bloc = titre.closest('.finops-block') as HTMLElement
     expect(within(bloc).getByText('mistral')).toBeTruthy()
@@ -124,7 +124,7 @@ describe('FinopsSection — profilage d’un transcript', () => {
   it('le détail du profilage charge SA propre exécution', async () => {
     vi.mocked(getFinopsSummary).mockResolvedValue({ ...STT, profile: PROFIL })
     render(<FinopsSection name="t.md" viewScope="all" label="Transcription" />)
-    const bloc = (await screen.findByText('Profilage')).closest('.finops-block') as HTMLElement
+    const bloc = (await screen.findByText('Analyse')).closest('.finops-block') as HTMLElement
     await userEvent.click(within(bloc).getByText('Voir le détail d’exécution'))
     expect(getFinopsExecution).toHaveBeenCalledWith('t.md', 'P1', 'all')
   })
@@ -132,7 +132,7 @@ describe('FinopsSection — profilage d’un transcript', () => {
   it('un profilage sans transcription liée s’affiche seul', async () => {
     vi.mocked(getFinopsSummary).mockResolvedValue({ available: false, profile: PROFIL })
     const { container } = render(<FinopsSection name="t.md" viewScope="all" label="Transcription" />)
-    expect(await screen.findByText('Profilage')).toBeTruthy()
+    expect(await screen.findByText('Analyse')).toBeTruthy()
     expect(container.querySelectorAll('.finops-block')).toHaveLength(1)
     expect(screen.queryByText('Transcription')).toBeNull()
   })
@@ -140,7 +140,7 @@ describe('FinopsSection — profilage d’un transcript', () => {
   it('libellé EN', async () => {
     vi.mocked(getFinopsSummary).mockResolvedValue({ ...STT, profile: PROFIL })
     render(<LangProvider initiale="en"><FinopsSection name="t.md" viewScope="all" label="Transcription" /></LangProvider>)
-    expect(await screen.findByText('Profiling')).toBeTruthy()
+    expect(await screen.findByText('Analysis')).toBeTruthy()
     expect(screen.getByText('$0.00090 derived')).toBeTruthy()
   })
 })

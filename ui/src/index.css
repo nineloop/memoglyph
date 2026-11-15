@@ -9,7 +9,8 @@
    - **Inter reste la police.** Cette UI tient sa hiérarchie sur 17 graisses
      distinctes ; une police à graisse unique demanderait une refonte
      typographique complète.
-   - **Le violet reste** la marque du contenu produit par un LLM.
+   - **Le violet reste** la marque du contenu produit par un modèle (badge « généré », réponse, suggestion), jamais celle d'une action : un bouton
+     « Demander » ou « Régénérer » est teal.
    ============================================================================ */
 :root {
   /* --- marque « Premium » (martin-pêcheur).
@@ -255,9 +256,9 @@
     --backdrop: rgb(4 9 11 / 68%);
     --bar-bg: rgb(22 38 43 / 88%);
     --panel-glass: rgb(29 48 55 / 94%);
-    --dock-bg: #2a4a52;
+    --dock-bg: #48707a;
     --dock-fg: #eaf6f6;
-    --dock-muted: #c0d9db;
+    --dock-muted: #e4f1f2;
     --dock-survol: rgb(255 255 255 / 12%);
     --dock-bordure: rgb(255 255 255 / 16%);
     --accent-glow: rgb(20 184 192 / 30%);

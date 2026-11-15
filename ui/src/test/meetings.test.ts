@@ -150,13 +150,18 @@ describe('displayDocumentTitle', () => {
       .toBe('AMI IS1009a, réunion de lancement d’une télécommande')
   })
 
-  it('rend lisible la base d’un compte-rendu et garde son suffixe', () => {
+  it('rend lisible la base d’un ancien compte-rendu et le lit sans trait d’union', () => {
     expect(displayDocumentTitle('ami-is1009a-réunion-de-lancement-dune-télécommande — compte-rendu', source))
-      .toBe('AMI IS1009a, réunion de lancement d’une télécommande — compte-rendu')
+      .toBe('AMI IS1009a, réunion de lancement d’une télécommande — compte rendu')
+  })
+
+  it('rend lisible la base d’un compte rendu au titre sans trait d’union, comme celle d’un ancien titre', () => {
+    expect(displayDocumentTitle('ami-is1009a-réunion-de-lancement-dune-télécommande — compte rendu', source))
+      .toBe('AMI IS1009a, réunion de lancement d’une télécommande — compte rendu')
   })
 
   it('garde un titre saisi, et un slug sans source connue', () => {
-    expect(displayDocumentTitle('Comité de pilotage — compte-rendu', source)).toBe('Comité de pilotage — compte-rendu')
+    expect(displayDocumentTitle('Comité de pilotage — compte-rendu', source)).toBe('Comité de pilotage — compte rendu')
     expect(displayDocumentTitle('ami-is1009a', null)).toBe('ami-is1009a')
   })
 })

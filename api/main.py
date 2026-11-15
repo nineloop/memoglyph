@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 import threading
 
@@ -32,6 +32,7 @@ from core import voiceprint
 from core import maintenance
 from core import projects as project_store
 from . import auth, partages, portee
+from .refus import RefusAvecCode, corps_du_refus, refus_d_auth
 from .jobs import GROUPES_COMPTE_RENDU, JobManager, JobsBusy, creneau_du_traitement, plan_etapes
 
 config.load_env()  # charge .env (HF_TOKEN) au démarrage de l'API
@@ -126,7 +127,7 @@ async def _session_obligatoire(request: Request, call_next):
             if utilisateur is not None:
                 request.state.jeton_id = auth.id_du_jeton(_jeton_porteur(request))
         if utilisateur is None:
-            return JSONResponse({"detail": "Connexion requise."}, status_code=401)
+            return JSONResponse({"detail": "Connexion requise.", "code": "auth.required"}, status_code=401)
         request.state.utilisateur = utilisateur
     return await call_next(request)
 
@@ -182,12 +183,12 @@ async def _origine_controlee(request: Request, call_next):
     if (origine and request.method in _METHODES_MODIFIANTES
             and request.url.path.startswith("/api/")
             and origine not in _origines_admises(request)):
-        return JSONResponse({"detail": "Origine refusée."}, status_code=403)
+        return JSONResponse({"detail": "Origine refusée.", "code": "request.origin.refused"}, status_code=403)
     return await call_next(request)
 
 
 def _trop_de_tentatives(exc: auth.TropDeTentatives) -> HTTPException:
-    return HTTPException(429, str(exc), headers={"Retry-After": str(exc.secondes)})
+    return RefusAvecCode(429, str(exc), code="auth.login.throttled", headers={"Retry-After": str(exc.secondes)})
 
 
 def _poser_cookie(reponse: Response, request: Request, jeton: str) -> None:
@@ -236,7 +237,7 @@ def auth_installation(corps: Installation, request: Request, response: Response)
         raise _trop_de_tentatives(exc) from exc
     except auth.ErreurAuth as exc:
         auth.noter_echec(cles)
-        raise HTTPException(400, str(exc)) from exc
+        raise refus_d_auth(exc) from exc
     _non_classe_du_compte_cree(utilisateur)
     _poser_cookie(response, request, auth.ouvrir_session(utilisateur))
     return {"utilisateur": _profil(utilisateur)}
@@ -256,7 +257,7 @@ def auth_connexion(corps: Identifiants, request: Request, response: Response) ->
     if utilisateur is None:
         auth.noter_echec(cles)
         # Même message dans les deux cas : ne pas dire si l'identifiant existe.
-        raise HTTPException(401, "Identifiant ou mot de passe incorrect.")
+        raise RefusAvecCode(401, "Identifiant ou mot de passe incorrect.", code="auth.login.invalid")
     auth.effacer_echecs(compte)
     _poser_cookie(response, request, auth.ouvrir_session(utilisateur))
     return {"utilisateur": _profil(utilisateur)}
@@ -307,7 +308,7 @@ def admin_creer_compte(corps: NouveauCompte, request: Request) -> dict:
         utilisateur = auth.creer_compte(corps.identifiant, corps.mot_de_passe,
                                         admin=corps.admin)
     except auth.ErreurAuth as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise refus_d_auth(exc) from exc
     _non_classe_du_compte_cree(utilisateur)
     return {"utilisateur": _profil(utilisateur)}
 
@@ -319,7 +320,7 @@ def admin_desactiver_compte(identifiant: str, request: Request) -> dict:
     try:
         auth.desactiver_compte(identifiant)
     except auth.ErreurAuth as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise refus_d_auth(exc) from exc
     return {"ok": True}
 
 
@@ -329,7 +330,7 @@ def admin_reactiver_compte(identifiant: str, request: Request) -> dict:
     try:
         auth.reactiver_compte(identifiant)
     except auth.ErreurAuth as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise refus_d_auth(exc) from exc
     return {"ok": True}
 
 
@@ -349,7 +350,7 @@ def creer_jeton(corps: NouveauJeton, request: Request) -> dict:
     try:
         description, jeton = auth.creer_jeton(portee.utilisateur(request), corps.nom)
     except auth.ErreurAuth as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise refus_d_auth(exc) from exc
     return {"jeton": description, "secret": jeton}
 
 
@@ -377,10 +378,60 @@ def regler_cloud_ultra(request: Request, corps: ReglageCloudUltra) -> dict:
     return auth.regler_cloud_ultra(portee.utilisateur(request), corps.autorise)
 
 
+class ResultatsVoulus(BaseModel):
+    model_config = {"extra": "forbid"}
+    compte_rendu: StrictBool
+    titre_resume: StrictBool
+    locuteurs: StrictBool
+
+
+class ReglagesTraitement(BaseModel):
+    """Vocabulaire FERMÉ : un champ inconnu (dont un `identifiant`) est refusé, pas ignoré."""
+    model_config = {"extra": "forbid"}
+    fournisseur: str
+    langue: str = Field(max_length=12, pattern=r"^$|^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$")
+    resultats: ResultatsVoulus
+    # Retenue SEULEMENT si elle est plus stricte que le défaut de l'instance : elle ne l'abaisse jamais (la plus stricte des deux
+    # s'applique à la lecture, côté écran). Absente = pas de sensibilité retenue.
+    sensibilite: Optional[str] = None
+
+    @field_validator("sensibilite")
+    @classmethod
+    def _sensibilite_plus_stricte_que_le_defaut(cls, valeur: Optional[str]) -> Optional[str]:
+        if valeur is None:
+            return None
+        if valeur not in sensitivity.SENSIBILITES:
+            raise ValueError("sensibilité inconnue")
+        if not sensitivity.plus_stricte(valeur, sensitivity.SENSIBILITE_DEFAUT):
+            raise ValueError("La sensibilité retenue doit être plus stricte que celle de l'instance, qu'elle ne peut pas abaisser.")
+        return valeur
+
+    @field_validator("fournisseur")
+    @classmethod
+    def _fournisseur_du_registre(cls, valeur: str) -> str:
+        # `cloud` (alias) n'est pas dans le registre : refusé comme tout nom inconnu.
+        if valeur not in llm.MOTEURS or valeur in llm.HORS_INTERFACE:
+            raise ValueError("fournisseur inconnu")
+        return valeur
+
+
+@app.get("/api/compte/reglages-traitement")
+def lire_reglages_traitement(request: Request) -> dict:
+    """Les réglages de traitement retenus par le compte de la session, ou `null`. Session seulement (hors
+    `ROUTES_DU_COMPAGNON`) ; aucun paramètre ne désigne un autre compte."""
+    return {"reglages": auth.reglages_traitement(portee.utilisateur(request))}
+
+
+@app.put("/api/compte/reglages-traitement")
+def regler_reglages_traitement(request: Request, corps: ReglagesTraitement) -> dict:
+    """Retient ces réglages pour le compte de la session, seul."""
+    return {"reglages": auth.regler_traitement(portee.utilisateur(request), corps.model_dump(exclude_none=True))}
+
+
 @app.delete("/api/jetons/{jeton_id}")
 def retirer_jeton(jeton_id: str, request: Request) -> dict:
     if not auth.retirer_jeton(portee.utilisateur(request), jeton_id):
-        raise HTTPException(404, "Jeton inconnu")
+        raise RefusAvecCode(404, "Jeton inconnu", code="device.unknown")
     return {"ok": True}
 
 
@@ -534,8 +585,9 @@ def _reunion_de_la_portee(meeting_id: str, portee_appelant: project_store.Portee
     try:
         meeting = library.reunion_dans_la_portee(meeting_id, portee_appelant)
     except library.ReunionAmbigue as exc:
-        raise HTTPException(409, "Plusieurs de vos projets portent cette réunion : choisissez "
-                                 "le projet (portée) ou passez par l'un de ses documents.") from exc
+        raise RefusAvecCode(409, "Plusieurs de vos projets portent cette réunion : choisissez "
+                                 "le projet (portée) ou passez par l'un de ses documents.",
+                            code="meeting.ambiguous") from exc
     if meeting is None:
         raise HTTPException(404, "Réunion introuvable dans cette portée")
     return meeting
@@ -621,7 +673,7 @@ def _refuser_le_cloud(sensibilite: object, *, local: bool, proprietaire: Optiona
         sensitivity.verifier_envoi(sensibilite, local=local,
                                    autorise=sensitivity.autorise(proprietaire))
     except sensitivity.EnvoiRefuse as exc:
-        raise HTTPException(403, sensitivity.REFUS_CLOUD) from exc
+        raise RefusAvecCode(403, sensitivity.REFUS_CLOUD, code="cloud.refused") from exc
 
 
 def _refuser_modele_gratuit(sensibilite: object, *, fournisseur: str) -> None:
@@ -632,6 +684,12 @@ def _refuser_modele_gratuit(sensibilite: object, *, fournisseur: str) -> None:
     vivre. Placée juste APRÈS lui à chaque point d'appel : un ultra-confidentiel non autorisé garde son refus du nuage, et un
     refus ne crée rien (aucun traitement, aucun fichier reçu). Le cœur la réapplique juste avant chaque appel au moteur."""
     modeles_gratuits.verifier(fournisseur, lambda: llm.modele_servi(fournisseur), [sensibilite])
+
+
+@app.exception_handler(RefusAvecCode)
+async def _refus_avec_code(_request: Request, exc: RefusAvecCode) -> JSONResponse:
+    """Un refus codé : la phrase et le code, au statut et avec les en-têtes de la `HTTPException` qu'il remplace."""
+    return JSONResponse(corps_du_refus(exc), status_code=exc.status_code, headers=exc.headers)
 
 
 @app.exception_handler(sensitivity.ModeleGratuitRefuse)
@@ -646,7 +704,7 @@ async def _modele_gratuit_refuse(_request: Request, exc: sensitivity.ModeleGratu
 @app.exception_handler(sensitivity.EnvoiRefuse)
 async def _envoi_refuse(_request: Request, _exc: sensitivity.EnvoiRefuse) -> JSONResponse:
     """Un refus du cœur (réglage désactivé entre la garde de route et l'envoi) : le même 403."""
-    return JSONResponse({"detail": sensitivity.REFUS_CLOUD}, status_code=403)
+    return JSONResponse({"detail": sensitivity.REFUS_CLOUD, "code": "cloud.refused"}, status_code=403)
 
 
 ETAT_DEMARRAGE: dict = {
@@ -860,6 +918,10 @@ def get_config(request: Request) -> dict:
         # à l'écran cette fois.
         "llm_models": {nom: llm.modele_servi(nom) for nom in llm.MOTEURS},
         "llm_available": any(llm_ready.values()),
+        # OÙ tourne chaque fournisseur (`lieu`) et S'IL est prêt (`etat`), y compris ceux que `llm_providers` cache.
+        # Ajout seul : les champs ci-dessus ne changent pas. Calculé depuis `llm_ready`, sans second sondage ; ni clé,
+        # ni nom de variable, ni adresse, ni modèle.
+        "llm_etats": llm.etats_fournisseurs(llm_ready),
         # `ollama_available` et `mistral_api_key_configured` sont RETIRÉES.
         # Elles nommaient deux moteurs dans une charge utile qui
         # décrit désormais le registre entier, et `llm_ready` les remplace
@@ -1026,8 +1088,8 @@ async def transcribe(
     if report_on and not timestamps:
         # Chaque phrase d'un CR cite `[source HH:MM:SS]` : sans horodatage, il
         # finirait sur zéro unité, après la transcription entière.
-        raise HTTPException(400, "Un compte-rendu exige les horodatages : activez-les "
-                                 "ou retirez le compte-rendu.")
+        raise RefusAvecCode(400, "Un compte rendu exige les horodatages : activez-les "
+                                 "ou retirez le compte rendu.", code="transcribe.timestamps.required")
 
     safe_name = Path(file.filename or "upload").name
     if safe_name in {"", ".", ".."}:
@@ -1048,7 +1110,7 @@ async def transcribe(
         else:
             job = jobs.create(owner=compte.id, nature="transcription", **suivi)
     except JobsBusy as exc:
-        raise HTTPException(429, str(exc))
+        raise RefusAvecCode(429, str(exc), code="resources.busy")
 
     job_upload_dir = UPLOAD_DIR / job.id
     job_upload_dir.mkdir(parents=True, exist_ok=True)
@@ -1064,8 +1126,9 @@ async def transcribe(
                 empreinte.update(chunk)
                 written += len(chunk)
                 if written > limit:
-                    raise HTTPException(
-                        413, f"Fichier trop volumineux (limite : {config.MAX_UPLOAD_MB} Mo)"
+                    raise RefusAvecCode(
+                        413, f"Fichier trop volumineux (limite : {config.MAX_UPLOAD_MB} Mo)",
+                        code="transcribe.file.tooLarge",
                     )
                 out.write(chunk)
         # Un second envoi du MÊME contenu par le même compte, pendant que le premier attend ou tourne, est refusé.
@@ -1386,7 +1449,7 @@ def ask(request: Request, body: AskBody) -> dict:
     """
     q = (body.question or "").strip()
     if not q:
-        raise HTTPException(400, "Question vide")
+        raise RefusAvecCode(400, "Question vide", code="ask.question.empty")
     from core import rag
     compte = portee.utilisateur(request)
     if body.scope.mode == "shared":
@@ -1412,19 +1475,19 @@ def ask(request: Request, body: AskBody) -> dict:
             mistral_api_key=body.mistral_api_key,
         )
     except rag.PassagesUltraConfidentiels as exc:
-        raise HTTPException(403, str(exc)) from exc
+        raise RefusAvecCode(403, str(exc), code="ask.ultra.blocked") from exc
     except resources.ResourcesBusy as exc:
         # 429 comme pour les jobs : la machine ne traite qu'une tâche
         # lourde à la fois, et un refus explicite vaut mieux qu'une
         # attente inexpliquée de plusieurs minutes.
-        raise HTTPException(429, str(exc))
+        raise RefusAvecCode(429, str(exc), code="resources.busy")
     except llm.LLMError as exc:
         # 503, jamais 429 (« occupé » partout ailleurs). Un quota atteint porte en plus son CODE, que l'interface traduit : la
         # phrase du serveur est en français. Le code vient du tableau de `core/erreurs.py` (par nom de classe), pas d'ici.
         corps = {"detail": f"Assistant indisponible : {exc}"}
         code = erreurs.code_de(exc)[0]
-        if code == "step.error.rateLimited":
-            corps["code"] = code
+        # Un quota atteint garde son code propre ; toute autre panne reçoit le code général de l'Assistant, jamais par-dessus.
+        corps["code"] = code if code == "step.error.rateLimited" else "ask.unavailable"
         return JSONResponse(corps, status_code=503)
 
 
@@ -1607,8 +1670,8 @@ def move_meeting(request: Request, meeting_id: str, body: MeetingMoveBody, view_
                                                          source_project_id=source["project_id"])
     except (library.UnsafeProject, project_store.ProjectManifestError) as exc:
         raise HTTPException(400, str(exc))
-    if destination is None:
-        raise HTTPException(404, "Réunion introuvable ou conflit dans la destination")
+    if destination is None:  # la réunion de la portée existe : reste le conflit dans la destination
+        raise RefusAvecCode(404, "Réunion introuvable ou conflit dans la destination", code="meeting.move.conflict")
     meeting = library.get_meeting(meeting_id, project_id=cible.id)
     if meeting is None:  # ne devrait jamais arriver après un déplacement réussi
         raise HTTPException(500, "Réunion déplacée mais absente de l'index")
@@ -2095,7 +2158,7 @@ def make_report(request: Request, name: str, view_scope: str, body: Optional[Rep
         # RAM unifiée.
         # `wait=0` : chemin INTERACTIF, on refuse tout de suite plutôt que de
         # faire patienter sans signal (la transcription, elle, attend son tour).
-        with resources.heavy(wait=0, label="compte-rendu"):
+        with resources.heavy(wait=0, label="compte rendu"):
             # Seam UNIQUE : route locale → CR riche, cloud → CR hérité (inchangé).
             # L'utilisateur ne choisit pas de mode ; la route découle du moteur.
             return report.generate_report(
@@ -2145,7 +2208,7 @@ def lancer_compte_rendu(request: Request, name: str, view_scope: str,
         raise HTTPException(429, str(exc))
 
     def target(cb):
-        with creneau_du_traitement(job, "compte-rendu"):
+        with creneau_du_traitement(job, "compte rendu"):
             sortie = report.generate_report(name, provider=fournisseur, mistral_api_key=cle, progress=cb)
         resultat = {"name": sortie["name"], "genre": sortie.get("genre")}
         if sortie.get("warnings"):
@@ -2375,9 +2438,9 @@ def create_project(request: Request, body: ProjectBody) -> dict:
     try:
         name = library.safe_project_name(body.name)
     except library.UnsafeProject as exc:
-        raise HTTPException(400, str(exc))
+        raise RefusAvecCode(400, str(exc), code="project.name.invalid")
     if name is None:
-        raise HTTPException(400, "Nom de projet invalide")
+        raise RefusAvecCode(400, "Nom de projet invalide", code="project.name.invalid")
     compte = portee.utilisateur(request)
     try:
         library.project_dir(name)  # refuse un nom qui sortirait de output/
@@ -2385,9 +2448,10 @@ def create_project(request: Request, body: ProjectBody) -> dict:
             library.OUTPUT_DIR, name=name, owner=compte.identifiant,
         )
     except project_store.ProjectManifestError as exc:
-        raise HTTPException(409, str(exc))
+        # Seul « nom indisponible » (les deux dossiers possibles sont occupés) est un refus que la personne peut corriger.
+        raise RefusAvecCode(409, str(exc), code="project.name.taken" if str(exc).endswith("nom indisponible") else None)
     except library.UnsafeProject as exc:
-        raise HTTPException(400, str(exc))
+        raise RefusAvecCode(400, str(exc), code="project.name.invalid")
     return {
         "id": project.id, "project": project.name, "name": project.name,
         "kind": project.kind, "owner": project.owner, "count": 0,
@@ -2429,19 +2493,20 @@ def creer_partage(request: Request, corps: NouveauPartage) -> dict:
     mes_projets = portee.projets_de(compte.identifiant)
     if corps.type == "projet":
         if corps.cible not in mes_projets:
-            raise HTTPException(404, "Projet introuvable")
+            raise RefusAvecCode(404, "Projet introuvable", code="share.project.unknown")
     else:
         reunion = _reunion_de_la_portee(corps.cible, frozenset(mes_projets))
         if any(library.reunion_ultra_confidentielle(corps.cible, d.get("project_id"))
                for d in (*reunion["transcripts"], *reunion["reports"])):
-            raise HTTPException(
-                409, "Cette réunion contient un document ultra-confidentiel : elle ne se partage pas.")
+            raise RefusAvecCode(
+                409, "Cette réunion contient un document ultra-confidentiel : elle ne se partage pas.",
+                code="share.ultra.blocked")
     invite = next((c for c in auth.lister_comptes()
                    if c["identifiant"].casefold() == corps.invite.strip().casefold()), None)
     if invite is None or not invite["actif"]:
-        raise HTTPException(400, "Aucun compte actif ne porte cet identifiant.")
+        raise RefusAvecCode(400, "Aucun compte actif ne porte cet identifiant.", code="share.account.unknown")
     if project_store.meme_compte(invite["identifiant"], compte.identifiant):
-        raise HTTPException(400, "Un partage se fait avec un autre compte.")
+        raise RefusAvecCode(400, "Un partage se fait avec un autre compte.", code="share.self")
     partage = partages.partager(compte.identifiant, invite["identifiant"], corps.type, corps.cible)
     return {"partage": _decrire_partage(partage)}
 
@@ -2460,7 +2525,7 @@ def lister_partages(request: Request) -> dict:
 def retirer_partage(request: Request, partage_id: str) -> dict:
     """Retire un partage du compte ; il ne s'ouvre plus dès la requête suivante."""
     if not partages.retirer(portee.utilisateur(request).identifiant, partage_id):
-        raise HTTPException(404, "Partage introuvable")
+        raise RefusAvecCode(404, "Partage introuvable", code="share.unknown")
     return {"retire": partage_id}
 
 

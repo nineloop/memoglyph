@@ -5,12 +5,16 @@ import {
   startFaithfulBackfill, streamJob,
 } from '../api'
 import { DedupPanel } from './DedupPanel'
+import { DetailTechnique } from './DetailTechnique'
 import { TrashPanel } from './TrashPanel'
 import { Icon } from './Icon'
 import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
+import { useBarreOnglets } from '../lib/barreOnglets'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
 import { pluralKey } from '../lib/i18n'
+import type { MessageKey } from '../lib/messages'
 
 type Props = {
   viewScope: string
@@ -27,16 +31,28 @@ type Props = {
 }
 type Section = 'status' | 'backfill' | 'duplicates' | 'trash'
 
+/**
+ * Une erreur de la maintenance. On garde sa CAUSE et la clé de sa phrase de repli : la phrase se dit au rendu, dans la langue du moment
+ * (changer de langue ne relit rien et ne ramène pas la section ouverte au diagnostic), et le détail technique n'est vu que d'un administrateur.
+ */
+type Echec = { cause: unknown; repli: MessageKey; detail: string }
+
+function echec(cause: unknown, repli: MessageKey): Echec {
+  return { cause, repli, detail: cause instanceof Error ? cause.message : String(cause) }
+}
+
 export function MaintenancePanel({
   viewScope, scopeLabel, initialSection = 'status', onChanged, admin = true, onChangerPortee,
 }: Props) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const depart: Section = admin || initialSection === 'trash' || initialSection === 'duplicates'
     ? initialSection : 'duplicates'
   const [section, setSection] = useState<Section>(depart)
+  const barre = useBarreOnglets<Section>(
+    [...(admin ? ['status' as const, 'backfill' as const] : []), 'duplicates', 'trash'], section, setSection)
   const [status, setStatus] = useState<MaintenanceStatus | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<Echec | null>(null)
   const [busy, setBusy] = useState<'semantic' | 'voices' | 'backfill' | 'faithful' | null>(null)
   const [message, setMessage] = useState('')
   const [trashCount, setTrashCount] = useState(0)
@@ -46,7 +62,7 @@ export function MaintenancePanel({
 
   const load = useCallback(async () => {
     const request = beginLoad()
-    setLoading(true); setError('')
+    setLoading(true); setError(null)
     try {
       const [value, trash] = await Promise.all([
         admin ? getMaintenanceStatus(viewScope) : Promise.resolve(null),
@@ -57,7 +73,7 @@ export function MaintenancePanel({
         setTrashCount(trash.length)
       }
     } catch (cause) {
-      if (isCurrentLoad(request)) setError(String(cause))
+      if (isCurrentLoad(request)) setError(echec(cause, 'repli.maintenanceCharger'))
     } finally {
       if (isCurrentLoad(request)) setLoading(false)
     }
@@ -72,7 +88,7 @@ export function MaintenancePanel({
             [load, depart])
 
   async function rebuild(kind: 'semantic' | 'voices') {
-    setBusy(kind); setError(''); setMessage('')
+    setBusy(kind); setError(null); setMessage('')
     try {
       const result = await reindexMaintenance(kind, viewScope)
       const count = result.indexed_files ?? result.indexed ?? 0
@@ -80,7 +96,7 @@ export function MaintenancePanel({
       setMessage(t(pluralKey('maint.reindexed.done', count), { label, n: count }))
       await load()
     } catch (cause) {
-      setError(String(cause))
+      setError(echec(cause, 'repli.maintenanceOperation'))
     } finally {
       setBusy(null)
     }
@@ -88,7 +104,7 @@ export function MaintenancePanel({
 
   async function runBackfill() {
     if (!status?.backfill_eligible.length || busy) return
-    setBusy('backfill'); setError(''); setMessage(t('maint.msg.backfillStarting'))
+    setBusy('backfill'); setError(null); setMessage(t('maint.msg.backfillStarting'))
     try {
       const { job_id } = await startBackfill(viewScope)
       streamJob(job_id, {
@@ -96,16 +112,16 @@ export function MaintenancePanel({
         onDone: () => {
           setBusy(null); setMessage(t('maint.msg.backfillDone')); load()
         },
-        onError: (detail) => { setBusy(null); setError(detail) },
+        onError: (detail) => { setBusy(null); setError({ cause: undefined, repli: 'repli.maintenanceOperation', detail }) },
       })
     } catch (cause) {
-      setBusy(null); setError(String(cause))
+      setBusy(null); setError(echec(cause, 'repli.maintenanceOperation'))
     }
   }
 
   async function runFaithfulBackfill() {
     if (!status?.faithful_backfill_eligible.length || busy) return
-    setBusy('faithful'); setError(''); setMessage(t('maint.msg.faithfulStarting'))
+    setBusy('faithful'); setError(null); setMessage(t('maint.msg.faithfulStarting'))
     try {
       const { job_id } = await startFaithfulBackfill(viewScope)
       streamJob(job_id, {
@@ -113,10 +129,10 @@ export function MaintenancePanel({
         onDone: () => {
           setBusy(null); setMessage(t('maint.msg.faithfulDone')); load()
         },
-        onError: (detail) => { setBusy(null); setError(detail) },
+        onError: (detail) => { setBusy(null); setError({ cause: undefined, repli: 'repli.maintenanceOperation', detail }) },
       })
     } catch (cause) {
-      setBusy(null); setError(String(cause))
+      setBusy(null); setError(echec(cause, 'repli.maintenanceOperation'))
     }
   }
 
@@ -175,28 +191,39 @@ export function MaintenancePanel({
       <div className="maintenance-tabs" role="tablist" aria-label={t('maint.tabs.aria')}>
         {admin && (
           <>
-            <button role="tab" aria-selected={section === 'status'} className={section === 'status' ? 'on' : ''} onClick={() => setSection('status')}>
+            <button type="button" {...barre.onglet('status')} className={section === 'status' ? 'on' : ''} onClick={() => setSection('status')}>
               <Icon name="settings" /> {t('maint.tab.status')}
             </button>
-            <button role="tab" aria-selected={section === 'backfill'} className={section === 'backfill' ? 'on' : ''} onClick={() => setSection('backfill')}>
+            <button type="button" {...barre.onglet('backfill')} className={section === 'backfill' ? 'on' : ''} onClick={() => setSection('backfill')}>
               <Icon name="refresh" /> {t('maint.tab.backfill')} {backfillCount ? <span>{backfillCount}</span> : null}
             </button>
           </>
         )}
-        <button role="tab" aria-selected={section === 'duplicates'} className={section === 'duplicates' ? 'on' : ''} onClick={() => setSection('duplicates')}>
+        <button type="button" {...barre.onglet('duplicates')} className={section === 'duplicates' ? 'on' : ''} onClick={() => setSection('duplicates')}>
           <Icon name="report" /> {t('maint.tab.duplicates')} {status?.duplicate_groups ? <span>{status.duplicate_groups}</span> : null}
         </button>
-        <button role="tab" aria-selected={section === 'trash'} className={section === 'trash' ? 'on' : ''} onClick={() => setSection('trash')}>
+        <button type="button" {...barre.onglet('trash')} className={section === 'trash' ? 'on' : ''} onClick={() => setSection('trash')}>
           <Icon name="trash" /> {t('maint.tab.trash')} {trashCount ? <span>{trashCount}</span> : null}
         </button>
       </div>
 
-      {error && <p className="error"><Icon name="error" /> {error}</p>}
+      {error && (
+        <>
+          <p className="error" role="alert"><Icon name="error" /> {phraseDErreur(t, lang, error.cause, t(error.repli))}</p>
+          <DetailTechnique detail={error.detail} admin={admin} />
+        </>
+      )}
       {message && <p className="maintenance-message" role="status"><Icon name="check" /> {message}</p>}
 
       {section === 'status' && (
-        loading || !status ? <p className="muted">{t('maint.loadingDiag')}</p> : (
-          <div className="maintenance-section" role="tabpanel">
+        loading || (!status && !error) ? (
+          <div role="tabpanel" id={barre.idPanneau('status')} aria-labelledby={barre.idOnglet('status')}>
+            <p className="muted">{t('maint.loadingDiag')}</p>
+          </div>
+        ) : !status ? (
+          <div role="tabpanel" id={barre.idPanneau('status')} aria-labelledby={barre.idOnglet('status')} />
+        ) : (
+          <div className="maintenance-section" role="tabpanel" id={barre.idPanneau('status')} aria-labelledby={barre.idOnglet('status')}>
             <div className="diagnostic-grid">
               <article><span>{t('maint.card.documents')}</span><strong>{status.documents}</strong><small>{t('maint.card.documents.detail')}</small></article>
               <article className={semanticMissing ? 'needs-attention' : ''}><span>{t('maint.card.semantic')}</span><strong>{status.semantic_documents}/{status.documents}</strong><small>{t(pluralKey('maint.card.semantic.detail', status.semantic_chunks), { n: status.semantic_chunks })}</small></article>
@@ -257,7 +284,7 @@ export function MaintenancePanel({
       )}
 
       {section === 'backfill' && (
-        <div className="maintenance-section backfill-section" role="tabpanel">
+        <div className="maintenance-section backfill-section" role="tabpanel" id={barre.idPanneau('backfill')} aria-labelledby={barre.idOnglet('backfill')}>
           <div className="maintenance-callout">
             <Icon name="volume" />
             <div><h2>{t('maint.backfill.callout.title')}</h2><p>{t('maint.backfill.callout.detail')}</p></div>
@@ -297,13 +324,13 @@ export function MaintenancePanel({
       )}
 
       {section === 'duplicates' && (
-        <div className="maintenance-section" role="tabpanel">
+        <div className="maintenance-section" role="tabpanel" id={barre.idPanneau('duplicates')} aria-labelledby={barre.idOnglet('duplicates')}>
           <DedupPanel viewScope={viewScope} embedded />
         </div>
       )}
 
       {section === 'trash' && (
-        <div className="maintenance-section" role="tabpanel">
+        <div className="maintenance-section" role="tabpanel" id={barre.idPanneau('trash')} aria-labelledby={barre.idOnglet('trash')}>
           <TrashPanel viewScope={viewScope} scopeLabel={scopeLabel}
                       onChanged={() => { load(); onChanged?.() }} />
         </div>

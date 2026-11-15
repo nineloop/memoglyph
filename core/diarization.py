@@ -6,6 +6,7 @@ l'application tourne sans ces dépendances lourdes quand l'option est désactiv�
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -36,6 +37,20 @@ class DiarizeResult:
     embeddings: dict[str, list[float]]
 
 
+def _couper_la_telemetrie_de_pyannote() -> None:
+    """Interdit à `pyannote.audio` d'envoyer des statistiques d'usage, AVANT tout import de ce paquet.
+
+    Livré avec `metrics_enabled: true`, il envoie à `https://otel.pyannote.ai` : version, identifiant de session
+    aléatoire, durée de l'audio, nombre de locuteurs demandé (ni le son ni le texte). Cela contredit la promesse de
+    Memoglyph (« There is no telemetry », « Rien ne sort du serveur Memoglyph »).
+
+    La valeur est FORCÉE, pas proposée par défaut : la promesse est sans condition, et une variable posée ailleurs dans
+    l'environnement de l'utilisateur, pour un autre projet, ne doit pas la réactiver ici. Le paquet relit cette variable
+    à chaque envoi : la poser avant l'usage suffit, même s'il était déjà importé.
+    """
+    os.environ["PYANNOTE_METRICS_ENABLED"] = "false"
+
+
 def _pick_device():
     import torch
 
@@ -59,6 +74,7 @@ def load_pipeline(hf_token: Optional[str]):
             "HF_TOKEN manquant. Renseigne-le dans .env et accepte les conditions "
             f"du modèle : https://huggingface.co/{DIARIZATION_MODEL}"
         )
+    _couper_la_telemetrie_de_pyannote()
     try:
         from pyannote.audio import Pipeline
     except ImportError as exc:
@@ -164,6 +180,7 @@ def _modele_empreinte(hf_token: Optional[str] = None):
         hf_token = config.HF_TOKEN
     if not hf_token:
         raise DiarizationError("HF_TOKEN manquant pour l'extraction d'empreintes")
+    _couper_la_telemetrie_de_pyannote()
     try:
         from pyannote.audio import Inference, Model
     except ImportError as exc:

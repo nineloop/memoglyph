@@ -70,7 +70,7 @@ def corpus(isolated_stores, tmp_path, monkeypatch):
 
 def test_l_index_porte_le_titre_lisible_du_transcript_et_du_compte_rendu(corpus) -> None:
     titres = {item["name"]: item["title"] for item in library.list_transcripts()}
-    assert titres == {f"{SLUG}.md": LISIBLE, f"{SLUG}-cr.md": f"{LISIBLE} — compte-rendu"}
+    assert titres == {f"{SLUG}.md": LISIBLE, f"{SLUG}-cr.md": f"{LISIBLE} — compte rendu"}
     assert library.get_meeting(corpus["reunion"])["title"] == LISIBLE
 
 
@@ -80,7 +80,7 @@ def test_un_compte_rendu_indexe_seul_prend_aussi_le_titre_lisible(corpus) -> Non
     library.forget(chemin.name)
     library.sync_file(chemin)
     assert {i["name"]: i["title"] for i in library.list_transcripts()}[chemin.name] == (
-        f"{LISIBLE} — compte-rendu")
+        f"{LISIBLE} — compte rendu")
 
 
 def test_un_index_d_une_version_precedente_est_relu(corpus, isolated_stores) -> None:
@@ -92,7 +92,7 @@ def test_un_index_d_une_version_precedente_est_relu(corpus, isolated_stores) -> 
         conn.execute("UPDATE library_meta SET version = 4 WHERE component = 'library_index'")
         conn.commit()
     library.reindex()  # mtime inchangé : seule la version d'index force la relecture
-    assert {i["title"] for i in library.list_transcripts()} == {LISIBLE, f"{LISIBLE} — compte-rendu"}
+    assert {i["title"] for i in library.list_transcripts()} == {LISIBLE, f"{LISIBLE} — compte rendu"}
 
 
 # ---------- Recherche ----------
@@ -101,7 +101,7 @@ def test_la_recherche_plein_texte_rend_titre_lisible_et_source_du_compte_rendu(c
     resultats = {r["name"]: r for r in library.search("vingt-cinq")}
     assert resultats[f"{SLUG}.md"]["title"] == LISIBLE
     rapport = resultats[f"{SLUG}-cr.md"]
-    assert rapport["title"] == f"{LISIBLE} — compte-rendu"
+    assert rapport["title"] == f"{LISIBLE} — compte rendu"
     assert rapport["source"] == SOURCE
 
 
@@ -109,7 +109,7 @@ def test_la_recherche_par_le_sens_rend_titre_lisible_et_source_du_compte_rendu(c
     resultats = {r["name"]: r for r in semantic.search("prix de vente", k=10)}
     assert resultats[f"{SLUG}.md"]["title"] == LISIBLE
     rapport = resultats[f"{SLUG}-cr.md"]
-    assert rapport["title"] == f"{LISIBLE} — compte-rendu"
+    assert rapport["title"] == f"{LISIBLE} — compte rendu"
     assert rapport["source"] == SOURCE
 
 
@@ -152,11 +152,11 @@ def _mcp(nom: str, **arguments) -> dict:
 def test_le_mcp_liste_recherche_et_lit_sous_le_titre_lisible(corpus) -> None:
     assert [r["title"] for r in _mcp("lister_reunions")["reunions"]] == [LISIBLE]
     titres = {r["name"]: r["title"] for r in _mcp("rechercher", requete="prix de vente")["resultats"]}
-    assert titres == {f"{SLUG}.md": LISIBLE, f"{SLUG}-cr.md": f"{LISIBLE} — compte-rendu"}
+    assert titres == {f"{SLUG}.md": LISIBLE, f"{SLUG}-cr.md": f"{LISIBLE} — compte rendu"}
     lu = _mcp("lire_compte_rendu", reunion=corpus["reunion"])
     assert lu["titre"] == LISIBLE
     # Le CR sur disque garde son H1 slug ; la lecture rend le titre lisible.
-    assert lu["compte_rendu"].splitlines()[0] == f"# Compte-rendu — {LISIBLE}"
+    assert lu["compte_rendu"].splitlines()[0] == f"# Compte rendu — {LISIBLE}"
     assert "vingt-cinq euros [source 00:00:10]" in lu["compte_rendu"]
 
 
@@ -172,11 +172,11 @@ def test_une_occurrence_de_voix_porte_titre_lisible_et_source(corpus) -> None:
 
 def test_le_plan_d_archivage_annonce_les_titres_lisibles(corpus) -> None:
     plan = library.archive_plan(f"{SLUG}.md")
-    assert [d["title"] for d in plan] == [f"{LISIBLE} — compte-rendu", LISIBLE]
+    assert [d["title"] for d in plan] == [f"{LISIBLE} — compte rendu", LISIBLE]
 
 
 def test_la_corbeille_rend_titre_lisible_et_source(corpus) -> None:
     assert library.archive(f"{SLUG}-cr.md")
     [rapport] = library.trash_items()
-    assert rapport["title"] == f"{LISIBLE} — compte-rendu"
+    assert rapport["title"] == f"{LISIBLE} — compte rendu"
     assert rapport["source"] == SOURCE

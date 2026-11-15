@@ -15,11 +15,13 @@ export function IndicateurTraitements({ liste, ouvert, surBasculer }: {
 }) {
   const { t } = useLang()
   const { enCours, enAttente, total } = comptes(liste)
+  // Tant que la liste est inconnue (pas encore reçue, ou relève en échec), aucun nombre n'est affirmé, zéro compris.
+  const inconnue = liste === null
   if (total === 0 && !ouvert) return null
   return (
     <button type="button" className={`indicateur-traitements ${ouvert ? 'on' : ''}`}
             aria-expanded={ouvert} aria-haspopup="dialog"
-            aria-label={t('traitements.indicator.aria', { enCours, enAttente })}
+            aria-label={inconnue ? t('traitements.panel.title') : t('traitements.indicator.aria', { enCours, enAttente })}
             onClick={surBasculer}>
       <span className="indicateur-signal" aria-hidden="true"><Icon name="clock" /></span>
       <span className="indicateur-texte">
@@ -27,7 +29,7 @@ export function IndicateurTraitements({ liste, ouvert, surBasculer }: {
           enAttente > 0 && t('traitements.indicator.waiting', { n: enAttente })].filter(Boolean).join(' · ')
           || t('traitements.panel.title')}
       </span>
-      <span className="indicateur-pastille" aria-hidden="true">{total}</span>
+      <span className="indicateur-pastille" aria-hidden="true">{inconnue ? '…' : total}</span>
     </button>
   )
 }

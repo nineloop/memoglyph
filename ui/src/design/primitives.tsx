@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import type { IconName } from '../components/Icon'
@@ -119,6 +120,33 @@ export function EmptyState({ icon, title, children, action }:
       <h3 className="kw-empty__title">{title}</h3>
       {children && <p className="kw-empty__body">{children}</p>}
       {action && <div className="kw-empty__action">{action}</div>}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------- EtatEchec */
+/**
+ * L'état d'un écran dont le chargement a échoué : une phrase de l'écran et, si on la donne, une reprise.
+ * Il ne reçoit jamais le texte d'une exception. Il s'annonce (`role="alert"`) SANS prendre le focus : un échec de relève en
+ * arrière-plan ne doit pas changer le contexte de la personne. `focusRetry` n'est posé que par l'écran dont l'échec SUIT le
+ * « Réessayer » de la personne (le bouton se remonte : le focus ne doit pas retomber sur la page).
+ */
+export function EtatEchec({ children, onRetry, focusRetry = false }:
+  { children: ReactNode; onRetry?: () => void; focusRetry?: boolean }) {
+  const { t } = useLang()
+  const bouton = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (focusRetry) bouton.current?.focus() }, [focusRetry])
+  return (
+    <div className="kw-empty kw-empty--echec" role="alert">
+      <span className="kw-empty__icon"><Icon name="alert" /></span>
+      <p className="kw-empty__title">{children}</p>
+      {onRetry && (
+        <div className="kw-empty__action">
+          <button type="button" className="kw-btn kw-btn--ghost kw-btn--md" ref={bouton} onClick={onRetry}>
+            {t('etat.reessayer')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

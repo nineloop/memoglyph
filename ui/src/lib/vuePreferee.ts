@@ -19,8 +19,8 @@
  * opération précise et on en revient. Rouvrir l'application sur la corbeille
  * parce qu'on y a restauré un document la veille serait déroutant.
  *
- * On reprend le patron de persistance de `llmProvider.ts` — `localStorage`
- * entouré d'une garde — plutôt que d'en inventer un second.
+ * On passe par `stockage.ts` — `localStorage` entouré d'une garde — plutôt que
+ * d'inventer un second patron de persistance.
  */
 import { ecrireCle, lireCle } from './stockage'
 import type { Vue } from './urlState'

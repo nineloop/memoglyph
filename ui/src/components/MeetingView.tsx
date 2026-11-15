@@ -12,14 +12,18 @@ import { FinopsSection } from './FinopsSection'
 import { useLatestRequest } from '../lib/latestRequest'
 import { Badge } from '../design/primitives'
 import { useLang } from '../lib/langContext'
+import { useConfirmer } from '../design/Confirmation'
+import { phraseDErreur } from '../lib/erreurs'
 import { pluralKey } from '../lib/i18n'
-import type { Traduire } from '../lib/i18n'
+import type { Lang, Traduire } from '../lib/i18n'
+import { formaterInstant, formaterJour } from '../lib/dates'
 import { sensitivityLabelKey } from '../lib/messages'
 import { usePartage } from '../lib/partage'
 import { PartageDialog } from './PartageDialog'
 import { EclFaits } from './EclFaits'
 import { RegenererCompteRendu } from './RegenererCompteRendu'
 import { ONGLETS_REUNION, type OngletReunion } from '../lib/urlState'
+import { useBarreOnglets } from '../lib/barreOnglets'
 
 type Props = {
   reunion: Reunion
@@ -57,25 +61,21 @@ function lireCapture(valeur: unknown): Capture | null {
   return capture.application || capture.mode ? capture : null
 }
 
-function formatDay(value: string, t: Traduire): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : value || t('common.unknownDate')
+function formatDay(value: string, t: Traduire, lang: Lang): string {
+  return formaterJour(value, lang) ?? (value || t('common.unknownDate'))
 }
 
-function formatVersion(item: LibraryItem, t: Traduire): string {
+function formatVersion(item: LibraryItem, t: Traduire, lang: Lang): string {
   const modified = Number(item.modified)
   if (!Number.isFinite(modified) || modified <= 0) {
-    return t('meeting.version.timeUnknown', { date: formatDay(item.date, t) })
+    return t('meeting.version.timeUnknown', { date: formatDay(item.date, t, lang) })
   }
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).format(new Date(modified * 1000))
+  return formaterInstant(modified, lang)
 }
 
-function documentLabel(item: LibraryItem, t: Traduire): string {
+function documentLabel(item: LibraryItem, t: Traduire, lang: Lang): string {
   const kind = item.type === 'report' ? t('common.docKind.report') : t('common.docKind.transcript')
-  return `${kind} · ${formatVersion(item, t)} · ${item.name}`
+  return `${kind} · ${formatVersion(item, t, lang)} · ${item.name}`
 }
 
 /**
@@ -94,8 +94,8 @@ function documentLabel(item: LibraryItem, t: Traduire): string {
  */
 type FaitReunion = { valeur: string; libelle: string; seul: string }
 
-function faitsDe(reunion: Reunion, t: Traduire): FaitReunion[] {
-  const jour = formatDay(reunion.date, t)
+function faitsDe(reunion: Reunion, t: Traduire, lang: Lang): FaitReunion[] {
+  const jour = formatDay(reunion.date, t, lang)
   const langue = reunion.langue?.toUpperCase() || ''
   const n = reunion.nSpeakers
   const nonClasse = t('common.unclassified')
@@ -128,10 +128,17 @@ function transcriptTraits(item: LibraryItem, t: Traduire): string[] {
   ]
 }
 
+/** Le titre est-il le nom du fichier, à l'extension et à la casse près ? */
+function memeNom(titre: string, source: string): boolean {
+  const normaliser = (s: string) => s.replace(/\.[A-Za-z0-9]{1,5}$/, '').trim().toLowerCase()
+  return normaliser(titre) === normaliser(source)
+}
+
 export function MeetingView({
   reunion, onBack, onVoirDoublons, onChanged, initialTab, onTabChange, ariane, navigation,
 }: Props) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
+  const confirmer = useConfirmer()
   // Lecture seule (partage reçu) : aucune action d'écriture ; seul le
   // propriétaire du projet de la réunion la partage.
   const { lectureSeule, peutPartager } = usePartage()
@@ -161,6 +168,9 @@ export function MeetingView({
     setTabInterne(suivant)
     onTabChange?.(suivant)
   }, [onTabChange])
+  // La barre d'onglets : les flèches passent par le même `setTab` que le clic, donc l'adresse suit.
+  const barre = useBarreOnglets<MeetingTab>(
+    ['cr', 'transcript', ...(faitsActives ? ['faits' as const] : []), 'versions', 'info'], ongletVisible, setTab)
 
   // Le parent peut imposer un onglet APRÈS le montage — c'est ce que fait le
   // bouton retour du navigateur.
@@ -180,6 +190,10 @@ export function MeetingView({
   const [reportText, setReportText] = useState<string | null>(null)
   // La version qu'une régénération vient de produire : sélectionnée dès que la réunion la liste.
   const [aSelectionner, setASelectionner] = useState('')
+  // Chaque clic sur « Rédiger / Régénérer » de l'onglet Transcript ouvre le panneau de l'onglet Compte rendu.
+  const [demandeCR, setDemandeCR] = useState(0)
+  // Le transcript actif est sans horodatage : un compte rendu n'y citerait rien (dit par `TranscriptReader` une fois le détail chargé).
+  const [sansHorodatage, setSansHorodatage] = useState(false)
   const [reservesOpen, setReservesOpen] = useState(false)
   const [metas, setMetas] = useState<Record<string, Record<string, unknown>>>({})
   const [error, setError] = useState('')
@@ -241,10 +255,10 @@ export function MeetingView({
         setMetas((current) => ({ ...current, [activeReport]: detail.meta || {} }))
       })
       .catch((reason) => {
-        if (isCurrentReport(request)) setError(t('meeting.error.reportUnreadable', { reason: String(reason) }))
+        if (isCurrentReport(request)) setError(phraseDErreur(t, lang, reason, t('meeting.error.reportUnreadable')))
       })
     return () => invalidateReport(request)
-  }, [activeReport, beginReport, invalidateReport, isCurrentReport, porteeDe, t])
+  }, [activeReport, beginReport, invalidateReport, isCurrentReport, porteeDe, t, lang])
 
   useEffect(() => {
     const missing = documents.filter((item) => (item.warnings || 0) > 0 && !(item.name in metas))
@@ -295,7 +309,7 @@ export function MeetingView({
       onChanged?.()
     } catch (raison) {
       setSensibilite(precedent)     // échec : on revient à l'état serveur
-      setError(t('meeting.error.sensitivityNotSaved', { reason: String(raison) }))
+      setError(phraseDErreur(t, lang, raison, t('meeting.error.sensitivityNotSaved')))
     } finally {
       setSensibiliteEnCours(false)
     }
@@ -305,15 +319,15 @@ export function MeetingView({
     const out: Reserve[] = []
     for (const item of documents) {
       const meta = metas[item.name]
-      if (meta) out.push(...reservesDe(documentLabel(item, t), meta, t))
+      if (meta) out.push(...reservesDe(documentLabel(item, t, lang), meta, t))
     }
     return out
-  }, [documents, metas, t])
+  }, [documents, metas, t, lang])
 
   // En lecture, l'en-tête plein poussait le premier mot du
   // document sous la ligne de flottaison. Il s'efface alors en une barre.
   const lecture = ONGLETS_DE_LECTURE.includes(tab)
-  const faits = useMemo(() => faitsDe(reunion, t), [reunion, t])
+  const faits = useMemo(() => faitsDe(reunion, t, lang), [reunion, t, lang])
 
   const title = displayMeetingTitle(reunion.titre, reunion.source)
   const activeReportItem = reunion.comptesRendus.find((item) => item.name === activeReport)
@@ -375,13 +389,16 @@ export function MeetingView({
       // Sondage best-effort
     }
 
-    const docList = planDocs.map((d) => ` • ${d.title}`).join('\n')
     const typeLabel = isReport ? t('meeting.archive.reportKind') : t('meeting.archive.transcriptKind')
-    const promptMsg = planDocs.length > 1
-      ? t('meeting.archive.confirmMany', { kind: typeLabel, name, list: docList })
-      : t('meeting.archive.confirmOne', { kind: typeLabel, name })
-
-    if (!confirm(promptMsg)) return
+    // Plusieurs documents partent ensemble : leurs titres sont rendus en liste (`details`), la phrase les annonce.
+    const accepte = await confirmer({
+      // Le titre lisible du document (celui du plan d'archivage), le nom du fichier seulement à défaut.
+      titre: t('meeting.archive.titre', { kind: typeLabel, name: planDocs.find((d) => d.name === name)?.title ?? name }),
+      phrase: planDocs.length > 1 ? t('meeting.archive.confirmMany') : t('meeting.archive.confirmOne'),
+      details: planDocs.length > 1 ? planDocs.map((d) => d.title) : undefined,
+      libelleAction: t('meeting.archive.action'),
+    })
+    if (!accepte) return
 
     try {
       await archiveTranscript(name, portee)
@@ -391,7 +408,7 @@ export function MeetingView({
         onBack()
       }
     } catch (e) {
-      setError(t('meeting.error.archiveFailed', { error: String(e) }))
+      setError(phraseDErreur(t, lang, e, t('meeting.error.archiveFailed')))
     }
   }
 
@@ -424,7 +441,8 @@ export function MeetingView({
                 {faits.map((fait) => fait.seul).join(' · ')}
               </p>
             ) : (
-              reunion.source && <p className="meeting-hero-source">{reunion.source}</p>
+              // Le nom du fichier n'est montré que s'il apprend quelque chose : pas quand le titre est ce nom, à l'extension près.
+              reunion.source && !memeNom(title, reunion.source) && <p className="meeting-hero-source">{reunion.source}</p>
             )}
           </div>
           {!lecture && (
@@ -439,7 +457,7 @@ export function MeetingView({
         </div>
       </header>
 
-      {error && <p className="error banner"><Icon name="error" /> {error}</p>}
+      {error && <p className="error banner" role="alert"><Icon name="error" /> {error}</p>}
 
       {reunion.avertissements > 0 && (
         <aside className="meeting-reserves" aria-label={t('meeting.reserves.aria')}>
@@ -464,40 +482,51 @@ export function MeetingView({
       )}
 
       <div className="meeting-tabs" role="tablist" aria-label={t('meeting.tabs.aria')}>
-        <button type="button" role="tab" aria-selected={ongletVisible === 'cr'} onClick={() => setTab('cr')}>
+        <button type="button" {...barre.onglet('cr')} onClick={() => setTab('cr')}>
           {t('common.docKind.report')} {reunion.comptesRendus.length > 0 && <span>{reunion.comptesRendus.length}</span>}
         </button>
-        <button type="button" role="tab" aria-selected={ongletVisible === 'transcript'} onClick={() => setTab('transcript')}>
+        <button type="button" {...barre.onglet('transcript')} onClick={() => setTab('transcript')}>
           {t('common.docKind.transcript')} <span>{reunion.transcripts.length}</span>
         </button>
         {faitsActives && (
-          <button type="button" role="tab" aria-selected={ongletVisible === 'faits'} onClick={() => setTab('faits')}>
+          <button type="button" {...barre.onglet('faits')} onClick={() => setTab('faits')}>
             {t('meeting.tab.facts')}
           </button>
         )}
-        <button type="button" role="tab" aria-selected={ongletVisible === 'versions'} onClick={() => setTab('versions')}>
+        <button type="button" {...barre.onglet('versions')} onClick={() => setTab('versions')}>
           {t('meeting.tab.versions')} <span>{documents.length}</span>
         </button>
-        <button type="button" role="tab" aria-selected={ongletVisible === 'info'} onClick={() => setTab('info')}>
+        <button type="button" {...barre.onglet('info')} onClick={() => setTab('info')}>
           {t('meeting.tab.info')}
         </button>
       </div>
 
       <div className="meeting-panels">
-        <section role="tabpanel" aria-label={t('common.docKind.report')} hidden={ongletVisible !== 'cr'} className="meeting-panel report-panel">
+        <section role="tabpanel" id={barre.idPanneau('cr')} aria-label={t('common.docKind.report')} hidden={ongletVisible !== 'cr'} className="meeting-panel report-panel">
           {!hasReport ? (
             <div className="empty-state compact">
               <span className="empty-icon"><Icon name="report" /></span>
               <strong>{t('meeting.report.empty.title')}</strong>
               <p className="muted">{t('meeting.report.empty.detail')}</p>
-              <button type="button" className="btn accent llm" onClick={() => setTab('transcript')}>{t('meeting.report.empty.action')}</button>
+              {!lectureSeule && (
+                <RegenererCompteRendu
+                  name={activeTranscript}
+                  documentScope={porteeDe(activeTranscript)}
+                  ultra={sensibilite === 'ultra_confidential'}
+                  redaction
+                  ouvertInitial
+                  sansHorodatage={sansHorodatage}
+                  demandeOuverture={demandeCR}
+                  surTermine={(nouveau) => { setASelectionner(nouveau); onChanged?.() }}
+                />
+              )}
             </div>
           ) : (
             <>
               <div className="report-toolbar">
                 <div>
                   <span className="action-scope">{t('common.activeDocument')}</span>
-                  <strong>{activeReportItem ? formatVersion(activeReportItem, t) : t('common.docKind.report')}</strong>
+                  <strong>{activeReportItem ? formatVersion(activeReportItem, t, lang) : t('common.docKind.report')}</strong>
                   <small>{activeReportItem?.name} · {t('meeting.report.fromSource', { source: activeReportItem?.source_transcript ?? t('meeting.report.fromSource.fallbackThis') })}</small>
                 </div>
                 <div className="report-toolbar-actions">
@@ -505,8 +534,8 @@ export function MeetingView({
                     <div className="report-switcher" aria-label={t('meeting.report.versions.aria')}>
                       {reunion.comptesRendus.map((item, index) => (
                         <button key={item.name} type="button" className={activeReport === item.name ? 'on' : ''}
-                                aria-label={t('meeting.report.showVersion.aria', { index: index + 1, date: formatVersion(item, t), name: item.name })}
-                                onClick={() => showReport(item.name)}>{formatVersion(item, t)} · {index + 1}</button>
+                                aria-label={t('meeting.report.showVersion.aria', { index: index + 1, date: formatVersion(item, t, lang), name: item.name })}
+                                onClick={() => showReport(item.name)}>{formatVersion(item, t, lang)} · {index + 1}</button>
                       ))}
                     </div>
                   )}
@@ -515,6 +544,8 @@ export function MeetingView({
                       name={activeTranscript}
                       documentScope={porteeDe(activeTranscript)}
                       ultra={sensibilite === 'ultra_confidential'}
+                      sansHorodatage={sansHorodatage}
+                      demandeOuverture={demandeCR}
                       surTermine={(nouveau) => { setASelectionner(nouveau); onChanged?.() }}
                     />
                   )}
@@ -538,7 +569,7 @@ export function MeetingView({
           )}
         </section>
 
-        <section role="tabpanel" aria-label={t('common.docKind.transcript')} hidden={ongletVisible !== 'transcript'} className="meeting-panel transcript-panel">
+        <section role="tabpanel" id={barre.idPanneau('transcript')} aria-label={t('common.docKind.transcript')} hidden={ongletVisible !== 'transcript'} className="meeting-panel transcript-panel">
           <TranscriptReader
             name={activeTranscript}
             documentScope={porteeDe(activeTranscript)}
@@ -548,13 +579,17 @@ export function MeetingView({
             embedded
             initialTimestamp={activeTimestamp}
             lancer
-            onReportCreated={() => onChanged?.()}
+            surHorodatage={setSansHorodatage}
+            actionCompteRendu={lectureSeule ? undefined : {
+              libelle: hasReport ? t('regenerer.open') : t('regenerer.write'),
+              onClick: () => { setTab('cr'); setDemandeCR((n) => n + 1) },
+            }}
             onArchive={lectureSeule ? undefined : handleArchiveDocument}
           />
         </section>
 
         {faitsActives && (
-          <section role="tabpanel" aria-label={t('meeting.facts.aria')} hidden={ongletVisible !== 'faits'} className="meeting-panel facts-panel">
+          <section role="tabpanel" id={barre.idPanneau('faits')} aria-label={t('meeting.facts.aria')} hidden={ongletVisible !== 'faits'} className="meeting-panel facts-panel">
             {ongletVisible === 'faits' && (
               <EclFaits meetingId={reunion.cle} viewScope={porteeDe(reunion.retenu.name)} onSource={showFactSource}
                 ultra={sensibilite === 'ultra_confidential'}
@@ -563,13 +598,13 @@ export function MeetingView({
           </section>
         )}
 
-        <section role="tabpanel" aria-label={t('meeting.tab.versions')} hidden={ongletVisible !== 'versions'} className="meeting-panel versions-panel">
+        <section role="tabpanel" id={barre.idPanneau('versions')} aria-label={t('meeting.tab.versions')} hidden={ongletVisible !== 'versions'} className="meeting-panel versions-panel">
           <div className="version-group">
             <div className="version-heading"><h2>{t('meeting.versions.transcripts')}</h2><span>{reunion.transcripts.length}</span></div>
             <ul className="version-list">
               {reunion.transcripts.map((item) => (
                 <li key={item.name} className={item.name === activeTranscript ? 'active' : ''}>
-                  <div><strong>{formatVersion(item, t)}</strong><small>{item.name} · {transcriptTraits(item, t).join(' · ')}</small></div>
+                  <div><strong>{formatVersion(item, t, lang)}</strong><small>{item.name} · {transcriptTraits(item, t).join(' · ')}</small></div>
                   <div className="version-actions">
                     {item.name === activeTranscript
                       ? <Badge tone="accent">{t('common.activeDocument')}</Badge>
@@ -591,7 +626,7 @@ export function MeetingView({
               <ul className="version-list">
                 {reunion.comptesRendus.map((item) => (
                   <li key={item.name} className={item.name === activeReport ? 'active' : ''}>
-                    <div><strong>{formatVersion(item, t)}</strong><small>{item.name} · {t('meeting.report.fromSource', { source: item.source_transcript || t('meeting.report.fromSource.fallbackMeeting') })}</small></div>
+                    <div><strong>{formatVersion(item, t, lang)}</strong><small>{item.name} · {t('meeting.report.fromSource', { source: item.source_transcript || t('meeting.report.fromSource.fallbackMeeting') })}</small></div>
                     <div className="version-actions">
                       {item.name === activeReport
                         ? <Badge tone="llm">{t('common.activeDocument')}</Badge>
@@ -616,12 +651,12 @@ export function MeetingView({
           )}
         </section>
 
-        <section role="tabpanel" aria-label={t('meeting.tab.info')} hidden={ongletVisible !== 'info'} className="meeting-panel info-panel">
+        <section role="tabpanel" id={barre.idPanneau('info')} aria-label={t('meeting.tab.info')} hidden={ongletVisible !== 'info'} className="meeting-panel info-panel">
           <dl className="meeting-info-grid">
             <div><dt>{t('meeting.info.id')}</dt><dd><code>{reunion.cle}</code></dd></div>
             <div><dt>{t('meeting.fact.project')}</dt><dd>{libelleProjet(reunion.projet || t('common.unclassified'), t)}</dd></div>
             <div><dt>{t('meeting.info.source')}</dt><dd>{reunion.source || t('common.notProvided')}</dd></div>
-            <div><dt>{t('meeting.fact.date')}</dt><dd>{formatDay(reunion.date, t)}</dd></div>
+            <div><dt>{t('meeting.fact.date')}</dt><dd>{formatDay(reunion.date, t, lang)}</dd></div>
             <div><dt>{t('meeting.fact.duration')}</dt><dd>{reunion.duree || t('common.notProvided')}</dd></div>
             <div><dt>{t('meeting.fact.language')}</dt><dd>{reunion.langue?.toUpperCase() || t('common.notProvided')}</dd></div>
             {erreurCR && (
@@ -652,12 +687,12 @@ export function MeetingView({
             <span className="action-scope">{t('finops.title')}</span>
             {activeReport && (
               <FinopsSection name={activeReport} viewScope={porteeDe(activeReport)}
-                             label={t('finops.report')} />
+                             label={t('finops.report')} sansUsage={t('finops.none')} />
             )}
             <FinopsSection name={reunion.retenu.name} viewScope={porteeDe(reunion.retenu.name)}
-                           label={t('finops.transcription')} />
+                           label={t('finops.transcription')} sansUsage={t('finops.none')} />
           </div>}
-          {!lectureSeule && <div className="action-scope-card">
+          {!lectureSeule && onVoirDoublons && reunion.transcripts.length > 1 && <div className="action-scope-card">
             <span className="action-scope">{t('meeting.info.actionsTitle')}</span>
             <p className="muted small">{t('meeting.info.actionsDetail')}</p>
             {onVoirDoublons && reunion.transcripts.length > 1 && (

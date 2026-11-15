@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { LibraryQuery, Meeting, Project } from '../api'
 import { archiveMeeting, getLanguages, getMeetings, moveMeeting, porteeDocument } from '../api'
 import { libelleProjet } from '../lib/libelleProjet'
@@ -8,12 +8,15 @@ import { NavigationReunion } from './NavigationReunion'
 import { MeetingView } from './MeetingView'
 import { Icon } from './Icon'
 import { useLatestRequest } from '../lib/latestRequest'
-import { Badge, Button, EmptyState, Skeleton } from '../design/primitives'
+import { Badge, Button, EmptyState, EtatEchec, Skeleton } from '../design/primitives'
 import { derniereEcoute, useAudio } from '../audio/AudioProvider'
 import { useLang } from '../lib/langContext'
+import { useConfirmer } from '../design/Confirmation'
+import { phraseDErreur } from '../lib/erreurs'
 import { usePartage } from '../lib/partage'
 import { pluralKey } from '../lib/i18n'
-import type { Traduire } from '../lib/i18n'
+import type { Lang, Traduire } from '../lib/i18n'
+import { formaterJour } from '../lib/dates'
 import type { MessageKey } from '../lib/messages'
 
 function mmss(total: number): string {
@@ -61,9 +64,8 @@ type LibProps = {
   onPartager?: () => void
 }
 
-function formatDate(value: string, t: Traduire): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : value || t('common.unknownDate')
+function formatDate(value: string, t: Traduire, lang: Lang): string {
+  return formaterJour(value, lang) ?? (value || t('common.unknownDate'))
 }
 
 export function LibraryPanel({
@@ -72,6 +74,7 @@ export function LibraryPanel({
   meetingTab, onMeetingTabChange, onSelectProject, titre, partageAvec, onPartager,
 }: LibProps) {
   const { t, lang } = useLang()
+  const confirmer = useConfirmer()
   // Lecture seule (partage reçu) : ni classer, ni archiver.
   const { lectureSeule } = usePartage()
   const [meetings, setMeetings] = useState<Meeting[]>([])
@@ -99,7 +102,20 @@ export function LibraryPanel({
       precedent === (openMeetingId ?? null) ? precedent : openMeetingId ?? null)
   }, [openMeetingId])
   const [loading, setLoading] = useState(true)
+  // `error` ne dit que l'échec d'une ACTION (déplacer, archiver) : la liste reste affichée.
   const [error, setError] = useState('')
+  const idListe = useId()   // relie chaque ligne à ses faits (date, durée, langue, locuteurs), lus avec leur libellé
+  // L'échec d'une ACTION (déplacer, archiver) : un état à part, que le rechargement de la liste n'efface pas.
+  const [erreurAction, setErreurAction] = useState('')
+  // L'échec du CHARGEMENT remplace la liste : « vide » ne s'affiche que quand le chargement a abouti.
+  const [echecChargement, setEchecChargement] = useState(false)
+  // Le nombre de réunions n'est affirmé qu'après une première réponse : avant, il est inconnu (pas « 0 »).
+  const [dejaCharge, setDejaCharge] = useState(false)
+  // L'échec qui SUIT le « Réessayer » de la personne reçoit le focus (le bouton se remonte) ; un autre ne le prend pas.
+  const [apresReprise, setApresReprise] = useState(false)
+  const [relance, setRelance] = useState(0)
+  const repriseDemandee = useRef(false)
+  const reessayer = useCallback(() => { repriseDemandee.current = true; setRelance((n) => n + 1) }, [])
   const [actionMenu, setActionMenu] = useState<string | null>(null)
   const [beginMeetings, isCurrentMeetings, invalidateMeetings] = useLatestRequest()
 
@@ -114,21 +130,24 @@ export function LibraryPanel({
   useEffect(() => {
     const request = beginMeetings()
     setLoading(true)
+    setEchecChargement(false)
+    setApresReprise(repriseDemandee.current)
+    repriseDemandee.current = false
     getMeetings({
       q: dq, sort, order, language, viewScope,
       diarized: diarized || undefined, profiled: profiled || undefined,
     })
       .then((r) => {
-        if (isCurrentMeetings(request)) { setMeetings(r); setError('') }
+        if (isCurrentMeetings(request)) { setMeetings(r); setError(''); setDejaCharge(true) }
       })
-      .catch((e) => {
-        if (isCurrentMeetings(request)) setError(t('library.error', { error: String(e) }))
+      .catch(() => {
+        if (isCurrentMeetings(request)) setEchecChargement(true)
       })
       .finally(() => { if (isCurrentMeetings(request)) setLoading(false) })
     return () => invalidateMeetings(request)
   }, [
     beginMeetings, diarized, dq, invalidateMeetings, isCurrentMeetings, language,
-    order, profiled, reloadKey, sort, viewScope, t,
+    order, profiled, reloadKey, relance, sort, viewScope,
   ])
 
   useEffect(() => {
@@ -149,24 +168,24 @@ export function LibraryPanel({
   // réunion listée en portée `all` appartient à un projet précis, et c'est ce
   // projet-là qui la localise.
   async function move(meetingId: string, target: string, portee: string) {
+    setErreurAction('')
     try {
       await moveMeeting(meetingId, target, portee)
-      setError('')
       setActionMenu(null)
     } catch (e) {
-      setError(t('library.moveFailed', { error: String(e) }))
+      setErreurAction(phraseDErreur(t, lang, e, t('library.moveFailed')))
     }
     onChanged?.()
   }
 
   async function remove(meetingId: string, title: string, portee: string) {
-    const ok = confirm(t('library.archiveMeeting.confirm', { titre: title }))
+    const ok = await confirmer({ titre: t('library.archiveMeeting.titre', { titre: title }), phrase: t('library.archiveMeeting.confirm'), libelleAction: t('library.menu.archive') })
     if (!ok) return
+    setErreurAction('')
     try {
       await archiveMeeting(meetingId, portee)
-      setError('')
     } catch (e) {
-      setError(t('library.archiveIncomplete', { error: String(e) }))
+      setErreurAction(phraseDErreur(t, lang, e, t('library.archiveIncomplete')))
     }
     onChanged?.()
   }
@@ -248,9 +267,10 @@ export function LibraryPanel({
         surProjet={() => onSelectProject?.(viewScope)} />
       <div className="library-heading">
         <div>
-          <h2>{titre ?? t('library.title')}</h2>
+          <h1>{titre ?? t('library.title')}</h1>
           <p className="muted small">
-            {t(pluralKey('library.count', count, lang), { n: count })}
+            {/* Un chargement qui a échoué ne dit pas « 0 réunion » : le nombre est inconnu. */}
+            {!echecChargement && dejaCharge && t(pluralKey('library.count', count, lang), { n: count })}
             {lectureSeule && <> · {t('nav.project.readOnly')}</>}
             {partageAvec && <> · {partageAvec.length > 0
               ? t('nav.project.sharedWith', { noms: partageAvec.join(', ') })
@@ -271,6 +291,7 @@ export function LibraryPanel({
       </div>
 
       {error && <p className="error"><Icon name="error" /> {error}</p>}
+      {erreurAction && <p className="error" role="alert"><Icon name="error" /> {erreurAction}</p>}
 
       {reprise && (() => {
         // Titre HUMAIN de la réunion cible plutôt que celui stocké au fil de la
@@ -318,10 +339,10 @@ export function LibraryPanel({
 
       <div className="library-tools">
         <div className="toolbar">
-          <div className="seg" aria-label={t('library.sort.aria')}>
+          <div className="seg" role="group" aria-label={t('library.sort.aria')}>
             {SORTS.map((s) => (
               <button key={s.key} type="button"
-                      className={`seg-btn ${sort === s.key ? 'on' : ''}`}
+                      className={`seg-btn ${sort === s.key ? 'on' : ''}`} aria-pressed={sort === s.key}
                       onClick={() => setSort(s.key)}>{t(s.label)}</button>
             ))}
             <button type="button" className="seg-btn icon" title={t('library.order.invert')}
@@ -331,9 +352,9 @@ export function LibraryPanel({
             </button>
           </div>
           <div className="filters">
-            <button type="button" className={`chip sm ${diarized ? 'on' : ''}`}
+            <button type="button" className={`chip sm ${diarized ? 'on' : ''}`} aria-pressed={diarized}
                     onClick={() => setDiarized((v) => !v)}><Icon name="users" /> {t('library.filter.diarized')}</button>
-            <button type="button" className={`chip sm ${profiled ? 'on' : ''}`}
+            <button type="button" className={`chip sm ${profiled ? 'on' : ''}`} aria-pressed={profiled}
                     onClick={() => setProfiled((v) => !v)}><Icon name="sparkles" /> {t('library.filter.profiled')}</button>
             {languages.length > 1 && (
               <select className="mini-select" aria-label={t('library.filter.language.aria')} value={language}
@@ -357,6 +378,9 @@ export function LibraryPanel({
           ))}
         </ul>
       )
+        : echecChargement ? (
+          <EtatEchec onRetry={reessayer} focusRetry={apresReprise}>{t('library.loadFailed')}</EtatEchec>
+        )
         : count === 0 ? (
           // NN/g : un état vide doit dire ce qui POURRAIT s'afficher et donner
           // un chemin d'action. Deux cas distincts, deux issues différentes.
@@ -374,7 +398,7 @@ export function LibraryPanel({
         )
         : (
         <ul className="meeting-list">
-          {reunions.map((meeting) => {
+          {reunions.map((meeting, rang) => {
             const project = projects.find((candidate) => candidate.id === meeting.retenu.project_id)
             const isInbox = project?.kind === 'inbox'
             const hasDestinations = projects.some((candidate) => candidate.id && candidate.id !== meeting.retenu.project_id)
@@ -384,7 +408,7 @@ export function LibraryPanel({
             return (
             <li key={meeting.cle} className={`meeting-row ${menuOpen ? 'menu-open' : ''}`}>
               <div className={`meeting-summary ${viewScope === 'all' || viewScope === 'shared' ? 'avec-projet' : ''}`} role="button" tabIndex={0}
-                   aria-label={t('library.open.aria', { titre: title })}
+                   aria-label={t('library.open.aria', { titre: title })} aria-describedby={`${idListe}-faits-${rang}`}
                    onClick={() => choisir(meeting.cle)}
                    onKeyDown={(event) => {
                      if (event.key === 'Enter' || event.key === ' ') {
@@ -396,14 +420,14 @@ export function LibraryPanel({
                   <span className="meeting-source">{meeting.source || t('library.row.sourceNone')}</span>
                 </div>
 
-                <div className="meeting-facts">
-                  <span title={t('library.row.date.aria')}>{formatDate(meeting.date, t)}</span>
-                  <span title={t('library.row.duration.aria')}><Icon name="clock" /> {meeting.duree || '—'}</span>
-                  <span className="meeting-language" title={t('library.row.language.aria')}>{meeting.langue?.toUpperCase() || '—'}</span>
-                  <span title={t('library.row.speakers.aria')}><Icon name="users" /> {meeting.nSpeakers ?? '—'}</span>
+                <div className="meeting-facts" id={`${idListe}-faits-${rang}`}>
+                  <span><span className="sr-only">{t('library.row.date.aria')} : </span>{formatDate(meeting.date, t, lang)}</span>
+                  <span><span className="sr-only">{t('library.row.duration.aria')} : </span><Icon name="clock" /> {meeting.duree || '—'}</span>
+                  <span className="meeting-language"><span className="sr-only">{t('library.row.language.aria')} : </span>{meeting.langue?.toUpperCase() || '—'}</span>
+                  <span><span className="sr-only">{t('library.row.speakers.aria')} : </span><Icon name="users" /> {meeting.nSpeakers ?? '—'}</span>
                   {/* Un seul projet affiché : la colonne répéterait le projet consulté. */}
                   {(viewScope === 'all' || viewScope === 'shared') && (
-                    <span className="meeting-project" title={t('library.row.project.aria')}><Icon name="folder" /> {libelleProjet(meeting.projet || t('common.unclassified'), t)}</span>
+                    <span className="meeting-project"><span className="sr-only">{t('library.row.project.aria')} : </span><Icon name="folder" /> {libelleProjet(meeting.projet || t('common.unclassified'), t)}</span>
                   )}
                 </div>
 

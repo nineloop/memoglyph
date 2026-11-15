@@ -4,7 +4,7 @@ Ce qui reste sur le Mac par défaut, ce qui peut partir vers un fournisseur en l
 
 ## Le réglage de départ : tout en local
 
-Le pipeline par défaut n'utilise que des modèles locaux : Whisper et un modèle de langage MLX (`Qwen3-4B-Instruct`) servi sur le Mac. La diarisation (pyannote) est facultative et demande une installation à part (voir [installation.md](installation.md)). La recherche sémantique utilise toujours un modèle d'embeddings local : aucun texte n'est envoyé à un fournisseur pour la vectoriser.
+Le pipeline par défaut n'utilise que des modèles locaux : Whisper et un modèle de langage MLX (`Qwen3-4B-Instruct`) servi sur le Mac. La diarisation (pyannote) est facultative et demande une installation à part (voir [installation.md](installation.md)) ; le paquet `pyannote.audio` envoie par défaut des statistiques d'usage à son éditeur, et Memoglyph les désactive avant chaque chargement de modèle (la variable `PYANNOTE_METRICS_ENABLED` est forcée à `false`). La recherche sémantique utilise toujours un modèle d'embeddings local : aucun texte n'est envoyé à un fournisseur pour la vectoriser.
 
 ## Les fournisseurs en ligne, facultatifs
 
@@ -29,6 +29,8 @@ Ils suivent la règle des fournisseurs en ligne : un document ultra-confidentiel
 ## Ce qui ne part pas : l'ultra-confidentiel
 
 Un document étiqueté **ultra-confidentiel** ne part vers aucun fournisseur en ligne par défaut : la transcription, le compte rendu, les faits et les extraits de l'Assistant restent locaux. Chaque compte peut autoriser le cloud pour ses propres documents ultra-confidentiels dans **Confidentialité** (inactif par défaut, confirmé à l'activation, effectif aussitôt à la désactivation). Ce réglage n'ouvre rien pour les documents partagés ni pour un autre compte, et chaque envoi autorisé est consigné sans contenu (voir [SECURITY.md](../SECURITY.md)).
+
+**Réglages retenus.** Le bouton « Retenir comme réglages par défaut » de l'écran Transcrire enregistre, pour le compte seulement, le fournisseur, la langue, les résultats demandés et la sensibilité. Ces réglages servent de point de départ à l'écran Transcrire, à « Régénérer » et à l'Assistant ; le fournisseur retenu n'est pas gardé par le navigateur. Quand rien n'est retenu, ou que le fournisseur retenu n'est plus disponible, le traitement part du fournisseur local. Une sensibilité n'est retenue que si elle est plus stricte que celle de l'instance, et un réglage retenu ne peut jamais abaisser la sensibilité d'un document. Il ne change aucune des règles d'envoi ci-dessus : un fournisseur en ligne retenu reste refusé pour un document ultra-confidentiel sans l'autorisation du compte.
 
 ## Un serveur de modèle auto-hébergé
 

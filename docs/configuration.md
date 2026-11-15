@@ -26,6 +26,7 @@ Les réglages se lisent sous le préfixe `MEMOGLYPH_*`. Les clés et modèles cl
 | `GROQ_API_KEY` | clé API Groq (fournisseur `groq`, en ligne) |
 | `MEMOGLYPH_GROQ_MODEL` | identifiant du modèle chez Groq ; aucun défaut : sans lui, le fournisseur n'est pas proposé |
 | `MEMOGLYPH_MLX_PORT` | port épinglé du `mlx_lm.server`, `8772` par défaut |
+| `MEMOGLYPH_MLX_PROMPT_CACHE_SIZE` | nombre de séquences gardées par le cache de prompts du `mlx_lm.server`, `4` par défaut (dix chez `mlx_lm`) |
 | `MEMOGLYPH_PORT_BASE` | port UI de base, API sur le suivant |
 | `MEMOGLYPH_ATTENTE_S` | attente maximale du démarrage par `start.sh`, `900` s par défaut |
 | `MEMOGLYPH_UI_HOST` | écoute UI, `127.0.0.1` par défaut ; préférer `--lan` pour `0.0.0.0` |

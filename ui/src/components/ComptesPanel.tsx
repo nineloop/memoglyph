@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { changerActivation, creerCompte, listerComptes, type Compte } from '../api'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
 import { useSession } from './AuthGate'
 
 /**
@@ -13,7 +14,7 @@ import { useSession } from './AuthGate'
  * qu'afficher ses réponses.
  */
 export function ComptesPanel() {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [comptes, setComptes] = useState<Compte[]>([])
   const [erreur, setErreur] = useState('')
   const [avis, setAvis] = useState('')
@@ -22,8 +23,8 @@ export function ComptesPanel() {
   const [admin, setAdmin] = useState(false)
 
   const charger = useCallback(() => {
-    listerComptes().then(setComptes).catch((exc: Error) => setErreur(exc.message))
-  }, [])
+    listerComptes().then(setComptes).catch((exc: unknown) => setErreur(phraseDErreur(t, lang, exc, t('repli.comptesCharger'))))
+  }, [t, lang])
   useEffect(() => { charger() }, [charger])
 
   const basculer = async (compte: Compte) => {
@@ -33,7 +34,7 @@ export function ComptesPanel() {
       await changerActivation(compte.identifiant, !compte.actif)
       charger()
     } catch (exc) {
-      setErreur(t('auth.error.failed', { detail: (exc as Error).message }))
+      setErreur(phraseDErreur(t, lang, exc, t('repli.compteActivation')))
     }
   }
 
@@ -49,7 +50,7 @@ export function ComptesPanel() {
       setAdmin(false)
       charger()
     } catch (exc) {
-      setErreur(t('auth.error.failed', { detail: (exc as Error).message }))
+      setErreur(phraseDErreur(t, lang, exc, t('repli.compteCreer')))
     }
   }
 

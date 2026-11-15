@@ -265,3 +265,44 @@ def test_une_reunion_partagee_seule_s_ouvre_avec_la_portee_de_son_projet(bibliot
     assert bruno.get("/api/transcript/interne.md", params={"view_scope": interne}).status_code == 200
     assert bruno.get("/api/transcript/autre.md", params={"view_scope": interne}).status_code == 404
     assert bruno.get("/api/library", params={"view_scope": bibliotheque["clients"].id}).status_code == 404
+
+
+# ---------- (7) Les refus portent un code stable, en plus de leur phrase ----------
+
+def _refus_code(reponse, statut: int, code: str) -> dict:
+    assert reponse.status_code == statut
+    corps = reponse.json()
+    assert corps["code"] == code and set(corps) == {"detail", "code"}, "une phrase et un code, rien d'autre"
+    return corps
+
+
+def test_un_projet_qui_n_est_pas_au_compte_porte_son_code(bibliotheque) -> None:
+    bruno = connecte("bruno")
+    corps = _refus_code(partager(bruno, "projet", bibliotheque["clients"].id, "carole"), 404, "share.project.unknown")
+    assert corps["detail"] == "Projet introuvable"
+
+
+def test_une_reunion_ultra_confidentielle_porte_son_code(bibliotheque) -> None:
+    alice = connecte("alice")
+    secret = next(d for d in library.list_transcripts() if d["name"] == "secret.md")
+    corps = _refus_code(partager(alice, "reunion", secret["meeting_id"]), 409, "share.ultra.blocked")
+    assert "ultra-confidentiel" in corps["detail"]
+
+
+def test_un_compte_inconnu_ou_inactif_porte_son_code(bibliotheque) -> None:
+    alice = connecte("alice")
+    corps = _refus_code(partager(alice, "projet", bibliotheque["clients"].id, "inconnu"), 400, "share.account.unknown")
+    assert corps["detail"] == "Aucun compte actif ne porte cet identifiant."
+
+
+def test_un_partage_avec_soi_meme_porte_son_code(bibliotheque) -> None:
+    alice = connecte("alice")
+    corps = _refus_code(partager(alice, "projet", bibliotheque["clients"].id, "alice"), 400, "share.self")
+    assert corps["detail"] == "Un partage se fait avec un autre compte."
+
+
+def test_un_partage_qui_n_est_pas_au_compte_porte_son_code(bibliotheque) -> None:
+    alice, bruno = connecte("alice"), connecte("bruno")
+    partage = partager(alice, "projet", bibliotheque["clients"].id).json()["partage"]
+    corps = _refus_code(bruno.delete(f"/api/partages/{partage['id']}"), 404, "share.unknown")
+    assert corps["detail"] == "Partage introuvable"

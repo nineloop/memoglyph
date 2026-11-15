@@ -350,8 +350,7 @@ def trop_d_attente(label: str) -> Message:
     """
     return Message(
         "step.error.waitTooLong",
-        f"Ressources occupées : un autre {label} est en cours. Réessaie dans un moment — "
-        "cette machine ne traite qu'une tâche lourde à la fois.",
+        f"Ressources occupées : un autre {label} est en cours. Réessayez dans un moment.",
         label=label)
 
 

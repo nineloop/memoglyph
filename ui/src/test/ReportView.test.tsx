@@ -75,11 +75,13 @@ it('ne replie l’annexe que derrière les marqueurs memoglyph', () => {
 })
 
 // Le H1 de tête répète le titre de la réunion, déjà dans l'en-tête. Chaque moteur
-// l'écrit à sa façon : le générateur local (« Compte-rendu — », « Report — ») et
+// l'écrit à sa façon : le générateur local (« Compte rendu — », « Report — ») et
 // l'écrivain commun des autres moteurs (`# <titre>`).
 it.each([
   '# Report — ami-is1009a-reunion',
+  '# Compte rendu — ami-is1009a-reunion',
   '# Compte-rendu — ami-is1009a-reunion',
+  '# ami-is1009a-reunion — compte rendu',
   '# ami-is1009a-reunion — compte-rendu',
 ])('retire de l’affichage le H1 de tête « %s »', (titre) => {
   const contenu = REPORT.replace('# Compte-rendu', titre)
@@ -89,11 +91,11 @@ it.each([
   expect(screen.getByRole('heading', { name: 'Décision' })).toBeInTheDocument()
 })
 
-it('garde un H1 qui n’est pas le premier bloc', () => {
+it('rend en h2 un H1 qui n’est pas le premier bloc', () => {
   const contenu = '## Décision\n\n- Validé.\n\n# Annexe\n\n- Détail.'
   render(<ReportView content={contenu} genre="generique" />)
 
-  expect(screen.getByRole('heading', { level: 1, name: 'Annexe' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 2, name: 'Annexe' })).toBeInTheDocument()   // le titre n'est pas perdu ; la page garde son seul h1
 })
 
 it.each([REPORT, '# Ancien compte-rendu\n\nTexte.'])(
@@ -104,7 +106,7 @@ it.each([REPORT, '# Ancien compte-rendu\n\nTexte.'])(
     const puce = screen.getByText('mlx-community/Qwen3-4B').closest('.report-model')
     expect(puce).not.toBeNull()
     expect(puce).toHaveTextContent('Modèle · mlx-community/Qwen3-4B')
-    expect(puce).toHaveAttribute('title', 'Modèle du compte-rendu')
+    expect(puce).toHaveAttribute('title', 'Modèle du compte rendu')
     expect(puce).not.toHaveAttribute('aria-hidden')
     expect(puce).toBeVisible()
   },

@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 
 import type { LibraryItem, Meeting } from '../api'
-import { getLanguages, getMeetings, getTranscript, moveMeeting } from '../api'
+import { ErreurAvecCode, archiveMeeting, getLanguages, getMeetings, getTranscript, moveMeeting } from '../api'
 import { LibraryPanel } from '../components/LibraryPanel'
+import { LangProvider } from '../components/LangProvider'
 import { AudioProvider } from '../audio/AudioProvider'
+import { aucuneFenetreDeConfirmation, avecConfirmation, confirmer as confirmerLaFenetre, fenetreDeConfirmation, phraseDeLaFenetre, refuser } from './confirmation'
 
 
 vi.mock('../api', async (importOriginal) => {
@@ -16,6 +18,7 @@ vi.mock('../api', async (importOriginal) => {
     getMeetings: vi.fn(),
     getTranscript: vi.fn(),
     moveMeeting: vi.fn(),
+    archiveMeeting: vi.fn(),
   }
 })
 
@@ -79,7 +82,7 @@ it('aligne les métadonnées et garde les actions destructives dans un menu', as
   expect(screen.getByText('00:10:00')).toBeInTheDocument()
   expect(screen.getByText('FR')).toBeInTheDocument()
   expect(screen.getByText('1 transcript')).toBeInTheDocument()
-  expect(screen.getByText('1 CR')).toBeInTheDocument()
+  expect(screen.getByText('1 compte rendu')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Archiver la réunion' })).not.toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: 'Actions pour « Réunion test »' }))
@@ -266,7 +269,7 @@ it('dit « partagé avec personne » quand c’est le cas, et propose Partager a
   const onPartager = vi.fn()
   render(<LibraryPanel reloadKey={0} viewScope="climate-id" projects={projects}
                        titre="Climat" partageAvec={[]} onPartager={onPartager} />)
-  expect(await screen.findByText(/partagé avec personne/i)).toBeInTheDocument()
+  expect(await screen.findByText(/non partagé/i)).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Partager' }))
   expect(onPartager).toHaveBeenCalledTimes(1)
 })
@@ -350,4 +353,271 @@ it('dans une réunion ouverte par la Bibliothèque, le fil d’Ariane remplace l
   await screen.findByRole('navigation', { name: /fil d.ariane/i })
   await screen.findByRole('link', { name: 'Non classé' })
   expect(screen.queryByRole('button', { name: /^← ?Bibliothèque$|^Bibliothèque$/ })).not.toBeInTheDocument()
+})
+
+
+const PHRASE_ECHEC = 'La bibliothèque n’a pas pu être chargée.'
+const ECHEC_SERVEUR = new Error('HTTP 503: {"detail":"base indisponible"}')
+
+/** Une promesse qu'on résout ou qu'on rejette à la main, pour tenir un chargement « en cours ». */
+function enAttente<T>() {
+  let resoudre!: (v: T) => void
+  let rejeter!: (e: unknown) => void
+  const promesse = new Promise<T>((ok, ko) => { resoudre = ok; rejeter = ko })
+  return { promesse, resoudre, rejeter }
+}
+
+
+it('un chargement qui échoue le dit et propose « Réessayer » : ni « Aucune réunion » ni l’invitation à transcrire', async () => {
+  vi.mocked(getMeetings).mockRejectedValue(ECHEC_SERVEUR)
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} onTranscrire={vi.fn()} />)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(PHRASE_ECHEC)
+  expect(screen.getByRole('button', { name: 'Réessayer' })).toBeInTheDocument()
+  expect(screen.queryByText('Aucune réunion')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Transcrire un enregistrement' })).toBeNull()
+  // Le texte de l'exception n'est jamais montré.
+  expect(document.body.textContent).not.toMatch(/HTTP|base indisponible/)
+})
+
+
+it('témoin : une bibliothèque réellement vide dit « Aucune réunion », sans alerte', async () => {
+  vi.mocked(getMeetings).mockResolvedValue([])
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} onTranscrire={vi.fn()} />)
+
+  expect(await screen.findByText('Aucune réunion')).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+
+it('« Réessayer » repasse par l’attente, efface l’échec et affiche la liste quand le chargement réussit', async () => {
+  const user = userEvent.setup()
+  const seconde = enAttente<Meeting[]>()
+  vi.mocked(getMeetings).mockRejectedValueOnce(ECHEC_SERVEUR).mockReturnValueOnce(seconde.promesse)
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  await user.click(await screen.findByRole('button', { name: 'Réessayer' }))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.getByLabelText('Chargement des réunions')).toBeInTheDocument()
+
+  seconde.resoudre([meeting])
+  expect(await screen.findByText('21/07/2026')).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+
+it('un second échec qui suit le « Réessayer » de la personne redonne le focus au bouton', async () => {
+  const user = userEvent.setup()
+  vi.mocked(getMeetings).mockRejectedValue(ECHEC_SERVEUR)
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  await user.click(await screen.findByRole('button', { name: 'Réessayer' }))
+  await waitFor(() => expect(getMeetings).toHaveBeenCalledTimes(2))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Réessayer' })).toHaveFocus())
+})
+
+
+it('un échec qui suit une liste déjà affichée remplace cette liste (elle ne correspond plus à la requête)', async () => {
+  const { rerender } = render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+  expect(await screen.findByText('21/07/2026')).toBeInTheDocument()
+
+  vi.mocked(getMeetings).mockRejectedValueOnce(ECHEC_SERVEUR)
+  rerender(<LibraryPanel reloadKey={1} viewScope="project-id" projects={projects} />)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(PHRASE_ECHEC)
+  expect(screen.queryByText('21/07/2026')).toBeNull()
+})
+
+
+it('l’échec d’un chargement périmé (la portée a changé entre-temps) ne remplace pas la réponse la plus récente', async () => {
+  const ancien = enAttente<Meeting[]>()
+  vi.mocked(getMeetings).mockReturnValueOnce(ancien.promesse).mockResolvedValueOnce([meeting])
+  const { rerender } = render(<LibraryPanel reloadKey={0} viewScope="projet-a" projects={projects} />)
+  rerender(<LibraryPanel reloadKey={0} viewScope="projet-b" projects={projects} />)
+
+  expect(await screen.findByText('21/07/2026')).toBeInTheDocument()
+  ancien.rejeter(ECHEC_SERVEUR)
+  await new Promise((fin) => setTimeout(fin, 20))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.getByText('21/07/2026')).toBeInTheDocument()
+})
+
+
+it('l’échec d’une ACTION (déplacer) garde la liste : seul le chargement remplace la liste par l’état d’échec', async () => {
+  const user = userEvent.setup()
+  vi.mocked(moveMeeting).mockRejectedValue(new Error('refus du déplacement'))
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  await user.click(await screen.findByRole('button', { name: 'Classer' }))
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Classer « Réunion test »' }), 'climate-id')
+
+  await waitFor(() => expect(moveMeeting).toHaveBeenCalled())
+  expect(screen.getByText('21/07/2026')).toBeInTheDocument()
+  // La liste reste ; l'état d'échec du chargement (avec « Réessayer ») n'apparaît pas. La phrase de l'action, elle, s'annonce.
+  expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Le déplacement n’a pas abouti.')
+})
+
+
+it('en anglais, la phrase d’échec et l’action de reprise sont en anglais', async () => {
+  vi.mocked(getMeetings).mockRejectedValue(ECHEC_SERVEUR)
+  render(
+    <LangProvider initiale="en">
+      <LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />
+    </LangProvider>,
+  )
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The library could not be loaded.')
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+})
+
+
+it('pendant un échec de chargement, le sous-titre n’affirme aucun nombre de réunions ; après un succès il le dit', async () => {
+  const user = userEvent.setup()
+  vi.mocked(getMeetings).mockRejectedValueOnce(ECHEC_SERVEUR)
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  await screen.findByRole('alert')
+  expect(screen.queryByText(/^\d+ réunions?$/)).toBeNull()
+
+  await user.click(screen.getByRole('button', { name: 'Réessayer' }))
+  expect(await screen.findByText('1 réunion')).toBeInTheDocument()
+})
+
+
+it('avant la première réponse, le sous-titre n’affirme aucun nombre de réunions ; il le dit ensuite', async () => {
+  const premiere = enAttente<Meeting[]>()
+  vi.mocked(getMeetings).mockReturnValueOnce(premiere.promesse)
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  expect(screen.getByLabelText('Chargement des réunions')).toBeInTheDocument()
+  expect(screen.queryByText(/^\d+ réunions?$/)).toBeNull()
+
+  await act(async () => { premiere.resoudre([meeting]) })
+  expect(await screen.findByText('1 réunion')).toBeInTheDocument()
+})
+
+
+it('en anglais, la date d’une réunion de la liste se lit « 21 Jul 2026 », jamais « 21/07/2026 »', async () => {
+  render(
+    <LangProvider initiale="en">
+      <LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />
+    </LangProvider>,
+  )
+
+  expect(await screen.findByText('21 Jul 2026')).toBeInTheDocument()
+  expect(screen.queryByText('21/07/2026')).toBeNull()
+})
+
+
+it('l’échec d’un déplacement dit la phrase du contexte : ni « HTTP », ni le texte de l’exception', async () => {
+  const user = userEvent.setup()
+  vi.mocked(moveMeeting).mockRejectedValue(new Error('HTTP 500: {"detail":"refus-brut-du-deplacement"}'))
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  await user.click(await screen.findByRole('button', { name: 'Classer' }))
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Classer « Réunion test »' }), 'climate-id')
+
+  expect(await screen.findByText('Le déplacement n’a pas abouti.')).toBeInTheDocument()
+  expect(document.body.textContent).not.toMatch(/HTTP|refus-brut/)
+})
+
+
+it('un conflit de déplacement dit la phrase du catalogue, jamais celle du serveur', async () => {
+  const user = userEvent.setup()
+  vi.mocked(moveMeeting).mockRejectedValue(new ErreurAvecCode('meeting.move.conflict', 'Réunion introuvable ou conflit dans la destination'))
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  await user.click(await screen.findByRole('button', { name: 'Classer' }))
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Classer « Réunion test »' }), 'climate-id')
+
+  expect(await screen.findByText(/un document de même nom existe peut-être déjà dans le projet de destination/)).toBeInTheDocument()
+  expect(document.body.textContent).not.toMatch(/introuvable ou conflit/)
+})
+
+
+it('l’échec d’un archivage dit la phrase du contexte : ni « HTTP », ni le texte de l’exception', async () => {
+  const user = userEvent.setup()
+  vi.mocked(archiveMeeting).mockRejectedValue(new Error('HTTP 500: {"detail":"archivage-brut"}'))
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />, { wrapper: avecConfirmation })
+
+  await user.click(await screen.findByRole('button', { name: 'Classer' }))
+  await user.click(screen.getByRole('button', { name: /Archiver/ }))
+  await confirmerLaFenetre(user)
+
+  expect(await screen.findByText('L’archivage n’a pas abouti entièrement.')).toBeInTheDocument()
+  expect(document.body.textContent).not.toMatch(/HTTP|archivage-brut/)
+})
+
+
+it('archiver une réunion demande confirmation dans la fenêtre de l’application ; un refus n’archive rien', async () => {
+  const user = userEvent.setup()
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />, { wrapper: avecConfirmation })
+
+  await user.click(await screen.findByRole('button', { name: 'Classer' }))
+  await user.click(screen.getByRole('button', { name: /Archiver/ }))
+
+  expect(await fenetreDeConfirmation()).toHaveAccessibleName('Archiver toute la réunion « Réunion test » ?')
+  expect(await phraseDeLaFenetre()).toBe('Tous ses transcripts et comptes rendus seront déplacés dans la corbeille. Cette action reste réversible.')
+  expect(within(await fenetreDeConfirmation()).getByRole('button', { name: 'Archiver la réunion' })).toBeInTheDocument()
+  await refuser(user)
+
+  aucuneFenetreDeConfirmation()
+  expect(archiveMeeting).not.toHaveBeenCalled()
+})
+
+
+it('l’échec d’un archivage reste affiché quand la liste se recharge ensuite, sans texte brut', async () => {
+  const user = userEvent.setup()
+  vi.mocked(archiveMeeting).mockRejectedValue(new Error('HTTP 500: {"detail":"archivage-brut"}'))
+  const monter = (cle: number) => (
+    <LibraryPanel reloadKey={cle} viewScope="project-id" projects={projects} onChanged={() => rendu.rerender(monter(cle + 1))} />)
+  const rendu = render(monter(0), { wrapper: avecConfirmation })
+
+  await user.click(await screen.findByRole('button', { name: 'Classer' }))
+  await user.click(screen.getByRole('button', { name: /Archiver/ }))
+  await confirmerLaFenetre(user)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('L’archivage n’a pas abouti entièrement.')
+  await waitFor(() => expect(vi.mocked(getMeetings).mock.calls.length).toBeGreaterThanOrEqual(2))   // la liste a bien été rechargée
+  expect(screen.getByRole('alert')).toHaveTextContent('L’archivage n’a pas abouti entièrement.')
+  expect(document.body.textContent).not.toMatch(/HTTP|archivage-brut/)
+})
+
+
+it('l’écran a un seul titre de niveau 1 : son périmètre', async () => {
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+
+  expect(await screen.findByRole('heading', { level: 1, name: 'Bibliothèque' })).toBeInTheDocument()
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+})
+
+
+it('les segments de tri et les filtres disent leur état aux lecteurs d’écran (aria-pressed), le tri est un groupe nommé', async () => {
+  const user = userEvent.setup()
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+  await screen.findByRole('button', { name: 'Classer' })
+
+  const groupe = screen.getByRole('group', { name: 'Trier les réunions' })
+  const tris = [...groupe.querySelectorAll('button.seg-btn:not(.icon)')] as HTMLElement[]
+  expect(tris.length).toBeGreaterThan(1)
+  expect(tris.filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
+  expect(tris.every((b) => b.hasAttribute('aria-pressed'))).toBe(true)
+
+  const filtre = document.querySelector('.filters button.chip') as HTMLElement
+  expect(filtre).toHaveAttribute('aria-pressed', 'false')
+  await user.click(filtre)
+  expect(filtre).toHaveAttribute('aria-pressed', 'true')
+})
+
+
+it('la ligne d’une réunion dit date, durée, langue et locuteurs avec leur libellé (description de la ligne), sans info-bulle', async () => {
+  render(<LibraryPanel reloadKey={0} viewScope="project-id" projects={projects} />)
+  const ligne = await screen.findByRole('button', { name: /^Ouvrir la réunion/ })
+
+  const description = ligne.getAttribute('aria-describedby')
+  expect(description).toBeTruthy()
+  const lue = (document.getElementById(description as string)?.textContent ?? '').replace(/\s+/g, ' ')
+  for (const libelle of ['Date de la réunion', 'Durée', 'Langue', 'Locuteurs']) expect(lue).toContain(libelle)
+  expect(ligne.querySelectorAll('.meeting-facts [title]')).toHaveLength(0)   // plus d'info-bulle : le libellé est lu, pas survolé
 })

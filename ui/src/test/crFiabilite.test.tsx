@@ -38,7 +38,7 @@ it('sans horodatages, le compte-rendu automatique n’est pas proposé ni demand
   const { container } = render(<TranscribePanel config={config} onCompleted={vi.fn()} />)
   fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement,
                    { target: { files: [new File(['a'], 'a.mp3', { type: 'audio/mpeg' })] } })
-  const cr = screen.getByRole('checkbox', { name: /Compte-rendu automatique/ })
+  const cr = screen.getByRole('checkbox', { name: /Compte rendu automatique/ })
   if (!(cr as HTMLInputElement).checked) await user.click(cr)
   expect(cr).toBeChecked()
 
@@ -57,10 +57,12 @@ it('un transcript sans horodatage ne propose pas de générer un compte-rendu', 
     name: 'sans-heure.md', body: 'Texte sans horodatage', content: '',
     meta: { pipeline: { stt: { timestamps: false } } },
   })
-  render(<TranscriptReader name="sans-heure.md" documentScope="p" onBack={vi.fn()} />)
+  // L'action « compte rendu » est celle que la réunion fournit (un seul chemin : le panneau « Régénérer »).
+  render(<TranscriptReader name="sans-heure.md" documentScope="p" onBack={vi.fn()}
+                           actionCompteRendu={{ libelle: 'Régénérer', onClick: vi.fn() }} />)
   await screen.findByText('Texte sans horodatage')
 
-  const bouton = screen.getByRole('button', { name: /Compte-rendu/ })
+  const bouton = screen.getByRole('button', { name: /Régénérer/ })
   expect(bouton).toBeDisabled()
   expect(bouton).toHaveAttribute('title', expect.stringMatching(/sans horodatage/))
 })
@@ -70,10 +72,11 @@ it('un transcript horodaté garde le bouton de compte-rendu', async () => {
     name: 'horodate.md', body: '[00:00:01] Bonjour', content: '',
     meta: { pipeline: { stt: { timestamps: true } } },
   })
-  render(<TranscriptReader name="horodate.md" documentScope="p" onBack={vi.fn()} />)
+  render(<TranscriptReader name="horodate.md" documentScope="p" onBack={vi.fn()}
+                           actionCompteRendu={{ libelle: 'Régénérer', onClick: vi.fn() }} />)
   await screen.findByText(/Bonjour/)
 
-  expect(screen.getByRole('button', { name: /Compte-rendu/ })).toBeEnabled()
+  expect(screen.getByRole('button', { name: /Régénérer/ })).toBeEnabled()
 })
 
 // ---------- A2 : la réserve d'un CR échoué reste visible ----------
@@ -101,7 +104,7 @@ it('l’onglet Information affiche la cause d’un compte-rendu en échec', asyn
   render(<MeetingView reunion={reunion} onBack={vi.fn()} initialTab="info" />)
 
   const panneau = screen.getByRole('tabpanel', { name: 'Informations' })
-  expect(await within(panneau).findByText('Compte-rendu en échec')).toBeInTheDocument()
+  expect(await within(panneau).findByText('Compte rendu en échec')).toBeInTheDocument()
   expect(within(panneau).getByRole('note')).toHaveTextContent("Le service LLM (mlx) n'est pas disponible.")
 })
 
@@ -110,5 +113,5 @@ it('sans échec de compte-rendu, aucune réserve n’est affichée', async () =>
   render(<MeetingView reunion={reunion} onBack={vi.fn()} initialTab="info" />)
 
   await waitFor(() => expect(getTranscript).toHaveBeenCalled())
-  expect(screen.queryByText('Compte-rendu en échec')).not.toBeInTheDocument()
+  expect(screen.queryByText('Compte rendu en échec')).not.toBeInTheDocument()
 })

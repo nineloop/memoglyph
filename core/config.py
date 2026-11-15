@@ -347,6 +347,21 @@ MLX_PROMPT_CACHE_BYTES = int(
     )
 )
 
+# Nombre de SÉQUENCES gardées par le cache de prompts de `mlx_lm.server`
+# (`--prompt-cache-size`) : QUATRE. Le défaut de `mlx_lm.server` est dix.
+#
+# Quatre séquences limitent la mémoire du serveur sur les longues réunions sans
+# changer le texte du compte-rendu. L'Assistant n'a pas d'historique de
+# conversation : la réutilisation de préfixe y compte peu.
+#
+# ⚠️ Ce que cette valeur ne règle PAS. Limiter le NOMBRE de séquences ne limite
+# pas les octets, et `MLX_PROMPT_CACHE_BYTES` n'agit qu'à l'INSERTION d'une
+# requête : il ne borne pas le pic de mémoire à l'intérieur d'un long
+# compte-rendu. Les deux bornes se complètent, aucune ne suffit seule.
+MLX_PROMPT_CACHE_SIZE = int(
+    getenv_compat("MLX_PROMPT_CACHE_SIZE", "4")
+)
+
 # Port ÉPINGLÉ, et dans la plage Memoglyph (interface 8770, API 8771).
 #
 # Le défaut de `mlx_lm.server` est 8080 — un port de développement banal, très

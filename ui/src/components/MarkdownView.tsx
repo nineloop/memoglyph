@@ -12,7 +12,8 @@ function inline(
   t: Traduire,
   onTimestamp?: (timestamp: string) => void,
 ): ReactNode[] {
-  const token = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[source (?:none|\d{1,2}:\d{2}(?::\d{2})?)\])/g
+  // `**gras**` avant `*italique*` (l'ordre des alternatives compte) ; l'italique ne commence ni ne finit par une espace : « 2 * 3 * 4 » reste du texte.
+  const token = /(\*\*[^*]+\*\*|\*(?=[^\s*])[^*\n]*[^\s*]\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[source (?:none|\d{1,2}:\d{2}(?::\d{2})?)\])/g
   const out: ReactNode[] = []
   let cursor = 0
   for (const match of text.matchAll(token)) {
@@ -37,6 +38,8 @@ function inline(
       out.push(<code key={key}>{source[1] === 'none' ? t('md.sourceMissing') : source[1]}</code>)
     } else if (value.startsWith('**')) {
       out.push(<strong key={key}>{value.slice(2, -2)}</strong>)
+    } else if (value.startsWith('*')) {
+      out.push(<em key={key}>{value.slice(1, -1)}</em>)
     } else if (value.startsWith('`')) {
       out.push(<code key={key}>{value.slice(1, -1)}</code>)
     } else {
@@ -92,7 +95,8 @@ export function MarkdownView({
     if (heading) {
       const level = heading[1].length
       const children = inline(heading[2], `h-${index}`, t, onTimestamp)
-      if (level === 1) blocks.push(<h1 key={`h-${index}`}>{children}</h1>)
+      // Un titre de niveau 1 du document n'est pas le titre de la page : `h2` (classe `md-h1` : il garde l'aspect d'un titre de niveau 1).
+      if (level === 1) blocks.push(<h2 key={`h-${index}`} className="md-h1">{children}</h2>)
       else if (level === 2) blocks.push(<h2 key={`h-${index}`}>{children}</h2>)
       else if (level === 3) blocks.push(<h3 key={`h-${index}`}>{children}</h3>)
       else blocks.push(<h4 key={`h-${index}`}>{children}</h4>)

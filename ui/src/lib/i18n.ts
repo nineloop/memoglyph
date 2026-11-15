@@ -5,8 +5,8 @@
  * interpolation `{param}`. Une dépendance de plus se paierait au premier audit
  * des dépendances non déclarées, pour un service que 60 lignes rendent.
  *
- * Persistance : même convention que `llmProvider.ts` — une clé `memoglyph.*`
- * dans `localStorage`, entourée d'un `try/catch` parce qu'en navigation privée
+ * Persistance : une clé `memoglyph.*` dans `localStorage`, lue et écrite par
+ * `stockage.ts`, qui l'entoure d'un `try/catch` parce qu'en navigation privée
  * l'accès LÈVE au lieu de renvoyer `null`.
  *
  * Règle de conception : ce qui DÉCRIT un comportement

@@ -58,10 +58,11 @@ export function displayMeetingTitle(title: string, source: string | null | undef
 
 /**
  * Titre lisible d'un DOCUMENT, transcript ou compte-rendu. Un compte-rendu porte
- * « <slug> — compte-rendu » : sa base est rendue lisible, le suffixe gardé.
+ * « <slug> — compte rendu » (« compte-rendu » avant) : sa base est rendue lisible, le suffixe gardé.
  * `source` est, pour un compte-rendu, celle du transcript dont il est tiré.
  */
 export function displayDocumentTitle(title: string, source: string | null | undefined): string {
+  title = title.replace(/ — compte-rendu$/, ' — compte rendu')    // lu au nouveau format, le titre enregistré reste tel quel
   const suffixe = title.match(/^(\S+)(\s+—\s+.+)$/)
   if (suffixe) return displayMeetingTitle(suffixe[1], source) + suffixe[2]
   return displayMeetingTitle(title, source)

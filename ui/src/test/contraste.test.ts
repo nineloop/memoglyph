@@ -72,6 +72,22 @@ describe('le dock se détache du fond', () => {
     }
   })
 
+  it('thème sombre : le dock est au moins 3:1 plus clair que la page', () => {
+    const dock = couleurDuJeton(SOMBRE, '--dock-bg')
+    expect(dock, 'le jeton --dock-bg manque dans le bloc sombre').not.toBeNull()
+    expect(rapport(composer(dock!, fondDePage(SOMBRE)), fondDePage(SOMBRE))).toBeGreaterThanOrEqual(3)
+  })
+
+  it('les étiquettes des entrées du dock (--dock-muted) restent lisibles sur son fond, dans les deux thèmes (≥ 4,5:1)', () => {
+    for (const table of [CLAIR, SOMBRE]) {
+      const fond = couleurDuJeton(table, '--dock-bg')
+      const texte = couleurDuJeton(table, '--dock-muted')
+      expect(fond, 'jeton --dock-bg').not.toBeNull()
+      expect(texte, 'jeton --dock-muted').not.toBeNull()
+      expect(rapport(texte!, composer(fond!, fondDePage(table)))).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
   it("l'état actuel (verre blanc à 92 %) ne passe pas : le test peut échouer", () => {
     const verre = couleurDuJeton(CLAIR, '--panel-glass')!
     expect(rapport(composer(verre, fondDePage(CLAIR)), fondDePage(CLAIR))).toBeLessThan(3)

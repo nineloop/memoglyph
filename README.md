@@ -31,8 +31,8 @@ Memoglyph turns a recording into a timestamped transcript and a report. Each sta
 
 An audio or video file dropped on the Transcribe screen, up to 2,048 MB by default, is filed in a project and, by default, processed on the Mac.
 
-![The Transcribe screen: a file drop area, the project to save to, and the processing steps](docs/assets/screenshots/transcribe.png)
-*The Transcribe screen: file, project and processing steps.*
+![The Transcribe screen: the processing settings (local or online, spoken language, document sensitivity), a file drop area, the project to save to, and the processing steps](docs/assets/screenshots/transcribe.png)
+*The Transcribe screen: processing settings, file, project and processing steps.*
 
 ### 2. Read
 
@@ -119,4 +119,4 @@ make check
 
 The code is under the Apache-2.0 license ([LICENSE](LICENSE), [NOTICE](NOTICE)). Models keep their own licenses. The Memoglyph name and logo are not covered by that license; the brand files are described in [docs/assets/brand/](docs/assets/brand/README.md).
 
-Version v1.2.1.
+Version v1.3.0.

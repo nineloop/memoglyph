@@ -4,8 +4,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
 import type { AppConfig } from '../api'
-import { createProject, getConfig, getDuplicates, getEtatAuth, getProjects, getTraitements, getTrash, search, streamJob, submitTranscribe } from '../api'
+import { ErreurAvecCode, createProject, getConfig, getDuplicates, getEtatAuth, getProjects, getTraitements, getTrash, search, streamJob, submitTranscribe } from '../api'
 import type { ListeTraitements, Traitement } from '../api'
+import { aucuneFenetreDeConfirmation, fenetreDeConfirmation, refuser } from './confirmation'
+
+/**
+ * Ouvre un écran : une entrée du dock, ou, sous « Plus », Voix, Usage et Maintenance. Corbeille et Doublons ne sont plus des entrées du dock :
+ * ce sont des onglets de la Maintenance (un seul chemin).
+ */
+async function ouvrirEcran(nom: string) {
+  const dock = screen.getByRole('navigation', { name: /principale|main/i })
+  const direct = within(dock).queryByRole('button', { name: nom })
+  if (direct) { fireEvent.click(direct); return }
+  if (nom === 'Corbeille' || nom === 'Doublons') {
+    await ouvrirEcran('Maintenance')
+    fireEvent.click(await screen.findByRole('tab', { name: new RegExp(nom) }))
+    return
+  }
+  fireEvent.click(within(dock).getByRole('button', { name: 'Plus' }))
+  fireEvent.click(within(screen.getByRole('group', { name: /plus d.écrans/i })).getByRole('button', { name: new RegExp(`^${nom}`) }))
+}
 
 
 vi.mock('../api', async (importOriginal) => {
@@ -158,11 +176,30 @@ it('l’état LLM nomme CHAQUE moteur prêt, MLX compris', async () => {
 
   render(<App />)
 
-  const badge = await screen.findByTitle(/LLM/)
+  const badge = await screen.findByTitle(/Modèle disponible/)
   expect(badge.getAttribute('title')).toContain('MLX')
   expect(badge.getAttribute('title')).toContain('Mistral')
   // Ollama n'est PAS prêt : l'annoncer serait aussi faux que de taire MLX.
-  expect(badge.getAttribute('title')).not.toContain('Ollama')
+  expect(badge.getAttribute('title')).not.toMatch(/ollama/i)
+})
+
+
+it('l’état LLM nomme aussi OpenRouter et Groq sous leur nom, jamais sous leur identifiant', async () => {
+  vi.mocked(getConfig).mockResolvedValue({
+    engines: ['whisper'], default_engine: 'whisper',
+    default_project: 'Non classé', default_project_id: '01KY243SVP5GA31F6KSBYXEAHR',
+    whisper_model: 'whisper-test', llm_model: 'llm-test',
+    max_upload_mb: 2048, supported_extensions: ['.mp3'],
+    diarization_available: true, llm_available: true,
+    llm_ready: { mlx: true, openrouter: true, groq: true },
+  } as AppConfig)
+
+  render(<App />)
+
+  const titre = (await screen.findByTitle(/Modèle disponible/)).getAttribute('title') ?? ''
+  expect(titre).toContain('OpenRouter')
+  expect(titre).toContain('Groq')
+  expect(titre).not.toMatch(/openrouter|groq/)
 })
 
 
@@ -175,9 +212,22 @@ it('expose les espaces de navigation dans le dock et navigue au clic', async () 
 
   await prete()
   const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
-  for (const label of ['Transcrire', 'Bibliothèque', 'Recherche', 'Assistant', 'Voix', 'Maintenance']) {
+  for (const label of ['Transcrire', 'Bibliothèque', 'Recherche', 'Assistant', 'Plus']) {
     expect(within(navigation).getByRole('button', { name: label })).toBeInTheDocument()
   }
+  // Voix, Usage et Maintenance sont sous « Plus » ; Corbeille et Doublons n'ont plus d'entrée (onglets de la Maintenance).
+  for (const label of ['Voix', 'Usage', 'Maintenance', 'Corbeille', 'Doublons']) {
+    expect(within(navigation).queryByRole('button', { name: label })).not.toBeInTheDocument()
+  }
+  await user.click(within(navigation).getByRole('button', { name: 'Plus' }))
+  const feuille = screen.getByRole('group', { name: /plus d.écrans/i })
+  for (const label of ['Voix', 'Usage', 'Maintenance']) {
+    expect(within(feuille).getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument()
+  }
+  for (const label of ['Corbeille', 'Doublons']) {
+    expect(within(feuille).queryByRole('button', { name: new RegExp(label) })).not.toBeInTheDocument()
+  }
+  await user.keyboard('{Escape}')
 
   await user.click(within(navigation).getByRole('button', { name: 'Assistant' }))
   await waitFor(() => expect(within(navigation).getByRole('button', { name: 'Assistant' }))
@@ -220,7 +270,7 @@ describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
     await prete()
 
     for (const ecran of [null, 'Corbeille', 'Recherche', 'Voix']) {
-      if (ecran) fireEvent.click(screen.getByRole('button', { name: ecran }))
+      if (ecran) await ouvrirEcran(ecran)
       expect(container.querySelector('.scope-kind')).toBeNull()
       expect(container.querySelector('.project-select')).toBeNull()
       expect(screen.queryByRole('combobox', { name: /Projet courant/ })).toBeNull()
@@ -232,27 +282,29 @@ describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
     await prete()
     fireEvent.click(screen.getByRole('button', { name: 'Transcrire' }))
     expect(await screen.findByRole('combobox', { name: 'Ranger dans' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Corbeille' }))
+    await ouvrirEcran('Corbeille')
     expect(screen.queryByRole('combobox', { name: 'Ranger dans' })).toBeNull()
   })
 
-  it('donne à Corbeille et Doublons leur propre entrée de navigation', async () => {
+  it('Corbeille et Doublons sont des onglets de la Maintenance, un seul chemin, plus des entrées du dock', async () => {
     renderApp()
     await prete()
 
-    // Deux clics en desktop et trois en mobile avant : ils étaient enfouis
-    // dans « Maintenance », dont le nom n'annonçait rien.
-    for (const nom of ['Corbeille', 'Doublons', 'Maintenance']) {
-      expect(screen.getByRole('button', { name: nom })).toBeInTheDocument()
+    // Ils ne sont plus des entrées du dock ; la Maintenance les porte.
+    for (const nom of ['Corbeille', 'Doublons']) {
+      expect(screen.queryByRole('button', { name: nom })).not.toBeInTheDocument()
     }
-    expect(screen.getByText('Données')).toBeInTheDocument()
+    await ouvrirEcran('Maintenance')
+    for (const nom of [/Corbeille/, /Doublons/]) {
+      expect(await screen.findByRole('tab', { name: nom })).toBeInTheDocument()
+    }
   })
 
   it('arrive sur la BONNE section, pas sur le diagnostic', async () => {
+    history.replaceState(null, '', '/?vue=trash')   // l'adresse de la Corbeille reste valide : elle ouvre la Maintenance sur son onglet
     renderApp()
     await prete()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Corbeille' }))
     await waitFor(() => {
       const onglet = document.querySelector('[role="tab"][aria-selected="true"]')
       expect(onglet?.textContent).toMatch(/Corbeille/)
@@ -276,10 +328,12 @@ describe('P1 — rôle du sélecteur et découvrabilité des données', () => {
     // serait payé à chaque changement de portée, par tout le monde, pour un
     // chiffre que personne n'a demandé.
     vi.mocked(getTrash).mockResolvedValue([{ name: 'a.md' }] as never)
-    renderApp()
+    const { container } = renderApp()
     await prete()
-    const doublons = screen.getByRole('button', { name: /Doublons/ })
-    expect(doublons.querySelector('.nav-badge')).toBeNull()
+    await waitFor(() => expect(container.querySelector('.nav-badge')).not.toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Plus' }))
+    // Le seul compteur est celui de la Corbeille (1) : sur « Plus » et sur la Maintenance ; aucun autre n'est ajouté pour les doublons.
+    expect([...container.querySelectorAll('.nav-badge')].map((b) => b.textContent)).toEqual(['1', '1'])
   })
 
   it('ne montre PAS deux champs de recherche dans la vue Recherche', async () => {
@@ -317,8 +371,8 @@ describe('P1 — état URL', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recherche' }))
     await waitFor(() => expect(location.search).toContain('vue=search'))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Corbeille' }))
-    await waitFor(() => expect(location.search).toContain('vue=trash'))
+    await ouvrirEcran('Maintenance')
+    await waitFor(() => expect(location.search).toContain('vue=maintenance'))
   })
 
   it('relit la vue au DÉMARRAGE', async () => {
@@ -326,8 +380,7 @@ describe('P1 — état URL', () => {
     history.replaceState(null, '', '/?vue=voices')
     renderApp()
     await prete()
-    expect(screen.getByRole('button', { name: 'Voix' }))
-      .toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Plus' })).toHaveClass('on')   // Voix est sous « Plus » : le bouton est marqué courant
   })
 
   it('réagit au bouton RETOUR', async () => {
@@ -667,9 +720,18 @@ describe('reprendre où l’on s’était arrêté', () => {
   /** L'entrée de navigation marquée comme courante — ce que l'écran montre. */
   function vueAffichee() {
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
-    return within(navigation).getAllByRole('button')
+    const courant = within(navigation).getAllByRole('button')
       .find((bouton) => bouton.getAttribute('aria-current') === 'page')
       ?.textContent?.trim()
+    if (courant) return courant
+    // Voix est sous « Plus » : le bouton « Plus » est marqué courant, l'écran affiché se lit dans la feuille.
+    const plus = within(navigation).getByRole('button', { name: 'Plus' })
+    if (!plus.classList.contains('on')) return undefined
+    fireEvent.click(plus)
+    const dansLaFeuille = within(screen.getByRole('group', { name: /plus d.écrans/i })).getAllByRole('button')
+      .find((bouton) => bouton.getAttribute('aria-current') === 'page')?.textContent?.trim()
+    fireEvent.click(plus)
+    return dansLaFeuille?.replace(/\d+$/, '')
   }
 
   /** Monte l'application et attend que la vue d'ouverture soit tranchée. */
@@ -739,13 +801,21 @@ describe('reprendre où l’on s’était arrêté', () => {
     // L'ÉCRITURE, séparée de la lecture ci-dessus.
     history.replaceState(null, '', '/?vue=transcribe')
     await ouvrir()
-    fireEvent.click(screen.getByRole('button', { name: 'Voix' }))
+    await ouvrirEcran('Voix')
     await waitFor(() => expect(localStorage.getItem(CLE_VUE)).toBe('voices'))
   })
 
   // `dedup` est vérifié dans `vuePreferee.test.ts` : ouvrir le panneau
   // Doublons ici déclencherait un `getDuplicates` non bouchonné, dont le rejet
   // polluerait la suite entière d'une erreur non rattrapée.
+  it('un serveur injoignable est annoncé', async () => {
+    vi.mocked(getConfig).mockRejectedValue(new Error('réseau'))
+    history.replaceState(null, '', '/')
+    renderApp()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Le serveur est injoignable.')
+  })
+
   it('ne mémorise RIEN quand le corpus est inconnu', async () => {
     // Le `.catch` de `getProjects` est muet, et `.finally` marque la liste
     // « reçue » même après un échec. Trancher là-dessus reviendrait à figer
@@ -766,7 +836,7 @@ describe('reprendre où l’on s’était arrêté', () => {
     await ouvrir()
     await waitFor(() => expect(localStorage.getItem(CLE_VUE)).toBe('transcribe'))
     for (const detour of ['Corbeille', 'Maintenance']) {
-      fireEvent.click(screen.getByRole('button', { name: detour }))
+      await ouvrirEcran(detour)
       await waitFor(() => expect(location.search).not.toContain('vue=transcribe'))
       // Rouvrir l'application sur la corbeille serait déroutant : on y va pour
       // une opération précise, ce n'est pas un point de départ.
@@ -900,6 +970,20 @@ describe('création de projet en modale', () => {
     expect(valider).toBeEnabled()
   })
 
+  it('un nom de projet indisponible dit la phrase du catalogue dans la modale, jamais celle du serveur', async () => {
+    const user = userEvent.setup()
+    vi.mocked(createProject).mockRejectedValue(new ErreurAvecCode('project.name.taken', 'Impossible de créer le projet \'Climat\' : nom indisponible'))
+    renderApp()
+    const { dialogue } = await ouvrirModale()
+    await user.type(within(dialogue).getByLabelText('Nom du projet'), 'Climat')
+    await user.click(within(dialogue).getByRole('button', { name: 'Créer le projet' }))
+
+    const erreur = await within(dialogue).findByRole('alert')
+    expect(erreur).toHaveTextContent('Ce nom de projet n’est pas disponible : choisissez-en un autre.')
+    expect(erreur).not.toHaveTextContent(/nom indisponible|Impossible/)
+    expect(within(dialogue).getByLabelText('Nom du projet')).toHaveValue('Climat')
+  })
+
   it('garde l’ERREUR et la saisie DANS la modale', async () => {
     // C'est le cas qui motivait le lot : `alert()` refermé, le nom tapé était
     // perdu, et il fallait rouvrir la boîte pour tout retaper.
@@ -913,7 +997,8 @@ describe('création de projet en modale', () => {
       await user.click(within(dialogue).getByRole('button', { name: 'Créer le projet' }))
 
       const erreur = await within(dialogue).findByRole('alert')
-      expect(erreur).toHaveTextContent(/Création impossible.*409 nom déjà pris/)
+      expect(erreur).toHaveTextContent('Le projet n’a pas pu être créé.')
+      expect(erreur).not.toHaveTextContent(/409|nom déjà pris/)
       expect(screen.getByRole('dialog', { name: 'Créer un projet' })).toBeInTheDocument()
       expect(within(dialogue).getByLabelText('Nom du projet')).toHaveValue('Climat')
       expect(alerte).not.toHaveBeenCalled()
@@ -956,10 +1041,13 @@ it('un membre ne voit pas la maintenance de toute la bibliothèque', async () =>
   render(<App />)
 
   await prete()
-  const dock = screen.getByRole('navigation', { name: /principale|main/i })
-  expect(within(dock).getByRole('button', { name: /Corbeille/ })).toBeInTheDocument()
-  expect(within(dock).getByRole('button', { name: /Doublons/ })).toBeInTheDocument()
-  expect(within(dock).queryByRole('button', { name: /Maintenance/ })).not.toBeInTheDocument()
+  // Ce qu'un membre atteint ne change pas : sa Corbeille et ses Doublons (aujourd'hui sous la Maintenance, avec ses deux onglets seulement),
+  // jamais le diagnostic ni les reprises de toute la bibliothèque.
+  await ouvrirEcran('Maintenance')
+  expect(await screen.findByRole('tab', { name: /Corbeille/ })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /Doublons/ })).toBeInTheDocument()
+  expect(screen.queryByRole('tab', { name: /État & index/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('tab', { name: /Reprise/ })).not.toBeInTheDocument()
 })
 
 
@@ -980,8 +1068,8 @@ it('un administrateur voit la maintenance et les projets sans propriétaire sign
   const panneau = screen.getByRole('navigation', { name: 'Projets de la bibliothèque' })
   expect(await within(panneau).findByRole('link', { name: /Ancien · sans propriétaire/ })).toBeInTheDocument()
   expect(within(panneau).getByRole('link', { name: /Non classé/ })).toBeInTheDocument()
-  const dock = screen.getByRole('navigation', { name: /principale|main/i })
-  expect(within(dock).getByRole('button', { name: /Maintenance/ })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Plus' }))
+  expect(within(screen.getByRole('group', { name: /plus d.écrans/i })).getByRole('button', { name: /^Maintenance/ })).toBeInTheDocument()
 })
 
 
@@ -1090,7 +1178,7 @@ describe('les six autres écrans affichent la portée en lecture', () => {
       renderApp()
       await prete()
       const dock = screen.getByRole('navigation', { name: 'Navigation principale' })
-      await user.click(within(dock).getByRole('button', { name: ecran }))
+      await ouvrirEcran(ecran)
 
       const lien = await screen.findByRole('link', { name: 'Changer dans la Bibliothèque' })
       expect(lien).toHaveAttribute('href', expect.stringContaining('vue=library'))
@@ -1114,7 +1202,7 @@ describe('les six autres écrans affichent la portée en lecture', () => {
     // (portée remise à zéro après le montage) ne doit pas passer pour un succès.
     await waitFor(() => expect(search).toHaveBeenCalled())
     await waitFor(() => expect(search).toHaveBeenLastCalledWith('budget', 'semantic', 'all'))
-    expect(await screen.findByText(/Portée : Tous mes projets/)).toBeInTheDocument()
+    expect(await screen.findByText(/Dans : Tous mes projets/)).toBeInTheDocument()
   })
 })
 
@@ -1192,15 +1280,13 @@ describe('les traitements, depuis n\'importe quel écran', () => {
     ({ traitements, actifs, en_attente: attente })
 
   it('l\'indicateur reste visible en changeant d\'écran, jusqu\'à la fin du traitement', async () => {
-    const user = userEvent.setup()
     vi.mocked(getTraitements).mockResolvedValue(liste([T()], 1))
     history.replaceState(null, '', '/?vue=library')
     renderApp()
     await prete()
     const indicateur = await screen.findByRole('button', { name: /traitements : 1 en cours, 0 en attente/i })
-    const dock = screen.getByRole('navigation', { name: 'Navigation principale' })
     for (const ecran of ['Recherche', 'Assistant', 'Transcrire', 'Voix']) {
-      await user.click(within(dock).getByRole('button', { name: ecran }))
+      await ouvrirEcran(ecran)
       expect(screen.getByRole('button', { name: /traitements : 1 en cours/i })).toBeInTheDocument()
     }
     expect(indicateur).toBeInTheDocument()
@@ -1240,6 +1326,20 @@ describe('les traitements, depuis n\'importe quel écran', () => {
     const panneau = await screen.findByRole('dialog', { name: 'Traitements' })
     expect(await within(panneau).findByText('visio du 2 novembre')).toBeInTheDocument()
     expect(panneau).toHaveTextContent(/Climat · étape 2 sur 5 · depuis 4 min/)
+  })
+
+  it('annuler un traitement en attente ouvre la fenêtre de confirmation de l\'application : le fournisseur est monté à la racine', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTraitements).mockResolvedValue(liste([T({ en_attente: true, etape: null, progression: 0 })], 0, 1))
+    history.replaceState(null, '', '/?vue=library&traitements=1')
+    renderApp()
+    await prete()
+    const panneau = await screen.findByRole('dialog', { name: 'Traitements' })
+    await user.click(await within(panneau).findByRole('button', { name: /^Annuler le traitement/ }))
+
+    expect(await fenetreDeConfirmation()).toHaveAccessibleName('Annuler ce traitement ?')
+    await refuser(user)
+    aucuneFenetreDeConfirmation()
   })
 
   it('« Ouvrir la réunion » d\'un traitement terminé ouvre cette réunion dans son projet et ferme le panneau', async () => {

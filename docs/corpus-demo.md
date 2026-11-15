@@ -35,6 +35,10 @@ Chaque fichier est vérifié contre son empreinte SHA-256, déclarée dans
 `tools/corpus_demo.py`. Un fichier présent mais différent est signalé, jamais
 écrasé.
 
+Si le miroir refuse un fichier, le script le signale, passe aux autres fichiers et sort en
+erreur ; aucun fichier incomplet ne porte son nom définitif ; relancé, il ne télécharge que
+ce qui manque.
+
 ## Où il sert
 
 - `tools/corpus_demo.extrait` découpe des extraits de deux minutes à l'exécution, pour

@@ -23,8 +23,8 @@ describe('une diarisation manquée dit sa cause (constat 2)', () => {
   const cause = 'DiarizationError: HF_TOKEN manquant.'
 
   it.each([
-    ['en', 'Speakers not identified: diarization failed'],
-    ['fr', 'Locuteurs non identifiés : la diarisation a échoué'],
+    ['en', 'Speakers not identified: recognition failed'],
+    ['fr', 'Locuteurs non identifiés : la reconnaissance a échoué'],
   ] as const)('%s', (lang, texte) => {
     const r = reservesDe('Transcript', { diarization_error: cause }, (k, p) => translate(lang, k, p))
     expect(r).toEqual([{ objet: 'Transcript', texte, detail: [cause] }])
@@ -39,7 +39,7 @@ describe('une diarisation manquée dit sa cause (constat 2)', () => {
 describe('le lien vers le projet d’un autre compte (constat 6)', () => {
   it.each(['fr', 'en'] as const)('dit « inaccessible », jamais « n’existe plus » (%s)', (lang) => {
     const texte = translate(lang, 'app.scope.urlProjectMissing', { projet: 'P1' })
-    expect(texte).toMatch(lang === 'fr' ? /n’est pas accessible depuis ce compte/ : /is not accessible from this account/)
+    expect(texte).toMatch(lang === 'fr' ? /n’est pas accessible depuis ce compte/ : /cannot open the project/)
     expect(texte).not.toMatch(/introuvable|no longer exists|n’existe plus/)
   })
 })

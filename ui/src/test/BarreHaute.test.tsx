@@ -58,7 +58,7 @@ describe('la barre haute allégée', () => {
   it('l\'état des services donne un nom lisible, pas seulement une couleur', () => {
     monter()
     const etat = screen.getByLabelText(/état des services|services status/i)
-    expect(etat).toHaveTextContent(/llm/i)
+    expect(etat).toHaveTextContent(/modèle|model/i)
     expect(etat.querySelectorAll('.dot.ok').length).toBe(1)
     expect(etat.querySelectorAll('.dot.off').length).toBe(1)
   })

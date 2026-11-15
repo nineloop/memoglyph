@@ -207,6 +207,7 @@ def transcript_fingerprint(
     derived_from_document_id: str | None = None,
     diarization_model: str | None = None,
     profiling_model: str | None = None,
+    profiling_prompt_cache_size: int | None = None,
 ) -> dict[str, Any]:
     """Fingerprint des réglages EFFECTIFS d'une nouvelle transcription.
 
@@ -289,6 +290,9 @@ def transcript_fingerprint(
             "context_policy": "dynamic_v1",
             "temperature": 0.2,
             "seed": None,
+            # Le cache de prompts du serveur LOCAL ne sert qu'à un profilage qui a eu lieu.
+            **({"prompt_cache_size": profiling_prompt_cache_size}
+               if profiled and profiling_prompt_cache_size is not None else {}),
         },
     })
     return _seal(payload)
@@ -316,8 +320,15 @@ def report_fingerprint(
     genre: str,
     num_ctx: int,
     questions: Sequence[str],
+    prompt_cache_size: int | None = None,
 ) -> dict[str, Any]:
-    """Fingerprint du CR et liaison vers la génération de son transcript."""
+    """Fingerprint du CR et liaison vers la génération de son transcript.
+
+    `prompt_cache_size` est le nombre de séquences du cache de prompts du serveur
+    LOCAL : il ne concerne que MLX, donc il n'est consigné que pour lui. Absent
+    (`None`), l'empreinte d'un compte-rendu produit par un autre moteur reste
+    exactement ce qu'elle était.
+    """
     payload = _base("report", REPORT_PIPELINE_VERSION, _REPORT_IMPLEMENTATION)
     payload.update({
         "source": _source_pipeline(source_pipeline),
@@ -328,6 +339,7 @@ def report_fingerprint(
             "temperature": 0.2,
             "think": False,
             "seed": None,
+            **({"prompt_cache_size": prompt_cache_size} if prompt_cache_size is not None else {}),
         },
         "template": {
             "genre": genre,

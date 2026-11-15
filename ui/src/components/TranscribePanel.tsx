@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { phraseDErreur } from '../lib/erreurs'
 import type { AppConfig, ListeTraitements, Project } from '../api'
-import { DoublonError, ModeleGratuitError, downloadUrl, streamJob, submitTranscribe } from '../api'
+import { AnnulationError, DoublonError, EnvoiRefuseError, ModeleGratuitError, annulerTraitement, downloadUrl, getReglagesTraitement, setReglagesTraitement, streamJob, submitTranscribe } from '../api'
 import { CODE_ANNULE } from '../lib/traitements'
 import { libelleProjet } from '../lib/libelleProjet'
 import { documentBody, isAtBottom, validateMediaFile } from '../lib/transcription'
 import type { MediaProblem } from '../lib/transcription'
 import { Icon } from './Icon'
 import { RangerDans } from './RangerDans'
+import { SelecteurFournisseur } from './SelecteurFournisseur'
 import { Button } from '../design/primitives'
-import { getLlmProvider, setLlmProvider as setLlmProvider_store } from '../lib/llmProvider'
+import { FOURNISSEUR_LOCAL_DE_REPLI, LIBELLES } from '../lib/fournisseurs'
+import { fournisseurRetenuIndisponible, reglagesApplicables, sensibiliteApplicable, sensibiliteRetenable } from '../lib/reglagesTraitement'
 import { MarkdownView } from './MarkdownView'
 import { useCloudUltra } from '../lib/cloudUltra'
 import { useLang } from '../lib/langContext'
+import { useConfirmer } from '../design/Confirmation'
 import { traduireEtape } from '../lib/i18n'
 import type { EtapeJob, Lang, Traduire } from '../lib/i18n'
 import type { MessageKey } from '../lib/messages'
@@ -137,6 +141,8 @@ function timelineStatus(
   return 'pending'
 }
 
+const FOCALISABLES = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+
 export function TranscribePanel({
   config,
   onCompleted,
@@ -151,20 +157,25 @@ export function TranscribePanel({
   onViewMeeting,
 }: Props) {
   const { t, lang } = useLang()
+  const confirmer = useConfirmer()
   const [file, setFile] = useState<File | null>(null)
   const [fileProblem, setFileProblem] = useState<MediaProblem | null>(null)
-  const [llmProvider, setLlmProviderState] = useState(() => getLlmProvider(config.default_llm_provider || 'mlx'))
-  // Le moteur STT n'est pas persisté : il se déduit du fournisseur MÉMORISÉ,
-  // comme `setCloudProvider` le fait au clic. Il repartait sur whisper au
-  // rechargement, alors que la tuile cloud, qui suit le fournisseur, restait
-  // allumée : l'écran annonçait Voxtral et l'audio était transcrit en local.
+  // Le fournisseur de départ vient du serveur ; ce que le COMPTE a retenu s'y applique à l'ouverture (jamais le navigateur).
+  const [llmProvider, setLlmProvider] = useState(config.default_llm_provider || FOURNISSEUR_LOCAL_DE_REPLI)
+  // Le moteur STT n'est pas persisté : il se déduit du fournisseur, comme
+  // `choisirFournisseur` le fait au choix. Sans cela, le fournisseur en ligne affiché
+  // ne suivrait pas la transcription réellement employée.
   const [engine, setEngine] = useState(() => (
     (llmProvider === 'mistral' || llmProvider === 'cloud') && config.engines.includes('mistral')
       ? 'mistral'
       : config.default_engine
   ))
-  // Persiste le choix pour que le CR à la demande et l'Assistant le voient aussi.
-  const setLlmProvider = (p: string) => { setLlmProviderState(p); setLlmProvider_store(p) }
+  // Ce que la PERSONNE a déjà réglé : les réglages du compte, qui arrivent après l'ouverture, ne l'écrasent pas.
+  const touche = useRef({ fournisseur: false, langue: false, resultats: false, sensibilite: false })
+  // Le fournisseur que le compte a retenu mais qui n'est pas configuré : dit en une ligne tant que la personne n'a rien choisi.
+  const [retenuIndisponible, setRetenuIndisponible] = useState('')
+  // La sensibilité retenue par le compte qui s'applique (plus stricte que le défaut) : dite en une ligne tant que la personne n'a pas choisi.
+  const [sensibiliteRetenue, setSensibiliteRetenue] = useState('')
   const [languageChoice, setLanguageChoice] = useState('')
   const [language, setLanguage] = useState('')
   const [timestamps, setTimestamps] = useState(true)
@@ -206,16 +217,46 @@ export function TranscribePanel({
   const [confirmation, setConfirmation] = useState<{ jobId: string; projet: string } | null>(null)
   // Le fichier est déjà en attente ou en cours pour ce compte (409) : nommé, sans texte brut.
   const [doublon, setDoublon] = useState<{ jobId: string; titre: string } | null>(null)
+  // Un envoi refusé AVANT le démarrage (plus de place, nuage refusé, modèle gratuit...) : rien n'a démarré, ce n'est pas un traitement interrompu.
+  const [refus, setRefus] = useState<{ titre?: string; texte: string } | null>(null)
   const [result, setResult] = useState<JobResult | null>(null)
   const [partial, setPartial] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
+  // Sur petit écran, les réglages s'ouvrent en fenêtre : dialogue modal seulement tant qu'il est ouvert (un dialogue modal
+  // toujours présent désactiverait le menu des réglages du compte), focus piégé, Échap, retour du focus au bouton d'ouverture.
+  const [reglagesOuverts, setReglagesOuverts] = useState(false)
+  const declencheurReglages = useRef<HTMLButtonElement>(null)
+  const panneauReglages = useRef<HTMLElement>(null)
+  // Annuler le traitement suivi tant qu'il attend sa place : UNE confirmation ; le flux du traitement dit ensuite « annulé ».
+  const [annulation, setAnnulation] = useState(false)
+  const [annulationRefusee, setAnnulationRefusee] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const liveRef = useRef<HTMLPreElement>(null)
   const stick = useRef(true)
   const stopStream = useRef<(() => void) | null>(null)
 
   useEffect(() => () => stopStream.current?.(), [])
+
+  useEffect(() => {
+    if (reglagesOuverts) panneauReglages.current?.querySelector<HTMLElement>(FOCALISABLES)?.focus()
+  }, [reglagesOuverts])
+  const fermerReglages = () => {
+    setReglagesOuverts(false)
+    declencheurReglages.current?.focus()
+  }
+  const surClavierReglages = (e: React.KeyboardEvent) => {
+    if (!reglagesOuverts) return
+    if (e.key === 'Escape') { e.stopPropagation(); fermerReglages(); return }
+    if (e.key !== 'Tab') return
+    const elements = [...(panneauReglages.current?.querySelectorAll<HTMLElement>(FOCALISABLES) ?? [])].filter((x) => x.offsetParent !== null || x === document.activeElement)
+    const liste = elements.length > 0 ? elements : [...(panneauReglages.current?.querySelectorAll<HTMLElement>(FOCALISABLES) ?? [])]
+    if (liste.length === 0) return
+    const premier = liste[0]
+    const dernier = liste[liste.length - 1]
+    if (e.shiftKey && document.activeElement === premier) { e.preventDefault(); dernier.focus() }
+    else if (!e.shiftKey && document.activeElement === dernier) { e.preventDefault(); premier.focus() }
+  }
 
   useEffect(() => {
     const el = liveRef.current
@@ -250,69 +291,98 @@ export function TranscribePanel({
   const localProviders = config.local_providers || ['mlx']
   const cloudProviders = (config.llm_providers || [])
     .filter((p) => !localProviders.includes(p) && p !== 'cloud')
-  const readyCloud = cloudProviders.filter(pretDe)
-  const cloudPret = readyCloud.length > 0
   const estCloud = (p: string) => cloudProviders.includes(p)
   const mode: 'local' | 'cloud' = estCloud(fournisseurCle) ? 'cloud' : 'local'
 
-  // Nom d'affichage court (donnée, pas logique) ; repli sur l'id si inconnu.
-  const NOMS_CLOUD: Record<string, string> = {
-    mistral: 'Mistral', openai: 'OpenAI', anthropic: 'Anthropic (Claude)', compatible: t('app.provider.compatible'),
-    openrouter: 'OpenRouter', groq: 'Groq',
-  }
-  const nomCloud = (p: string) => NOMS_CLOUD[p] || p
-  // Un serveur hébergé par l'utilisateur hors de cette machine : « cloud privé ».
-  const prives = config.private_cloud_providers || []
-  // Plusieurs moteurs locaux prêts (MLX, un serveur compatible sur la machine) : le
-  // mode local propose aussi de choisir.
-  const readyLocal = localProviders.filter((p) => (config.llm_providers || []).includes(p) && pretDe(p))
-  // Choisir un fournisseur cloud règle le RAPPORT et couple le STT : Mistral apporte
-  // Voxtral (engine=mistral) ; les autres cloud n'ont pas de STT → chemin local
-  // (whisper). Préserve l'UX Mistral existante.
-  const setCloudProvider = (p: string) => {
+  // Le nom d'un fournisseur vient de la table unique des libellés ; un fournisseur inconnu garde son identifiant.
+  const nomCloud = (p: string) => (LIBELLES[p] ? t(LIBELLES[p]) : p)
+  // UN seul chemin pour choisir un fournisseur (clic dans le sélecteur, retour au local, réglages du compte) : le choix est noté comme
+  // fait par la personne, la ligne « retenu non configuré » s'efface, et le moteur de transcription suit le fournisseur — Mistral
+  // apporte Voxtral ; les autres fournisseurs en ligne n'ont pas de transcription, elle reste locale (whisper).
+  const choisirFournisseur = (p: string) => {
+    touche.current.fournisseur = true
+    setRetenuIndisponible('')
     setLlmProvider(p)
     setEngine(p === 'mistral' ? 'mistral' : 'whisper')
   }
-  const setMode = (choix: 'local' | 'cloud') => {
-    if (choix === 'local') {
-      setEngine('whisper')
-      // Le mode local est MLX (`default_llm_provider`) — relu, pas figé.
-      setLlmProvider(config.default_llm_provider || 'mlx')
-      return
-    }
-    // Cloud : garder le fournisseur cloud courant s'il est prêt, sinon le 1er prêt
-    // (préférence Mistral pour la compatibilité).
-    const courant = estCloud(fournisseurCle) && pretDe(fournisseurCle) ? fournisseurCle : null
-    const choisi = courant || (readyCloud.includes('mistral') ? 'mistral' : readyCloud[0])
-    if (choisi) setCloudProvider(choisi)
-  }
 
-  // UN CHOIX PERSISTÉ PEUT ÊTRE PÉRIMÉ, et c'est le risque de la sortie
-  // d'Ollama : `memoglyph.llmProvider = "ollama"` survit au déploiement, le
-  // type fermé du backend refuse la valeur, et l'utilisateur reçoit une erreur
-  // dure au lieu d'un produit.
-  //
-  // On retombe sur le défaut annoncé par l'API, et on RÉÉCRIT le stockage —
-  // sans la réécriture, la correction serait à refaire à chaque chargement.
-  //
-  // Pas d'alias `ollama → mlx` côté backend : il ferait tourner un autre moteur
-  // que celui demandé, en silence. C'est exactement ce que le type fermé
-  // interdit.
-  useEffect(() => {
-    const connus = config.llm_providers
-    if (!connus?.length || connus.includes(fournisseurCle)) return
-    setLlmProvider(config.default_llm_provider || 'mlx')
-  }, [config.llm_providers, config.default_llm_provider, fournisseurCle])
   // Passer en ultra-confidentiel ramène au local : rien ne doit rester réglé sur le cloud.
   useEffect(() => {
-    if (ultra && (mode === 'cloud' || engine !== 'whisper')) setMode('local')
+    // Le mode local est le modèle local du serveur (`default_llm_provider`), relu, pas figé.
+    if (ultra && (mode === 'cloud' || engine !== 'whisper')) choisirFournisseur(config.default_llm_provider || FOURNISSEUR_LOCAL_DE_REPLI)
   }, [ultra])
+
+  // Les réglages du COMPTE s'appliquent UNE fois, à l'ouverture, par le même chemin que le clic (le moteur de transcription suit le
+  // fournisseur) ; ils n'écrasent jamais ce que la personne a déjà réglé, et lire ne revient jamais à écrire. Illisibles : les
+  // valeurs de départ. Un fournisseur retenu devenu périmé ou non prêt retombe sur « Local » (`reglagesApplicables`).
+  const ultraCourant = useRef(ultra)
+  ultraCourant.current = ultra
+  const cloudUltraCourant = useRef(cloudUltra)
+  cloudUltraCourant.current = cloudUltra
+  useEffect(() => {
+    let courant = true
+    getReglagesTraitement().then(({ reglages }) => {
+      if (!courant) return
+      const r = reglagesApplicables(reglages, config)
+      if (!r) return
+      // La sensibilité qui s'applique : la plus stricte du défaut de l'instance et de celle que le compte a retenue (jamais en dessous du
+      // défaut) ; le compte n'est pas réécrit. Calculée AVANT le fournisseur : un ultra-confidentiel retenu garde le traitement local
+      // d'emblée, sans qu'un fournisseur en ligne soit appliqué un instant (ce qui ouvrirait « En ligne » tout seul).
+      let ultraEnCours = ultraCourant.current
+      if (!touche.current.sensibilite) {
+        const applique = sensibiliteApplicable(reglages?.sensibilite, config)
+        setSensitivity(applique)
+        setSensibiliteRetenue(sensibiliteRetenable(reglages?.sensibilite ?? '', config) ? applique : '')
+        ultraEnCours = applique === 'ultra_confidential' && !cloudUltraCourant.current
+      }
+      if (!touche.current.fournisseur) {
+        setRetenuIndisponible(fournisseurRetenuIndisponible(reglages, config) ?? '')
+        const enLigne = cloudProviders.includes(r.fournisseur)
+        // Un document ultra-confidentiel reste local : le fournisseur en ligne retenu ne s'applique pas.
+        if (!(enLigne && ultraEnCours)) {
+          setLlmProvider(r.fournisseur)
+          setEngine(r.fournisseur === 'mistral' && config.engines.includes('mistral') ? 'mistral' : 'whisper')
+        }
+      }
+      if (!touche.current.langue && r.langue) {
+        setLanguageChoice(LANGUAGE_OPTIONS.some((o) => o.value === r.langue) ? r.langue : '__other__')
+        setLanguage(r.langue)
+      }
+      if (!touche.current.resultats) {
+        setReportOn(r.resultats.compte_rendu)
+        setProfile(r.resultats.titre_resume)
+        setDiarize(r.resultats.locuteurs && config.diarization_available)
+      }
+    }).catch(() => { /* illisibles : les valeurs de départ */ })
+    return () => { courant = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une seule lecture, à l'ouverture
+  }, [])
+
+  // « Retenir comme réglages par défaut » : le fournisseur, la langue (seulement si c'est un code valide), les résultats voulus et la
+  // sensibilité SEULEMENT si elle est plus stricte que le défaut de l'instance (sinon la clé est absente). Seul geste de l'écran qui
+  // écrit au compte.
+  const [retenu, setRetenu] = useState<'' | 'ok' | 'echec'>('')
+  async function retenir() {
+    setRetenu('')
+    const code = language.trim().toLowerCase()
+    const langueValide = code.length <= 12 && /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/.test(code) ? code : ''
+    try {
+      await setReglagesTraitement({
+        fournisseur: fournisseurCle, langue: langueValide,
+        resultats: { compte_rendu: reportVoulu, titre_resume: profileVoulu, locuteurs: diarize },
+        ...(sensibiliteRetenable(sensitivity, config) ? { sensibilite: sensitivity } : {}),
+      })
+      setRetenu('ok')
+    } catch {
+      setRetenu('echec')
+    }
+  }
   const llmPret = pretDe(fournisseurCle)
   // Un nom de modèle est une DONNÉE : il ne se traduit pas, et doit être
   // identique dans les deux langues.
   const llmNom = config.llm_models?.[fournisseurCle]
     || (fournisseurCle === 'mistral'
-      ? (config.mistral_chat_model || 'Mistral')
+      ? (config.mistral_chat_model || nomCloud('mistral'))
       : (config.llm_model || fournisseurCle))
 
   // L'état EFFECTIF : ce qui s'affiche et ce qui part dans la requête. Une
@@ -326,11 +396,9 @@ export function TranscribePanel({
   // (une clé absente du `.env`). Tout moteur LOCAL partage un libellé PARAMÉTRÉ
   // par son nom : `missingOllama` nommait un moteur en dur, et MLX n'avait donc
   // aucun message à afficher.
-  const llmManquant = fournisseurCle === 'mistral'
-    ? t('transcribe.llm.missingMistral')
-    : estCloud(fournisseurCle)
-      ? t('transcribe.llm.missingCloud', { provider: nomCloud(fournisseurCle) })
-      : t('transcribe.llm.missingLocal', { llm: llmNom })
+  const llmManquant = estCloud(fournisseurCle)
+    ? t('transcribe.llm.missingCloud', { provider: nomCloud(fournisseurCle) })
+    : t('transcribe.llm.missingLocal', { llm: llmNom })
 
   // Le nom du moteur de transcription RÉELLEMENT employé. Le panneau expert
   // affichait `whisper_model` en toutes circonstances : en mode cloud, on y
@@ -372,6 +440,21 @@ export function TranscribePanel({
   )
   // Le traitement suivi attend sa place (un autre calcul lourd occupe la machine) : il n'a pas commencé, donc ni
   // « envoi sécurisé » ni étape active à montrer. La liste partagée des traitements le dit.
+  async function annulerLeSuivi() {
+    if (!confirmation || annulation) return
+    if (!await confirmer({ titre: t('traitements.cancel.titre'), phrase: t('traitements.cancel.confirm'), libelleAction: t('traitements.cancel.action'), libelleRefus: t('traitements.cancel.keep') })) return
+    setAnnulation(true)
+    setAnnulationRefusee('')
+    try {
+      await annulerTraitement(confirmation.jobId)
+    } catch (caught) {
+      setAnnulationRefusee(t(caught instanceof AnnulationError
+        ? (caught.raison === 'impossible' ? 'traitements.cancel.impossible' : 'traitements.cancel.gone')
+        : 'traitements.cancel.failed'))
+    } finally {
+      setAnnulation(false)
+    }
+  }
   const suiviEnAttente = Boolean(running && confirmation && traitements?.traitements.some(
     (x) => x.id === confirmation.jobId && (x.statut === 'pending' || x.en_attente)))
   const started = (running || Boolean(result) || Boolean(error) || progress > 0) && !annule && !suiviEnAttente
@@ -385,6 +468,7 @@ export function TranscribePanel({
     setError('')
     setErreurEnvoi('')
     setDoublon(null)
+    setRefus(null)
     setAnnule(false)
     // Un traitement lancé est encore SUIVI ici : choisir un autre fichier ne remet pas sa frise à zéro.
     if (!stopStream.current) {
@@ -403,6 +487,7 @@ export function TranscribePanel({
     setError('')
     setErreurEnvoi('')
     setDoublon(null)
+    setRefus(null)
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -418,6 +503,7 @@ export function TranscribePanel({
     setErreurEnvoi('')
     setAnnule(false)
     setDoublon(null)
+    setRefus(null)
     setPartial('')
     setProgress(0)
     setLigne(null)
@@ -434,6 +520,7 @@ export function TranscribePanel({
     setError('')
     setErreurEnvoi('')
     setDoublon(null)
+    setRefus(null)
     setAnnule(false)
     if (!suivi) {
       setRunning(true)
@@ -503,14 +590,21 @@ export function TranscribePanel({
           // Annulé avant d'avoir commencé : un choix, pas une panne. La frise s'arrête, sans alerte.
           // La confirmation « Rangé dans… » ne dit plus vrai : rien n'est enregistré, l'écran redevient prêt à l'envoi.
           if (etape?.code === CODE_ANNULE) { setAnnule(true); setConfirmation(null); return }
-          // Le code de l'échec se traduit ; le texte brut du serveur n'est montré que sans code.
+          // Le code de l'échec se traduit. Exception nommée : un serveur plus ancien n'envoie pas de code, et le texte du serveur
+          // reste alors affiché (un test l'exige) ; elle n'a pas de clé de catalogue, donc pas de ligne dans la garde du catalogue.
           setError(etape?.code ? traduireEtape(lang, etape) : streamError)
         },
       })
     } catch (caught) {
       // Un modèle gratuit refuse ce document : SA phrase (traduite), jamais le texte brut ni celle de l'ultra-confidentiel.
-      const dit = caught instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted') : String(caught)
+      const dit = caught instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted') : phraseDErreur(t, lang, caught, t('repli.envoi'))
       if (caught instanceof DoublonError) setDoublon({ jobId: caught.jobId, titre: caught.titre })
+      else if (caught instanceof ModeleGratuitError) setRefus({ titre: t('envoi.refus.titre'), texte: dit })
+      else if (caught instanceof EnvoiRefuseError) {
+        // Un code connu donne la phrase du catalogue (dans la langue choisie) ; sans code connu, la phrase générale : jamais celle du serveur.
+        const phrase = phraseDErreur(t, lang, caught, '')
+        setRefus({ texte: phrase ? t('envoi.refus.detail', { detail: phrase }) : t('envoi.refus.general') })
+      }
       else if (suivi) setErreurEnvoi(dit)
       else setError(dit)
       if (!suivi) setRunning(false)
@@ -541,11 +635,158 @@ export function TranscribePanel({
       </header>
 
       <div className="transcribe-layout">
-        <div className="transcribe-form-column">
+        {/* Zone de gauche : les réglages du traitement. Sur petit écran, ils s'ouvrent en fenêtre (dialogue modal, focus piégé, Échap). */}
+        <section
+          ref={panneauReglages}
+          className={`studio-panel reglages-panel ${reglagesOuverts ? 'ouvert' : ''}`}
+          role={reglagesOuverts ? 'dialog' : undefined}
+          aria-modal={reglagesOuverts ? true : undefined}
+          aria-labelledby="reglages-title"
+          onKeyDown={surClavierReglages}
+        >
+          <div className="studio-panel-heading">
+            <div><h2 id="reglages-title">{t('reglages.titre')}</h2><p>{t('transcribe.options.subtitle')}</p></div>
+            <button type="button" className="icon-btn reglages-fermer" onClick={fermerReglages} aria-label={t('reglages.fermer')}>
+              <Icon name="close" />
+            </button>
+          </div>
+
+          <div className="stt-engine-section">
+            {/* Le sélecteur partagé : « Local » d'abord, puis « En ligne » repliable avec chaque fournisseur et son état. */}
+            <SelecteurFournisseur config={config} valeur={fournisseurCle} onChange={choisirFournisseur}
+                                  legende={t('transcribe.mode.label')} nom="fournisseur-transcrire"
+                                  ultra={sensitivity === 'ultra_confidential'} cloudUltra={cloudUltra} desactive={envoi} />
+          </div>
+
+          {/* Ce que le choix veut dire : où partent l'audio et le texte. */}
+          {mode === 'local' && <p className="muted small">{t('transcribe.mode.localDetail')}</p>}
+          {mode === 'cloud' && engine === 'mistral' && <p className="muted small">{t('transcribe.mode.cloudDetail', { fournisseur: nomCloud(fournisseurCle) })}</p>}
+          {/* Un fournisseur en ligne qui ne transcrit pas (tout sauf Mistral) : seul le texte part chez lui. */}
+          {mode === 'cloud' && engine !== 'mistral' && (
+            <p className="muted small">{t('fournisseur.texteSeulEnLigne')}</p>
+          )}
+          {retenuIndisponible && (
+            <p className="muted small reglages-indispo" role="status">
+              {t('reglages.retenuIndisponible', { fournisseur: LIBELLES[retenuIndisponible] ? t(LIBELLES[retenuIndisponible]) : retenuIndisponible })}
+            </p>
+          )}
+          <label className="field">{t('spoken.label')}
+            <select className="option-select" aria-label={t('spoken.label')} value={languageChoice}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      touche.current.langue = true
+                      setLanguageChoice(value)
+                      setLanguage(value === '__other__' ? '' : value)
+                    }} disabled={envoi}>
+              {LANGUAGE_OPTIONS.map((candidate) => (
+                <option key={candidate.value} value={candidate.value}>{t(candidate.key)}</option>
+              ))}
+            </select>
+          </label>
+          {languageChoice === '__other__' && (
+            <label className="field custom-language">{t('spoken.codeLabel')}
+              <input type="text" value={language} placeholder={t('spoken.codePlaceholder')} maxLength={12}
+                     autoCapitalize="none" spellCheck={false} disabled={envoi}
+                     onChange={(event) => { touche.current.langue = true; setLanguage(event.target.value.trim().toLowerCase()) }} />
+            </label>
+          )}
+
+          {/* Sensibilité du document. Petit sélecteur, sous-titré pour DIRE que
+              c'est la nature du document, pas le fournisseur d'IA ; en
+              ultra-confidentiel, il garde tout en local. */}
+          <label className="field">{t('sensitivity.label')}
+            <select className="option-select" aria-label={t('sensitivity.label')}
+                    value={sensitivity} disabled={envoi}
+                    onChange={(event) => { touche.current.sensibilite = true; setSensitivity(event.target.value) }}>
+              {sensitivityLevels.map((niveau) => (
+                <option key={niveau} value={niveau}>{t(sensitivityLabelKey(niveau))}</option>
+              ))}
+            </select>
+            <small className="field-note">{t(ultra ? cleSelonFaits('sensitivity.hint.ultra', config.faits === true)
+              : ultraCloudAutorise ? 'sensitivity.hint.ultraCloud' : 'sensitivity.hint')}</small>
+            {/* Une sensibilité retenue par le compte qui s'applique : dite ici, tant que la personne ne choisit pas autre chose. */}
+            {sensibiliteRetenue && sensitivity === sensibiliteRetenue && (
+              <small className="field-note" role="status">
+                {t('reglages.sensibiliteRetenue', { niveau: t(sensitivityLabelKey(sensibiliteRetenue)) })}
+              </small>
+            )}
+          </label>
+
+          <div className="enhancement-grid">
+            <label className={`option-tile ${diarize && diarisationPossible ? 'on' : ''} ${diarisationPossible ? '' : 'disabled'}`}>
+              <input type="checkbox" checked={diarize && diarisationPossible}
+                     disabled={envoi || !diarisationPossible}
+                     onChange={(event) => { touche.current.resultats = true; setDiarize(event.target.checked) }} />
+              <span className="option-icon"><Icon name="users" /></span>
+              <span>
+                <strong>{t('transcribe.diarize.label')}</strong>
+                <small>
+                  {/* Voxtral rend des ÉTIQUETTES de locuteurs, pas de
+                      vecteurs : les empreintes sont un sous-produit de
+                      pyannote. Le registre « Voix » reste donc vide pour une
+                      réunion transcrite en cloud — à dire, pas à taire. */}
+                  {diarisationDetail}{diarisationPourquoi}
+                </small>
+              </span>
+            </label>
+            <label className={`option-tile ${profile ? 'on llm' : ''} ${llmPret ? '' : 'disabled'}`}>
+              <input type="checkbox" checked={profile} disabled={envoi || !llmPret}
+                     onChange={(event) => { touche.current.resultats = true; setProfile(event.target.checked) }} />
+              <span className="option-icon"><Icon name="sparkles" /></span>
+              <span><strong>{t('transcribe.profile.label')}</strong><small>{llmPret ? t('transcribe.profile.carte') : llmManquant}</small></span>
+            </label>
+            <label className={`option-tile ${reportOn ? 'on llm' : ''} ${llmPret && timestamps ? '' : 'disabled'}`}>
+              <input type="checkbox" checked={reportOn} disabled={envoi || !llmPret || !timestamps}
+                     onChange={(event) => { touche.current.resultats = true; setReportOn(event.target.checked) }} />
+              <span className="option-icon"><Icon name="report" /></span>
+              <span><strong>{t('transcribe.report.label')}</strong><small>{!llmPret ? llmManquant
+                : timestamps ? t('transcribe.report.detail', { llm: llmNom })
+                  : t('transcribe.report.needsTimestamps')}</small></span>
+            </label>
+          </div>
+
+          <details className="expert-options">
+            <summary><Icon name="settings" /> {t('transcribe.expert.title')}</summary>
+            <div className="expert-content">
+              <label><input type="checkbox" checked={timestamps} disabled={envoi}
+                            onChange={(event) => setTimestamps(event.target.checked)} /> {t('transcribe.expert.timestamps')}</label>
+              {config.engines.length > 1 && (
+                <label className="field">{t('transcribe.expert.engine')}
+                  <select className="option-select" value={engine} disabled={envoi}
+                          onChange={(event) => setEngine(event.target.value)}>
+                    {config.engines.map((candidate) => (
+                      <option key={candidate} value={candidate}
+                              disabled={ultra && candidate !== 'whisper'}>{candidate}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <dl className="model-facts">
+                <div><dt>{t('transcribe.expert.stt')}</dt><dd>{sttNom}</dd></div>
+                {profile && <div><dt>{t('transcribe.expert.llm')}</dt><dd>{llmNom}</dd></div>}
+              </dl>
+            </div>
+          </details>
+
+          <div className="reglages-defaut">
+            <button type="button" className="btn sm" onClick={() => void retenir()} disabled={envoi}>
+              {t('reglages.retenir')}
+            </button>
+            {retenu === 'ok' && <span role="status" className="muted small">{t('reglages.retenus')}</span>}
+            {retenu === 'echec' && <span role="alert" className="error small">{t('reglages.echec')}</span>}
+          </div>
+        </section>
+
+        {/* Zone de droite : le dépôt, « Ranger dans » et « Lancer » sur une même ligne, puis le suivi. */}
+        <div className="transcribe-work-column">
           <section className="studio-panel file-step" aria-labelledby="file-step-title">
             <div className="studio-panel-heading">
-              <span className="step-number">01</span>
               <div><h2 id="file-step-title">{t('transcribe.file.title')}</h2><p>{t('transcribe.file.subtitle')}</p></div>
+              {/* Petit écran : le bouton qui ouvre les réglages en fenêtre (caché en bureau, où le panneau est déjà à gauche). */}
+              <button type="button" ref={declencheurReglages} className="btn reglages-ouvrir" aria-expanded={reglagesOuverts}
+                      onClick={() => setReglagesOuverts(true)}>
+                <Icon name="settings" /> {t('reglages.titre')}
+              </button>
             </div>
 
             <div
@@ -601,242 +842,145 @@ export function TranscribePanel({
               </p>
             )}
             {/* La destination se choisit ICI, avant d'envoyer : elle ne change pas ce que la Bibliothèque consulte. */}
-            <RangerDans projets={projects} destination={destinationProjectId}
-                        surChoisir={onChooseDestination} desactive={envoi}
-                        surCreer={onCreateDestination ?? (() => Promise.reject(new Error('no-create')))}
-                        proposee={destinationSuggested} nomParDefaut={libelleProjet(config.default_project, t)} />
+            <div className="ligne-envoi" data-ligne="envoi">
+              {/* La barre collante recouvre la carte du fichier sur une fenêtre basse : elle redit quel fichier part. */}
+              {file && <p className="envoi-fichier" title={file.name}><span>{file.name}</span></p>}
+              <RangerDans projets={projects} destination={destinationProjectId}
+                          surChoisir={onChooseDestination} desactive={envoi}
+                          surCreer={onCreateDestination ?? (() => Promise.reject(new Error('no-create')))}
+                          proposee={destinationSuggested} nomParDefaut={libelleProjet(config.default_project, t)} />
+              {(file || confirmation) && (
+                <button className="primary transcribe-submit" disabled={envoi}
+                        onClick={() => {
+                          // Sans fichier, après un envoi accepté : demander QUEL enregistrement, jamais renvoyer le même.
+                          if (!file && confirmation) inputRef.current?.click()
+                          else void run()
+                        }}>
+                  <Icon name={envoi ? 'clock' : 'upload'} />
+                  {/* Pendant l'envoi : « Traitement en cours… » ; ensuite le formulaire est PRÊT et le bouton le dit
+                      (un traitement tourne déjà, on peut en lancer un autre). */}
+                  {envoi ? t('transcribe.submitting') : (running || (confirmation && !file)) ? t('transcribe.submitAnother') : t('transcribe.submit')}
+                </button>
+              )}
+            </div>
+
+            {/* Tant qu'un envoi accepté est confirmé, même fichier vidé : la confirmation et « Transcrire un autre enregistrement » vivent ici. */}
+            {(file || confirmation) && (
+              <>
+                {confirmation && (
+                  <div className="traitements-confirmation" role="status" aria-label={t('traitements.confirm.aria')}>
+                    <Icon name="check" />
+                    <span>
+                      {t('traitements.confirm.saved', { projet: confirmation.projet })}
+                      {traitements?.traitements.some((x) => x.id === confirmation.jobId && (x.statut === 'pending' || x.en_attente))
+                        && <> {t('traitements.waiting.hint')}</>}
+                    </span>
+                    {onSuivre && <button type="button" className="btn sm" onClick={onSuivre}>{t('traitements.confirm.follow')}</button>}
+                  </div>
+                )}
+                {warnings.length > 0 && (
+                  <div className="error job-error" role="status" style={{ background: 'transparent' }}>
+                    <Icon name="error" />
+                    <span>
+                      <strong>{t('transcribe.partialFailure')}</strong>
+                      {warnings.map((w) => <span key={w}>{w}. </span>)}
+                    </span>
+                  </div>
+                )}
+                {doublon && (
+                  <div className="error job-error" role="alert">
+                    <Icon name="error" />
+                    <span>
+                      <strong>{t('transcribe.duplicate')}</strong> {t('transcribe.duplicate.existing', { titre: doublon.titre })}
+                    </span>
+                    {onSuivre && <button type="button" className="btn sm" onClick={onSuivre}>{t('traitements.confirm.follow')}</button>}
+                  </div>
+                )}
+                {refus && (
+                  <div className="error job-error" role="alert">
+                    <Icon name="error" />
+                    <span>{refus.titre && <strong>{refus.titre} </strong>}{refus.texte}</span>
+                  </div>
+                )}
+                {error && <div className="error job-error" role="alert"><Icon name="error" /><span><strong>{t('transcribe.aborted')}</strong>{error}</span></div>}
+                {erreurEnvoi && <div className="error job-error" role="alert"><Icon name="error" /><span><strong>{t('transcribe.aborted')}</strong>{erreurEnvoi}</span></div>}
+              </>
+            )}
           </section>
 
-          {/* La section reste affichée tant qu'un envoi accepté est confirmé, même fichier vidé : la confirmation
-              et le bouton « Transcrire un autre enregistrement » y vivent. */}
-          {(file || confirmation) && (
-            <section className="studio-panel options-step" aria-labelledby="options-step-title">
-              <div className="studio-panel-heading">
-                <span className="step-number">02</span>
-                <div><h2 id="options-step-title">{t('transcribe.options.title')}</h2><p>{t('transcribe.options.subtitle')}</p></div>
+          <aside className="studio-panel process-panel" aria-labelledby="process-title">
+            <div className="studio-panel-heading">
+              <div><h2 id="process-title">{t('transcribe.process.title')}</h2><p>{annule ? t('traitements.cancelled.message')
+                : suiviEnAttente ? t('traitements.waiting.hint')
+                  : started ? rendreLigne(t, lang, ligne) || t('transcribe.process.init') : t('transcribe.process.idle')}</p></div>
+            </div>
+            {/* Tant qu'un traitement tourne ou attend sa place : on peut quitter la page, il continue côté serveur. */}
+            {running && <p className="muted small">{t('transcribe.process.leave')}</p>}
+            {suiviEnAttente && (
+              <div className="suivi-annulation">
+                <button type="button" className="btn sm" disabled={annulation} onClick={() => void annulerLeSuivi()}>
+                  {t('traitements.cancel')}
+                </button>
+                {annulationRefusee && <span role="alert" className="error small">{annulationRefusee}</span>}
               </div>
+            )}
 
-              <div className="stt-engine-section">
-                <label className="field-label"><strong>{t('transcribe.mode.label')}</strong></label>
-                <div className="enhancement-grid engine-toggle-grid">
-                  <button
-                    type="button"
-                    className={`option-tile ${mode === 'local' ? 'on' : ''}`}
-                    disabled={envoi}
-                    onClick={() => setMode('local')}
-                  >
-                    <span className="option-icon"><Icon name="cpu" /></span>
-                    <span>
-                      <strong>{t('transcribe.mode.local')}</strong>
-                      <small>{t('transcribe.mode.localDetail', {
-                        // Le modèle du mode LOCAL, pas celui du fournisseur
-                        // courant : ce libellé décrit une option qu'on peut
-                        // lire depuis le mode cloud.
-                        llm: config.llm_models?.[config.default_llm_provider || 'mlx']
-                          || config.llm_model || 'MLX',
-                      })}</small>
+            <div className="process-progress" aria-label={t('transcribe.process.progress', { pourcent: Math.round(progress * 100) })}>
+              <div className="bar"><div className="fill" style={{ width: `${Math.round(progress * 100)}%` }} /></div>
+              <strong>{Math.round(progress * 100)} %</strong>
+            </div>
+
+            <ol className="job-timeline">
+              {timeline.map((item) => {
+                const status = timelineStatus(item, progress, started, Boolean(result), Boolean(error))
+                return (
+                  <li key={item.id} className={status} aria-current={status === 'current' || status === 'error' ? 'step' : undefined}>
+                    <span className="timeline-marker">
+                      {status === 'done' ? <Icon name="check" /> : status === 'error' ? <Icon name="error" /> : null}
                     </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`option-tile ${mode === 'cloud' ? 'on llm' : ''}`}
-                    disabled={envoi || !cloudPret || ultra}
-                    onClick={() => setMode('cloud')}
-                  >
-                    <span className="option-icon"><Icon name="sparkles" /></span>
-                    <span>
-                      <strong>{t('transcribe.mode.cloud')}</strong>
-                      <small>
-                        {ultra
-                          ? t('transcribe.ultra.cloudOff')
-                          : !cloudPret
-                          ? t('transcribe.llm.missingMistral')
-                          : (mode === 'cloud' && fournisseurCle !== 'mistral')
-                            ? t('transcribe.cloud.detail', { stt: sttCourt, llm: llmNom })
-                            : t('transcribe.mode.cloudDetail')}
-                      </small>
-                    </span>
-                  </button>
-                </div>
-                {/* Sélecteur de fournisseur cloud : SECONDAIRE, visible seulement en
-                    mode cloud quand PLUSIEURS fournisseurs cloud sont prêts. Piloté
-                    par le registre (`readyCloud`), aucun « == mistral » en dur. */}
-                {mode === 'local' && readyLocal.length > 1 && (
-                  <div className="local-provider-select" style={{ marginTop: '8px' }}>
-                    <div className="enhancement-grid" style={{ gridTemplateColumns: `repeat(${readyLocal.length}, 1fr)` }}>
-                      {readyLocal.map((p) => (
-                        <button key={p} type="button" className={`option-tile ${fournisseurCle === p ? 'on llm' : ''}`}
-                          disabled={envoi} onClick={() => { setLlmProvider(p); setEngine('whisper') }}>
-                          <span>
-                            <strong>{p === 'compatible' ? t('app.provider.compatible') : (config.llm_models?.[p] || p)}</strong>
-                            <small>{config.llm_models?.[p] || p}</small>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                    <span><strong>{item.label}</strong><small>{status === 'skipped' ? t('timeline.skipped') : item.detail}</small></span>
+                  </li>
+                )
+              })}
+            </ol>
+
+            <div className={`live-result ${result ? 'ready' : partial ? 'streaming' : ''}`}>
+              {result ? (
+                <>
+                  <div className="result-heading">
+                    <span className="result-check"><Icon name="check" /></span>
+                    <span><small>{t('transcribe.result.ready')}</small><strong>{result.name}</strong></span>
                   </div>
-                )}
-                {mode === 'cloud' && readyCloud.length > 1 && (
-                  <div className="cloud-provider-select" style={{ marginTop: '8px' }}>
-                    <label className="field-label"><small>{t('transcribe.cloud.provider')}</small></label>
-                    <div
-                      className="enhancement-grid"
-                      style={{ gridTemplateColumns: `repeat(${readyCloud.length}, 1fr)` }}
-                    >
-                      {readyCloud.map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          className={`option-tile ${fournisseurCle === p ? 'on llm' : ''}`}
-                          disabled={envoi}
-                          onClick={() => setCloudProvider(p)}
-                        >
-                          <span>
-                            <strong>{nomCloud(p)}</strong>
-                            <small>{prives.includes(p) ? `${t('app.mode.privateCloud')} · ` : ''}{config.llm_models?.[p] || p}</small>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                  <div className="result-actions">
+                    {onViewMeeting && (
+                      <Button variant="primary" onClick={() => onViewMeeting(result.name, result.destinationProjectId)}>
+                        {t('transcribe.result.view')}
+                      </Button>
+                    )}
+                    {/* Le document vient d'être écrit DANS cette destination :
+                        c'est sa portée, et non celle du projet affiché. */}
+                    <a className="btn" href={downloadUrl(result.name, result.destinationProjectId)}>{t('transcribe.result.download')}</a>
+                    <Button variant="ghost" onClick={clearFile}>{t('transcribe.result.again')}</Button>
                   </div>
-                )}
-              </div>
-
-              <label className="field">{t('spoken.label')}
-                <select className="option-select" aria-label={t('spoken.label')} value={languageChoice}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setLanguageChoice(value)
-                          setLanguage(value === '__other__' ? '' : value)
-                        }} disabled={envoi}>
-                  {LANGUAGE_OPTIONS.map((candidate) => (
-                    <option key={candidate.value} value={candidate.value}>{t(candidate.key)}</option>
-                  ))}
-                </select>
-              </label>
-              {languageChoice === '__other__' && (
-                <label className="field custom-language">{t('spoken.codeLabel')}
-                  <input type="text" value={language} placeholder={t('spoken.codePlaceholder')} maxLength={12}
-                         autoCapitalize="none" spellCheck={false} disabled={envoi}
-                         onChange={(event) => setLanguage(event.target.value.trim().toLowerCase())} />
-                </label>
-              )}
-
-              {/* Sensibilité du document. Petit sélecteur, sous-titré pour DIRE que
-                  c'est la nature du document, pas le fournisseur d'IA ; en
-                  ultra-confidentiel, il garde tout en local. */}
-              <label className="field">{t('sensitivity.label')}
-                <select className="option-select" aria-label={t('sensitivity.label')}
-                        value={sensitivity} disabled={envoi}
-                        onChange={(event) => setSensitivity(event.target.value)}>
-                  {sensitivityLevels.map((niveau) => (
-                    <option key={niveau} value={niveau}>{t(sensitivityLabelKey(niveau))}</option>
-                  ))}
-                </select>
-                <small className="field-note">{t(ultra ? cleSelonFaits('sensitivity.hint.ultra', config.faits === true)
-                  : ultraCloudAutorise ? 'sensitivity.hint.ultraCloud' : 'sensitivity.hint')}</small>
-              </label>
-
-              <div className="enhancement-grid">
-                <label className={`option-tile ${diarize && diarisationPossible ? 'on' : ''} ${diarisationPossible ? '' : 'disabled'}`}>
-                  <input type="checkbox" checked={diarize && diarisationPossible}
-                         disabled={envoi || !diarisationPossible}
-                         onChange={(event) => setDiarize(event.target.checked)} />
-                  <span className="option-icon"><Icon name="users" /></span>
-                  <span>
-                    <strong>{t('transcribe.diarize.label')}</strong>
-                    <small>
-                      {/* Voxtral rend des ÉTIQUETTES de locuteurs, pas de
-                          vecteurs : les empreintes sont un sous-produit de
-                          pyannote. Le registre « Voix » reste donc vide pour une
-                          réunion transcrite en cloud — à dire, pas à taire. */}
-                      {diarisationDetail}{diarisationPourquoi}
-                    </small>
-                  </span>
-                </label>
-                <label className={`option-tile ${profile ? 'on llm' : ''} ${llmPret ? '' : 'disabled'}`}>
-                  <input type="checkbox" checked={profile} disabled={envoi || !llmPret}
-                         onChange={(event) => setProfile(event.target.checked)} />
-                  <span className="option-icon"><Icon name="sparkles" /></span>
-                  <span><strong>{t('transcribe.profile.label')}</strong><small>{llmPret ? t('transcribe.profile.detail', { llm: llmNom }) : llmManquant}</small></span>
-                </label>
-                <label className={`option-tile ${reportOn ? 'on llm' : ''} ${llmPret && timestamps ? '' : 'disabled'}`}>
-                  <input type="checkbox" checked={reportOn} disabled={envoi || !llmPret || !timestamps}
-                         onChange={(event) => setReportOn(event.target.checked)} />
-                  <span className="option-icon"><Icon name="report" /></span>
-                  <span><strong>{t('transcribe.report.label')}</strong><small>{!llmPret ? llmManquant
-                    : timestamps ? t('transcribe.report.detail', { llm: llmNom })
-                      : t('transcribe.report.needsTimestamps')}</small></span>
-                </label>
-              </div>
-
-              <details className="expert-options">
-                <summary><Icon name="settings" /> {t('transcribe.expert.title')}</summary>
-                <div className="expert-content">
-                  <label><input type="checkbox" checked={timestamps} disabled={envoi}
-                                onChange={(event) => setTimestamps(event.target.checked)} /> {t('transcribe.expert.timestamps')}</label>
-                  {config.engines.length > 1 && (
-                    <label className="field">{t('transcribe.expert.engine')}
-                      <select className="option-select" value={engine} disabled={envoi}
-                              onChange={(event) => setEngine(event.target.value)}>
-                        {config.engines.map((candidate) => (
-                          <option key={candidate} value={candidate}
-                                  disabled={ultra && candidate !== 'whisper'}>{candidate}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <dl className="model-facts">
-                    <div><dt>{t('transcribe.expert.stt')}</dt><dd>{sttNom}</dd></div>
-                    {profile && <div><dt>{t('transcribe.expert.llm')}</dt><dd>{llmNom}</dd></div>}
-                  </dl>
-                </div>
-              </details>
-
-              {confirmation && (
-                <div className="traitements-confirmation" role="status" aria-label={t('traitements.confirm.aria')}>
-                  <Icon name="check" />
-                  <span>
-                    {t('traitements.confirm.saved', { projet: confirmation.projet })}
-                    {traitements?.traitements.some((x) => x.id === confirmation.jobId && (x.statut === 'pending' || x.en_attente))
-                      && <> {t('traitements.waiting.hint')}</>}
-                  </span>
-                  {onSuivre && <button type="button" className="btn sm" onClick={onSuivre}>{t('traitements.confirm.follow')}</button>}
+                  <div className="result-preview"><MarkdownView content={documentBody(result.content)} /></div>
+                </>
+              ) : partial ? (
+                <>
+                  <p className="live-label"><Icon name="feather" /> {t('transcribe.preview.label')}</p>
+                  <pre ref={liveRef} className="preview live"
+                       onScroll={(event) => { stick.current = isAtBottom(event.currentTarget) }}>
+                    {partial}<span className="caret" />
+                  </pre>
+                </>
+              ) : (
+                <div className="process-empty">
+                  <Icon name="feather" />
+                  <strong>{t('transcribe.preview.empty')}</strong>
+                  <span>{t('transcribe.preview.truth')}</span>
                 </div>
               )}
-              <button className="primary transcribe-submit" disabled={envoi}
-                      onClick={() => {
-                        // Sans fichier, après un envoi accepté : demander QUEL enregistrement, jamais renvoyer le même.
-                        if (!file && confirmation) inputRef.current?.click()
-                        else void run()
-                      }}>
-                <Icon name={envoi ? 'clock' : 'upload'} />
-                {/* Pendant l'envoi : « Traitement en cours… » ; ensuite le formulaire est PRÊT et le bouton le dit
-                    (un traitement tourne déjà, on peut en lancer un autre). */}
-                {envoi ? t('transcribe.submitting') : (running || (confirmation && !file)) ? t('transcribe.submitAnother') : t('transcribe.submit')}
-              </button>
-              {warnings.length > 0 && (
-                <div className="error job-error" role="status" style={{ background: 'transparent' }}>
-                  <Icon name="error" />
-                  <span>
-                    <strong>{t('transcribe.partialFailure')}</strong>
-                    {warnings.map((w) => <span key={w}>{w}. </span>)}
-                  </span>
-                </div>
-              )}
-              {doublon && (
-                <div className="error job-error" role="alert">
-                  <Icon name="error" />
-                  <span>
-                    <strong>{t('transcribe.duplicate')}</strong> {t('transcribe.duplicate.existing', { titre: doublon.titre })}
-                  </span>
-                  {onSuivre && <button type="button" className="btn sm" onClick={onSuivre}>{t('traitements.confirm.follow')}</button>}
-                </div>
-              )}
-              {error && <div className="error job-error" role="alert"><Icon name="error" /><span><strong>{t('transcribe.aborted')}</strong>{error}</span></div>}
-              {erreurEnvoi && <div className="error job-error" role="alert"><Icon name="error" /><span><strong>{t('transcribe.aborted')}</strong>{erreurEnvoi}</span></div>}
-            </section>
-          )}
+            </div>
+          </aside>
 
           {/* Le compagnon s'explique ici, sans être piloté depuis la page. */}
           <section className="studio-panel companion-note" aria-labelledby="companion-title">
@@ -846,71 +990,6 @@ export function TranscribePanel({
             <p className="muted small">{t('transcribe.companion.install', { readme: 'compagnon/README.md' })}</p>
           </section>
         </div>
-
-        <aside className="studio-panel process-panel" aria-labelledby="process-title">
-          <div className="studio-panel-heading">
-            <span className="step-number">03</span>
-            <div><h2 id="process-title">{t('transcribe.process.title')}</h2><p>{annule ? t('traitements.cancelled.message')
-              : suiviEnAttente ? t('traitements.waiting.hint')
-                : started ? rendreLigne(t, lang, ligne) || t('transcribe.process.init') : t('transcribe.process.idle')}</p></div>
-          </div>
-
-          <div className="process-progress" aria-label={t('transcribe.process.progress', { pourcent: Math.round(progress * 100) })}>
-            <div className="bar"><div className="fill" style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-            <strong>{Math.round(progress * 100)} %</strong>
-          </div>
-
-          <ol className="job-timeline">
-            {timeline.map((item) => {
-              const status = timelineStatus(item, progress, started, Boolean(result), Boolean(error))
-              return (
-                <li key={item.id} className={status} aria-current={status === 'current' || status === 'error' ? 'step' : undefined}>
-                  <span className="timeline-marker">
-                    {status === 'done' ? <Icon name="check" /> : status === 'error' ? <Icon name="error" /> : null}
-                  </span>
-                  <span><strong>{item.label}</strong><small>{status === 'skipped' ? t('timeline.skipped') : item.detail}</small></span>
-                </li>
-              )
-            })}
-          </ol>
-
-          <div className={`live-result ${result ? 'ready' : partial ? 'streaming' : ''}`}>
-            {result ? (
-              <>
-                <div className="result-heading">
-                  <span className="result-check"><Icon name="check" /></span>
-                  <span><small>{t('transcribe.result.ready')}</small><strong>{result.name}</strong></span>
-                </div>
-                <div className="result-actions">
-                  {onViewMeeting && (
-                    <Button variant="primary" onClick={() => onViewMeeting(result.name, result.destinationProjectId)}>
-                      {t('transcribe.result.view')}
-                    </Button>
-                  )}
-                  {/* Le document vient d'être écrit DANS cette destination :
-                      c'est sa portée, et non celle du projet affiché. */}
-                  <a className="btn" href={downloadUrl(result.name, result.destinationProjectId)}>{t('transcribe.result.download')}</a>
-                  <Button variant="ghost" onClick={clearFile}>{t('transcribe.result.again')}</Button>
-                </div>
-                <div className="result-preview"><MarkdownView content={documentBody(result.content)} /></div>
-              </>
-            ) : partial ? (
-              <>
-                <p className="live-label"><Icon name="feather" /> {t('transcribe.preview.label')}</p>
-                <pre ref={liveRef} className="preview live"
-                     onScroll={(event) => { stick.current = isAtBottom(event.currentTarget) }}>
-                  {partial}<span className="caret" />
-                </pre>
-              </>
-            ) : (
-              <div className="process-empty">
-                <Icon name="feather" />
-                <strong>{t('transcribe.preview.empty')}</strong>
-                <span>{t('transcribe.preview.truth')}</span>
-              </div>
-            )}
-          </div>
-        </aside>
       </div>
     </section>
   )

@@ -11,6 +11,11 @@
 // ne pas être linté ni bundlé), sauf si PLAYWRIGHT désigne un paquet déjà
 // présent sur la machine. Aucune donnée backend n'est fabriquée : le script ne
 // fait que naviguer et photographier des états réels.
+//
+// Un échec n'est jamais avalé : une navigation, un sélecteur d'attente ou une action
+// qui échoue est signalé « ✗ » avec le nom de l'écran, et le script sort en erreur
+// à la fin (code 1). Sans cela, l'image d'un écran de chargement ou d'un mauvais écran
+// serait annoncée « ✓ ».
 
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -21,6 +26,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../../../..') // racine du dépôt (worktree)
 
 const BASE = process.env.BASE || 'http://localhost:8780'
+let echecs = 0
+const echec = (msg) => { echecs += 1; process.stdout.write(`  ✗ ${msg}\n`) }
 // Identifiants propres au corpus capturé : aucun défaut, pour ne jamais
 // photographier par mégarde une bibliothèque autre que celle choisie.
 // Réunion (portée « tous les projets ») utilisée pour l'espace document.
@@ -103,10 +110,16 @@ async function capture(context, list, dir) {
   if (list.length === 0) return
   const page = await context.newPage()
   for (const t of list) {
-    await page.goto(BASE + t.url, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {})
-    if (t.wait) await page.waitForSelector(t.wait, { timeout: 9000 }).catch(() => {})
-    await page.addStyleTag({ content: FREEZE }).catch(() => {})
-    if (t.action) await t.action(page).catch(() => {})
+    await page.goto(BASE + t.url, { waitUntil: 'networkidle', timeout: 30000 })
+      .catch((e) => echec(`${t.name} : navigation — ${String(e).split('\n')[0]}`))
+    if (t.wait) {
+      await page.waitForSelector(t.wait, { timeout: 9000 })
+        .catch(() => echec(`${t.name} : sélecteur « ${t.wait} » absent après 9 s`))
+    }
+    await page.addStyleTag({ content: FREEZE }).catch((e) => echec(`${t.name} : gel — ${String(e).split('\n')[0]}`))
+    if (t.action) {
+      await t.action(page).catch((e) => echec(`${t.name} : action — ${String(e).split('\n')[0]}`))
+    }
     await page.mouse.move(0, 0)
     await page.waitForTimeout(500)
     await page.screenshot({ path: path.join(dir, `${t.name}.png`) })
@@ -157,7 +170,8 @@ async function main() {
   } finally {
     await browser.close()
   }
-  process.stdout.write('Baseline capturée.\n')
+  process.stdout.write(echecs ? `Baseline capturée AVEC ${echecs} échec(s).\n` : 'Baseline capturée.\n')
+  if (echecs) process.exitCode = 1
 }
 
 main().catch((e) => { process.stderr.write(String(e) + '\n'); process.exit(1) })

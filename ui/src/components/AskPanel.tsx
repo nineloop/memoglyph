@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { RagAnswer, RagSource } from '../api'
+import type { RagAnswer, RagScope, RagSource } from '../api'
 import { usePartage } from '../lib/partage'
-import { ErreurAvecCode, ModeleGratuitError, PORTEE_PARTAGES, ask, porteeDocument } from '../api'
+import { ModeleGratuitError, PORTEE_PARTAGES, ask, porteeDocument } from '../api'
 import { TranscriptReader } from './TranscriptReader'
 import { Icon } from './Icon'
 import { Badge } from '../design/primitives'
@@ -10,7 +10,9 @@ import { ScopeControl } from './ScopeControl'
 import { useLatestRequest } from '../lib/latestRequest'
 import { libelleProjet } from '../lib/libelleProjet'
 import { useLang } from '../lib/langContext'
-import { traduireEtape } from '../lib/i18n'
+import { phraseDErreur } from '../lib/erreurs'
+import { FOURNISSEUR_LOCAL_DE_REPLI } from '../lib/fournisseurs'
+import { fournisseurDeLAssistant } from '../lib/reglagesTraitement'
 import { pluralKey } from '../lib/i18n'
 import type { MessageKey } from '../lib/messages'
 
@@ -83,21 +85,20 @@ export function AskPanel({
     const request = beginAsk()
     setLoading(true); setError(''); setRes(null)
     try {
-      const value = await ask(
-        question,
-        allProjects ? { mode: 'all' }
-          // Ce qui est partagé avec le compte : tout, ou un projet reçu (Q15).
-          : lectureSeule
-            ? (viewScope === PORTEE_PARTAGES ? { mode: 'shared' } : { mode: 'shared', project_id: viewScope })
-            : { mode: 'project', project_id: viewScope },
-      )
+      const portee: RagScope = allProjects ? { mode: 'all' }
+        // Ce qui est partagé avec le compte : tout, ou un projet reçu (Q15).
+        : lectureSeule
+          ? (viewScope === PORTEE_PARTAGES ? { mode: 'shared' } : { mode: 'shared', project_id: viewScope })
+          : { mode: 'project', project_id: viewScope }
+      // Le fournisseur retenu par le COMPTE s'il est prêt, sinon le local (l'appel à deux arguments, comme avant).
+      const fournisseur = await fournisseurDeLAssistant()
+      const value = fournisseur === FOURNISSEUR_LOCAL_DE_REPLI ? await ask(question, portee) : await ask(question, portee, fournisseur)
       if (isCurrentAsk(request)) setRes(value)
     } catch (e) {
       if (isCurrentAsk(request)) setError(
         e instanceof ModeleGratuitError ? t('job.step.error.freeModelRestricted')
-          // Un code connu se traduit ; inconnu, la phrase du serveur reste (jamais la clé brute).
-          : e instanceof ErreurAvecCode ? traduireEtape(lang, { code: e.code, params: {}, message: e.message })
-            : e instanceof Error ? e.message : String(e))
+          // Un code connu se traduit ; tout le reste dit la phrase du contexte, jamais le texte du serveur ni de l'exception.
+          : phraseDErreur(t, lang, e, t('repli.assistant')))
     } finally {
       if (isCurrentAsk(request)) setLoading(false)
     }
@@ -143,20 +144,24 @@ export function AskPanel({
 
   if (opened) {
     return (
-      <TranscriptReader
-        name={opened.name}
-        documentScope={opened.scope}
-        title={opened.title}
-        initialTimestamp={opened.ts}
-        lancer
-        onBack={() => setOpened(null)}
-        backLabel={t('ask.back')}
-      />
+      <>
+        <h1 className="sr-only">{t('app.nav.ask')}</h1>
+        <TranscriptReader
+          name={opened.name}
+          documentScope={opened.scope}
+          title={opened.title}
+          initialTimestamp={opened.ts}
+          lancer
+          onBack={() => setOpened(null)}
+          backLabel={t('ask.back')}
+        />
+      </>
     )
   }
 
   return (
     <section className="card query-card">
+      <h1 className="sr-only">{t('app.nav.ask')}</h1>
       <ScopeControl
         allProjects={allProjects}
         viewScope={viewScope} onChangerPortee={onChangerPortee}
@@ -174,13 +179,13 @@ export function AskPanel({
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run() }}
         />
-        <button className="primary llm" onClick={run} disabled={!q.trim() || loading}>
+        <button className="primary" onClick={run} disabled={!q.trim() || loading}>
           {loading ? t('ask.submitting') : t('ask.submit')}
         </button>
       </div>
 
-      {error ? <p className="error"><Icon name="error" /> {error}</p>
-        : loading ? <p className="muted">{t('ask.writing')}</p>
+      {error ? <p className="error" role="alert"><Icon name="error" /> {error}</p>
+        : loading ? <p className="muted" role="status">{t('ask.writing')}</p>
         : !res ? (
           /* Deux manques comblés ici, tous deux gratuits :
              l'indisponibilité du modèle se disait APRÈS quarante mots tapés, et

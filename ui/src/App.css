@@ -15,11 +15,6 @@
 :root[data-theme='dark'] .brand-mark-clair { display: none; }
 :root[data-theme='dark'] .brand-mark-sombre { display: block; }
 .brand span { letter-spacing: -.4px; }
-/* Intitulés de groupe : présents dans le DOM (lecteurs d'écran + tests), masqués à l'œil. */
-.nav-caption {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-}
 .local-indicator { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 15%, transparent); }
 
 /* ---- Dock flottant : navigation PRIMAIRE, signature de l'interface ---- */
@@ -32,9 +27,8 @@
      se confondait avec le fond (≈ 1,1:1). Bordure et ombre le détachent aussi. */
   background: var(--dock-bg); backdrop-filter: blur(18px) saturate(1.2);
   box-shadow: 0 20px 46px -14px var(--shadow-tint), inset 0 0 0 1px var(--dock-bordure);
-  overflow-x: auto; scrollbar-width: none;
+  overflow: visible;   /* la feuille de « Plus » sort du dock vers le haut : rien ne doit la couper */
 }
-.dock::-webkit-scrollbar { display: none; }
 .dock-item {
   flex: none; position: relative;
   display: inline-flex; flex-direction: column; align-items: center; gap: 3px;
@@ -173,8 +167,6 @@
 .primary:hover:not(:disabled) { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 14px 28px -8px var(--accent-glow); }
 .primary:active:not(:disabled) { transform: translateY(0); }
 .primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.primary.llm { background: var(--llm); border-color: var(--llm); color: #fff; box-shadow: 0 7px 16px var(--llm-glow); }
-.primary.llm:hover:not(:disabled) { background: var(--llm-hover); border-color: var(--llm-hover); filter: none; box-shadow: 0 10px 22px var(--llm-glow); }
 
 /* ---- Progress / result ---- */
 .progress { display: flex; flex-direction: column; gap: 6px; }
@@ -204,8 +196,6 @@
 .btn.accent { border-color: var(--accent-border); background: var(--accent-bg); color: var(--accent); font-weight: 600; }
 .btn.accent:hover { background: var(--accent); color: var(--accent-text); }
 .btn.accent:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn.accent.llm { border-color: color-mix(in srgb, var(--llm) 35%, transparent); background: var(--llm-bg); color: var(--llm); }
-.btn.accent.llm:hover:not(:disabled) { border-color: var(--llm); background: var(--llm); color: var(--accent-text); }
 .row > strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview {
   background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; margin: 0;
@@ -260,8 +250,25 @@
 .flow-steps li.done { color: var(--text-h); }
 .flow-steps li.done > span { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 32%, transparent); background: color-mix(in srgb, var(--ok) 10%, white); }
 
-.transcribe-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(340px, .92fr); gap: var(--space-5); align-items: start; }
-.transcribe-form-column { min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.transcribe-layout { display: grid; grid-template-columns: minmax(300px, .86fr) minmax(0, 1.14fr); gap: var(--space-5); align-items: start; }
+.transcribe-work-column { min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+/* Les réglages : une zone à gauche ; sur petit écran, une fenêtre qu'on ouvre par un bouton (voir plus bas). */
+/* Plus précis que `.icon-btn` et `.btn` (déclarés plus bas) : sans cela ils s'affichent aussi en bureau. */
+.studio-panel-heading .reglages-ouvrir, .studio-panel-heading .reglages-fermer { display: none; }
+/* « Ranger dans » et le bouton d'envoi sur une même ligne : le bouton s'aligne sur le champ (sous son étiquette). */
+.ligne-envoi { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; position: sticky; bottom: 104px; z-index: 20; padding-block: 10px 6px; background: var(--panel); border-top: 1px solid var(--border); }
+.ligne-envoi > .ranger-dans { flex: 1 1 0; min-width: 0; }   /* base 0 : le champ ne pousse pas le bouton à la ligne ; le nom du fichier a sa propre ligne */
+.ligne-envoi > .envoi-fichier { flex: 0 0 100%; margin: 0; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.85rem; font-weight: 600; }
+.ligne-envoi > .envoi-fichier span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ligne-envoi .transcribe-submit { flex: 0 0 auto; width: auto; min-height: 48px; margin-top: 28px; padding-inline: 22px; white-space: nowrap; }
+/* La barre d'envoi (« Ranger dans » et « Lancer la transcription ») reste visible au bas de la carte « Fichier » dès qu'un fichier est choisi :
+   collante au-dessus du dock (et du mini-lecteur, quand il y en a un), sous le z-index du dock (55). Hauteurs en dur, comme celles du dock. */
+:root[data-lecteur] .ligne-envoi { bottom: 176px; }
+@media (max-width: 820px) {
+  .ligne-envoi { bottom: 96px; }
+  :root[data-lecteur] .ligne-envoi { bottom: 168px; }
+}
+.suivi-annulation { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .studio-panel {
   min-width: 0; padding: clamp(18px, 2.4vw, 28px); display: flex; flex-direction: column; gap: 18px;
   border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel);
@@ -332,9 +339,6 @@
 .option-tile.llm .option-icon { color: var(--llm); }
 .option-icon .icon { width: 17px; height: 17px; }
 .option-tile > span:nth-of-type(2) { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-/* Sélecteur « Fournisseur cloud » : pas d'icône, donc un seul <span> (nom et modèle) : même empilement que ci-dessus. */
-.cloud-provider-select .option-tile { text-align: left; font: inherit; }
-.cloud-provider-select .option-tile > span:only-of-type { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .option-tile strong { color: var(--text-h); font-size: 12.5px; }
 .option-tile small { color: var(--text); font-size: 10.5px; line-height: 1.35; }
 
@@ -345,7 +349,7 @@
 .expert-content { padding: 4px 2px 14px; display: flex; flex-direction: column; gap: 12px; }
 .expert-content > label:not(.field) { display: flex; align-items: center; gap: 8px; color: var(--text-h); font-size: 12.5px; }
 .model-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.model-facts > div { display: grid; grid-template-columns: 42px 1fr; gap: 8px; font-size: 11px; }
+.model-facts > div { display: grid; grid-template-columns: 76px 1fr; gap: 8px; font-size: 11px; }
 .model-facts dt { color: var(--text); font-weight: 720; }
 .model-facts dd { margin: 0; color: var(--text-h); font-family: var(--mono); overflow-wrap: anywhere; }
 .transcribe-submit { width: 100%; padding-block: 12px; }
@@ -354,7 +358,7 @@
 .job-error .icon { width: 18px; height: 18px; flex: 0 0 auto; }
 .job-error span { display: flex; flex-direction: column; gap: 3px; }
 
-.process-panel { position: sticky; top: 101px; max-height: calc(100svh - 125px); overflow: auto; }
+.process-panel { position: static; }
 .process-progress { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 11px; }
 .process-progress .bar { height: 6px; }
 .process-progress strong { min-width: 36px; color: var(--text-h); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
@@ -398,7 +402,16 @@
   .transcribe-hero { grid-template-columns: 1fr; }
   .flow-steps { justify-self: start; }
   .transcribe-layout { grid-template-columns: 1fr; }
-  .process-panel { position: static; max-height: none; }
+  /* Petit écran : les réglages s'ouvrent en fenêtre plein écran (dialogue modal), le bouton d'ouverture est là. */
+  .studio-panel-heading .reglages-ouvrir { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; min-height: 44px; flex: 0 0 auto; }
+  .reglages-panel:not(.ouvert) { display: none; }
+  .reglages-panel.ouvert { position: fixed; inset: 0; z-index: 80; overflow-y: auto; border-radius: 0; border: 0; }
+  .studio-panel-heading .reglages-fermer { display: grid; margin-left: auto; min-width: 44px; min-height: 44px; flex: 0 0 auto; }
+}
+@media (max-width: 520px) {
+  .ligne-envoi { flex-direction: column; align-items: stretch; }
+  .ligne-envoi > .ranger-dans { flex: 0 0 auto; }
+  .ligne-envoi .transcribe-submit { width: 100%; margin-top: 0; }
 }
 
 @media (max-width: 600px) {
@@ -409,6 +422,13 @@
   .flow-steps li > span { width: 23px; height: 23px; }
   .studio-panel { padding: 16px; border-radius: var(--radius-md); }
   .studio-dropzone { min-height: 205px; padding: 28px 14px; }
+  /* Un fichier choisi : l'écran se resserre pour que le bouton d'envoi reste visible sans défiler (390×844). */
+  .transcribe-hero { gap: 12px; }
+  .transcribe-hero h1 { font-size: 25px; }
+  .transcribe-hero p { display: none; }
+  .file-step .studio-panel-heading p { display: none; }
+  .studio-dropzone.has-file { min-height: 0; padding: 12px 14px; gap: 4px; }
+  .studio-dropzone.has-file .drop-icon { width: 32px; height: 32px; font-size: 18px; }
   .destination-callout { grid-template-columns: auto 1fr; }
   .destination-note { grid-column: 1 / -1; justify-self: start; max-width: none; text-align: left; }
   .enhancement-grid { grid-template-columns: 1fr; }
@@ -430,6 +450,8 @@
 }
 .lib-item:hover { border-color: var(--accent-border); background: var(--accent-bg); transform: translateY(-1px); box-shadow: var(--shadow-xs); }
 .lib-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+/* Quand la zone s'ouvre au clavier (Doublons), c'est un vrai bouton : on lui retire l'allure d'un bouton. */
+button.lib-main { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; align-items: flex-start; }
 .lib-title { color: var(--text-h); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badges { display: flex; gap: 6px; flex-wrap: wrap; }
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; padding: 3px 8px; border-radius: var(--radius-pill); background: var(--accent-bg); color: var(--accent); white-space: nowrap; }
@@ -466,6 +488,7 @@
 .library-card { gap: var(--space-5); }
 .library-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-5); }
 .library-heading > div { display: flex; flex-direction: column; gap: 2px; }
+.library-heading h1 { font-size: 18px; line-height: 1.3; }   /* le titre de la Bibliothèque est le h1 de l'écran : il garde la taille qu'il avait en h2 (`.card h2`) */
 .library-search { width: min(340px, 45%); }
 
 /* ---- Galerie de projets : accueil premium en vue globale ---- */
@@ -518,7 +541,7 @@
 .meeting-summary:not(.avec-projet) .meeting-facts { grid-template-columns: 82px 80px 34px 44px; }
 .meeting-summary:focus-visible { outline: none; box-shadow: inset var(--focus); }
 .meeting-identity { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.meeting-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-h); font-size: 14px; font-weight: 670; }
+.meeting-title { overflow-wrap: anywhere; color: var(--text-h); font-size: 14px; font-weight: 670; }   /* D4 : le titre complet passe à la ligne, il n'est plus coupé */
 .meeting-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 11.5px; }
 .meeting-facts {
   min-width: 0; display: grid; grid-template-columns: 82px 80px 34px 44px minmax(88px, 1fr);
@@ -602,7 +625,6 @@
   min-width: 0; flex: 1; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; cursor: pointer;
 }
 .search-passage-open:hover .snippet, .source-open:hover .source-title { color: var(--accent); }
-.search-document { display: block; margin-top: 6px; color: var(--muted); font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timestamp-link {
   display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: var(--radius-pill);
@@ -658,6 +680,12 @@
 .dup-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
 .dup-reason { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-bg); padding: 4px 10px; border-radius: 20px; }
 .dup-group .lib-item { background: var(--panel); }
+/* Sur mobile, la ligne d'un membre se replie : le titre et la date en pleine largeur, les pastilles et « Archiver » en dessous (rien n'est coupé). */
+@media (max-width: 600px) {
+  .dup-group .lib-item { flex-wrap: wrap; }
+  .dup-group .lib-main { flex: 1 1 100%; }
+  .dup-group .lib-title { white-space: normal; overflow-wrap: anywhere; }
+}
 .dup-keep { border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 6%, var(--panel)); }
 .keep-badge { color: var(--ok); font-family: var(--mono); font-size: 11px; font-weight: 700; margin-right: 8px; }
 .btn.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 30%, transparent); background: var(--red-100); box-shadow: none; }
@@ -676,6 +704,17 @@
 .regenerer-option.interdit { cursor: not-allowed; border-style: dashed; }
 .regenerer-option.interdit strong { color: var(--muted); }
 .regenerer-raison { color: var(--text); }
+.selecteur-fournisseur { text-align: left; }
+.selecteur-fournisseur ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.selecteur-fournisseur ul[hidden] { display: none; }
+.selecteur-bascule { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.selecteur-bascule .muted { font-weight: 400; }
+/* L'intitulé « Local » : le même mot et le même poids que le bouton « En ligne », sans être un bouton. */
+.selecteur-intitule { margin: 0 0 2px; padding: 0 8px; font-weight: 600; color: var(--text); }
+.selecteur-etat { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--panel-2, var(--panel)); font-size: 12px; color: var(--text); }
+.selecteur-indispo { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: 44px; padding: 6px 8px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); }
+.selecteur-indispo strong { color: var(--muted); }
+.selecteur-indispo small { color: var(--text); }
 .traitement-echec-bloc p { margin: 0; font-size: 13px; color: var(--text-h); }
 .traitement-echec-detail { margin-top: 4px; font-size: 12px; }
 .traitement-echec-detail summary { cursor: pointer; min-height: 24px; }
@@ -856,11 +895,16 @@
 .merge-destination { border-color: var(--accent-border) !important; background: var(--accent-bg) !important; }
 .merge-arrow { align-self: center; color: var(--accent); font-size: 24px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.confirmation-phrase { margin: 0; white-space: pre-line; }
 
 /* ---- Maintenance ---- */
 .maintenance-tabs { display: flex; gap: 5px; padding: 4px; overflow-x: auto; border-radius: var(--radius-md); background: var(--panel-2); }
 .maintenance-tabs button { padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: var(--radius-sm); color: var(--text); background: transparent; font: 650 12px var(--sans); white-space: nowrap; cursor: pointer; }
 .maintenance-tabs button.on { color: var(--text-h); background: var(--panel); box-shadow: var(--shadow-xs); }
+/* Sur mobile, un dégradé de bord dit que la rangée défile (l'onglet de droite n'est plus coupé net). */
+@media (max-width: 820px) {
+  .maintenance-tabs { padding-right: 32px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+}
 .maintenance-tabs button > span { min-width: 18px; padding: 1px 5px; border-radius: var(--radius-pill); color: var(--accent); background: var(--accent-bg); font: 10px var(--mono); }
 .maintenance-message { margin: 0; padding: 10px 12px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--accent-border); border-radius: var(--radius-sm); color: var(--accent); background: var(--accent-bg); font-size: 12px; }
 .maintenance-section { display: flex; flex-direction: column; gap: 18px; }
@@ -968,6 +1012,8 @@
 .meeting-tabs button[aria-selected="true"] { color: var(--ink-on-teal); background: var(--grad); box-shadow: 0 6px 16px -8px var(--accent-glow); }
 .meeting-tabs button span { min-width: 20px; padding: 1px 5px; border-radius: var(--radius-pill); background: var(--panel-2); font-size: 10px; text-align: center; }
 .meeting-tabs button[aria-selected="true"] span { background: rgb(255 255 255 / 40%); color: var(--ink-on-teal); }
+/* L'onglet qui a le focus au clavier est toujours le sélectionné : son ombre propre ne doit pas effacer l'anneau de focus (`:where(...)` de index.css a une spécificité nulle). Le contour plein est en `--accent` (≥ 3:1 sur la barre dans les deux thèmes ; le céladon n'atteint que 2:1 en clair). */
+.meeting-tabs button[aria-selected]:focus-visible, .maintenance-tabs button.on:focus-visible, .maintenance-tabs button[role="tab"]:focus-visible { box-shadow: var(--focus); outline: 2px solid var(--accent); outline-offset: 2px; }
 .meeting-panels { min-width: 0; }
 .meeting-panel { min-width: 0; padding: clamp(18px, 3vw, 32px); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--shadow-sm); }
 .meeting-panel[hidden] { display: none; }
@@ -998,7 +1044,7 @@
 
 .markdown-view { max-width: 760px; margin: 0 auto; color: var(--ink-800); font-size: 15px; line-height: 1.75; }
 .markdown-view > :first-child { margin-top: 0; }
-.markdown-view h1 { margin: 1.4em 0 .6em; font-size: 27px; line-height: 1.2; }
+.markdown-view h1, .markdown-view h2.md-h1 { margin: 1.4em 0 .6em; padding: 0; border: 0; font-size: 27px; line-height: 1.2; }
 .markdown-view h2 { margin: 1.5em 0 .55em; padding-bottom: .3em; border-bottom: 1px solid var(--border); font-size: 20px; }
 .markdown-view h3, .markdown-view h4 { margin: 1.35em 0 .45em; font-size: 16px; }
 .markdown-view p { margin: .8em 0; }
@@ -1026,7 +1072,8 @@
 .report-view > .markdown-view { max-width: 720px; }
 /* Un H1 de tête est retiré de l'affichage par `ReportView` ; celui-ci ne vise
    que le compte-rendu réduit à son seul titre (anciens comptes-rendus). */
-.report-view > .markdown-view > h1:first-child {
+.report-view > .markdown-view > h1:first-child,
+.report-view > .markdown-view > h2.md-h1:first-child {
   margin: 0 auto 1.5em; padding-bottom: 1.1em; border-bottom: 1px solid var(--border);
   font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--muted);
   text-align: center; overflow-wrap: anywhere;
@@ -1037,6 +1084,7 @@
   font-size: 21px; line-height: 1.3; font-weight: 660; color: var(--text-h);
 }
 .report-view > .markdown-view h2:first-of-type { margin-top: .4em; }
+.report-view > .markdown-view h2.md-h1:not(:first-child) { margin: 1.4em 0 .6em; font-size: 27px; line-height: 1.2; font-weight: 650; }
 .report-view > .markdown-view ul { padding-left: 1.2em; }
 .report-view > .markdown-view li { margin: .5em 0; line-height: 1.7; }
 .report-view > .markdown-view li::marker { color: var(--accent); }
@@ -1048,7 +1096,7 @@
 .transcript-reader.embedded { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .document-toolbar { padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .document-label { margin-right: auto; min-width: 0; display: flex; flex-direction: column; }
-.document-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-h); font-size: 12px; }
+.document-label strong { overflow-wrap: anywhere; color: var(--text-h); font-size: 12px; }   /* D4 : le nom complet du document actif passe à la ligne */
 .meeting-workspace .transcript-reader .player { position: sticky; top: 138px; z-index: 7; margin: 0 -8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-glass); box-shadow: var(--shadow-sm); backdrop-filter: blur(12px); }
 
 .versions-panel { display: flex; flex-direction: column; gap: 28px; }
@@ -1098,7 +1146,7 @@
 /* ---------- Tableau de bord Usage ---------- */
 .usage-panel { display: flex; flex-direction: column; gap: 18px; }
 .usage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.usage-head h2 { margin: 0; font-size: 18px; color: var(--text-h); }
+.usage-head h1 { margin: 0; font-size: 18px; color: var(--text-h); }
 .usage-scope { font-size: 12px; color: var(--muted); }
 .usage-empty { padding: 24px 0; }
 /* couleurs de base : nuage / local / non tarifé — jamais mélangées visuellement */
@@ -1244,10 +1292,12 @@
   .meeting-actions { position: absolute; top: 8px; right: 7px; padding: 0; }
   .meeting-action-menu { top: 37px; right: 0; width: min(238px, calc(100vw - 50px)); }
   .skeleton-row { display: grid; grid-template-columns: 1.3fr .7fr; gap: 10px; }
-  .meeting-hero { padding: 16px; gap: 22px; border-radius: var(--radius-md); }
+  /* Sur mobile l'en-tête reste compact pour tous les onglets : il fallait défiler d'environ 480 px avant le contenu (C12). */
+  .meeting-hero { padding: 12px 14px; gap: 10px; border-radius: var(--radius-md); }
+  .meeting-hero .meeting-eyebrow { display: none; }
   .meeting-hero-top { align-items: flex-start; }
   .meeting-scope-actions { justify-content: flex-end; flex-wrap: wrap; }
-  .meeting-hero h1 { font-size: 25px; }
+  .meeting-hero h1 { font-size: 20px; line-height: 1.25; }
   .meeting-hero-facts { width: 100%; }
   .meeting-hero-facts > span { min-width: 72px; padding: 9px 10px; }
   .meeting-reserves li { grid-template-columns: 1fr; }
@@ -1257,7 +1307,7 @@
   .report-toolbar { align-items: stretch; flex-direction: column; }
   .report-switcher { justify-content: flex-start; }
   .markdown-view { font-size: 14px; }
-  .markdown-view h1 { font-size: 23px; }
+  .markdown-view h1, .markdown-view h2.md-h1 { font-size: 23px; }
   .markdown-view h2 { font-size: 18px; }
   .document-toolbar { align-items: stretch; }
   .document-label { flex-basis: 100%; order: -1; }
@@ -1301,6 +1351,8 @@
 .auth-card h1 { margin: 0; font-size: 1.4rem; }
 .auth-card p { margin: 0; color: var(--muted); }
 .auth-card input { width: 100%; }
+.auth-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+.auth-brand img { width: 30px; height: 30px; }
 .auth-error { color: var(--err) !important; }
 .auth-hint { font-size: 0.85rem; }
 .auth-logout { white-space: nowrap; }
@@ -1431,7 +1483,13 @@ a.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; b
 .fil-ariane a:hover { background: var(--accent-bg); text-decoration: underline; }
 .fil-ariane a:focus-visible { outline: 2px solid var(--accent); }
 .fil-sep { color: var(--muted); }
-.fil-courant { color: var(--text-h); font-weight: 650; max-width: 38ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fil-courant { color: var(--text-h); font-weight: 650; max-width: 70ch; overflow-wrap: anywhere; }   /* D4 : au bureau, le titre complet passe à la ligne ; sous 820 px il est coupé (bloc suivant) */
+@media (max-width: 820px) {
+  /* Le grand titre de la réunion, juste dessous, dit déjà le titre en entier : le fil d'Ariane le coupe par une ellipse, sur une ligne, au lieu de le répéter. */
+  .fil-ariane, .fil-ariane ol { min-width: 0; max-width: 100%; }   /* sans cela, la ligne sans coupure force la largeur du parent et déborde de la carte */
+  .fil-ariane li:last-child { max-width: 100%; }
+  .fil-courant { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
 .navigation-reunion { display: inline-flex; gap: 4px; }
 .navigation-reunion .icon-btn { min-width: 44px; min-height: 44px; }
 .navigation-reunion .fleche-droite { display: grid; transform: scaleX(-1); }
@@ -1467,7 +1525,7 @@ a.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; b
 .query-scope-change:hover { text-decoration: underline; }
 
 /* ---- Dock mobile : « Plus » ---- */
-.dock-plus { position: relative; display: none; }
+.dock-plus { position: relative; }
 .dock-feuille {
   position: absolute; right: 0; bottom: calc(100% + 12px); min-width: 210px; display: flex; flex-direction: column; gap: 2px; padding: 8px;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 18px 40px -14px var(--shadow-tint);
@@ -1488,11 +1546,10 @@ a.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; b
   /* Cinq entrées au plus (quatre + Plus) : elles se partagent la largeur au lieu de défiler. */
   /* Plus de défilement : la feuille de « Plus » sort du dock vers le haut, `overflow` ne doit pas la couper. */
   .dock { justify-content: space-between; overflow: visible; }
-  .dock-item, .dock-plus { flex: 1 1 0; min-width: 0; }
+  .dock-item, .dock-plus { flex: 1 1 0; min-width: min-content; }   /* D4 : jamais plus étroite que son libellé (F-85) */
+  .dock-plus { min-width: 44px; }
   .dock-item { padding: 8px 2px; }
   .dock-plus-bouton { width: 100%; }
-  .dock-plus { display: block; }
-  .dock-secondaire { display: none; }
   .reglages-texte { display: none; }
   .barre-haute { flex-wrap: wrap; }
   .barre-haute .global-search { order: 3; flex-basis: 100%; }
@@ -1638,4 +1695,21 @@ a.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; b
 .source-chip { display: inline-flex; align-items: center; min-height: 24px; }
 @media (pointer: coarse), (max-width: 820px) {
   .source-chip { min-height: 44px; min-width: 44px; justify-content: center; }
+}
+.reglages-defaut { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
+.player-ecouter { margin: 4px 0 8px; }
+
+/* ---- D4 : cibles tactiles de 44 px (C24, F-75 à F-78). La règle vise les sélecteurs, pas la liste des usages d'aujourd'hui ;
+   au bureau et au pointeur fin, l'aspect compact reste. `.cite-missing` n'est pas un contrôle (un `span` barré). ---- */
+@media (max-width: 820px), (pointer: coarse) {
+  .btn.sm, .icon-btn, .timestamp-link, .chip { min-height: 44px; min-width: 44px; }
+  .timestamp-link { display: inline-flex; align-items: center; justify-content: center; }
+  /* Une citation placée dans une phrase relève de l'exception « en ligne » des règles de taille de cible : elle reste compacte (au moins 24 px),
+     sans zone chevauchante. À 44 px, elle desserrait le paragraphe de l'Assistant (168 px devenus 221 px). */
+  .cite:not(.cite-missing) { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; min-width: 24px; }
+}
+
+/* D4 (F-85) : aux largeurs de 360 px et moins, le dock se resserre pour que les cinq libellés tiennent en entier (mesuré à 320 px). */
+@media (max-width: 360px) {
+  .dock { padding: 5px; gap: 1px; }
 }

@@ -5,7 +5,7 @@ Organisation du code, des fichiers et des données.
 ```mermaid
 flowchart TD
     subgraph UI ["Interface Utilisateur (React + Vite)"]
-        Nav["Navigation — Espace : Transcrire | Bibliothèque | Recherche | Assistant | Voix · Données : Doublons | Corbeille | Maintenance"]
+        Nav["Navigation — Barre du bas : Transcrire | Bibliothèque | Recherche | Assistant | Plus (Voix · Usage · Maintenance, avec Doublons et Corbeille en onglets)"]
         Timeline["Timeline SSE 6 étapes (0 à 100%)"]
         Player["Lecteur audio synchronisé aux timestamps"]
     end

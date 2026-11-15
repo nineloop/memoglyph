@@ -126,7 +126,7 @@ def make_local_report(
         try:
             semantic.index_name(out_path.name)
         except Exception as exc:  # noqa: BLE001
-            warnings.append(f"Compte-rendu écrit mais absent de la recherche par le sens : {exc}")
+            warnings.append(f"Compte rendu écrit mais absent de la recherche par le sens : {exc}")
             print(f"[app_report] indexation sémantique ignorée : {exc}")
 
         return {"name": out_path.name, "content": content, "genre": genre,
@@ -218,7 +218,7 @@ def _assemble_app_report(name: str, meta: dict, genre: str, out: dict,
     fm = {
         "id": report_id or docid.nouveau(),
         **_report._identity_fields(meta),
-        "title": f"{title} — compte-rendu",
+        "title": f"{title} — compte rendu",
         "date": now.strftime("%Y-%m-%d"),
         "type": "report",
         "source_transcript": name,
@@ -253,10 +253,11 @@ def _assemble_app_report(name: str, meta: dict, genre: str, out: dict,
             genre=genre,
             num_ctx=config.EXPERIMENTAL_CHUNK_TOKENS,
             questions=[],
+            prompt_cache_size=llm.taille_cache_prompts(diag["provider"]),
         ),
     }
 
-    heading = "Compte-rendu" if fr else "Report"
+    heading = "Compte rendu" if fr else "Report"
     p: list[str] = [f"# {heading} — {title}", ""]
 
     # --- Couche INTERPRÉTATION (visiblement étiquetée) ---

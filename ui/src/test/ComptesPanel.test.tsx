@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-import { changerActivation, creerCompte, getEtatAuth, listerComptes } from '../api'
+import { ErreurAvecCode, changerActivation, creerCompte, getEtatAuth, listerComptes } from '../api'
 import { AuthGate } from '../components/AuthGate'
 import { BoutonComptes, ComptesPanel } from '../components/ComptesPanel'
 import { LangProvider } from '../components/LangProvider'
@@ -71,7 +71,7 @@ it('liste les comptes avec rôle et état, et bascule l’activation', async () 
 it('affiche le refus du serveur, par exemple pour le dernier administrateur', async () => {
   const user = userEvent.setup()
   vi.mocked(changerActivation).mockRejectedValue(
-    new Error('Impossible de désactiver le dernier administrateur actif.'))
+    new ErreurAvecCode('account.lastAdmin', 'Impossible de désactiver le dernier administrateur actif.'))
   render(<LangProvider><ComptesPanel /></LangProvider>)
 
   const ligneAdmin = (await screen.findByText('admin')).closest('tr')!

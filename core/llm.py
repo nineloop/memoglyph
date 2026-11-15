@@ -216,6 +216,34 @@ def pret_declare(provider: str) -> bool:
     return moteur(provider).pret_declare()
 
 
+def lieu(provider: str) -> str:
+    """OÙ tourne le fournisseur : `local`, `cloud_prive` (un serveur que l'utilisateur héberge, hors de cette machine) ou
+    `en_ligne`. Dérivé des mêmes capacités que la règle d'envoi (`est_local`, `auto_heberge`), jamais d'un nom ni d'une adresse."""
+    if est_local(provider):
+        return "local"
+    return "cloud_prive" if auto_heberge(provider) else "en_ligne"
+
+
+def etats_fournisseurs(prets: dict[str, bool]) -> dict[str, dict[str, str]]:
+    """`{fournisseur → {lieu, etat}}` pour tout le registre, y compris les fournisseurs que `propose` cache.
+
+    `etat` : `non_configure` (pas prêt), `gratuit` (prêt ET modèle marqué gratuit par le service, règle de
+    `modeles_gratuits`) ou `pret`. `prets` est le dictionnaire déjà lu par l'appelant : aucun second sondage.
+    Rien d'autre n'en sort : ni clé, ni nom de variable, ni adresse, ni modèle."""
+    etats: dict[str, dict[str, str]] = {}
+    for nom in MOTEURS:
+        if nom in HORS_INTERFACE:
+            continue
+        if not prets.get(nom, False):
+            etat = "non_configure"
+        elif modeles_gratuits.est_gratuit(nom, modele_servi(nom)):
+            etat = "gratuit"
+        else:
+            etat = "pret"
+        etats[nom] = {"lieu": lieu(nom), "etat": etat}
+    return etats
+
+
 def disponibilite_declaree() -> dict[str, bool]:
     """`{fournisseur → prêt}` pour TOUS les moteurs annoncés.
 
@@ -230,6 +258,16 @@ def disponibilite_declaree() -> dict[str, bool]:
     et l'annoncer ferait compter Mistral deux fois.
     """
     return {nom: pret_declare(nom) for nom in MOTEURS}
+
+
+def taille_cache_prompts(provider: str = FOURNISSEUR_DEFAUT) -> Optional[int]:
+    """Séquences du cache de prompts du serveur LOCAL, ou `None` pour un autre moteur.
+
+    Le cache appartient à `mlx_lm.server` : il n'existe pas chez un fournisseur en
+    ligne. Le CHOIX vit ici, avec les autres détails de moteur, et non dans le
+    tronc du compte-rendu, qui ne branche jamais sur le fournisseur.
+    """
+    return config.MLX_PROMPT_CACHE_SIZE if provider == "mlx" else None
 
 
 def modele_servi(provider: str = FOURNISSEUR_DEFAUT, model: Optional[str] = None) -> str:

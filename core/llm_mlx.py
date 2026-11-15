@@ -467,9 +467,13 @@ class MlxEngine:
         réunion ordinaire est coupé à 512 jetons et le moteur le refuse en
         conseillant d'augmenter une valeur que l'appelant ne peut pas toucher.
 
-        `--prompt-cache-bytes` n'a AUCUN défaut chez `mlx_lm.server` : seul le
-        NOMBRE de caches est borné, à dix. MESURÉ sur cinq
-        comptes-rendus enchaînés, c'est une borne sans effet — dix caches de
+        `--prompt-cache-bytes` n'a AUCUN défaut chez `mlx_lm.server`, et le
+        NOMBRE de caches y est borné à dix par défaut : nous le portons à
+        quatre (`--prompt-cache-size`, voir `config.MLX_PROMPT_CACHE_SIZE`
+        pour la mesure). Aucune des deux bornes ne suffit seule : le nombre ne
+        limite pas les octets, et la limite en octets n'agit qu'à l'insertion
+        d'une requête, pas à l'intérieur d'un long compte-rendu. MESURÉ sur cinq
+        comptes-rendus enchaînés, la borne de dix (le défaut) est sans effet — dix caches de
         prompts à 24 074 jetons pèsent 8,97 Go, et la génération suivante meurt
         sur `[METAL] Insufficient Memory` sans jamais répondre. Voir
         `config.MLX_PROMPT_CACHE_BYTES` pour le détail de la mesure et le
@@ -482,6 +486,7 @@ class MlxEngine:
             "--port", str(self.port),
             "--max-tokens", str(self._max_tokens),
             "--prompt-cache-bytes", str(config.MLX_PROMPT_CACHE_BYTES),
+            "--prompt-cache-size", str(config.MLX_PROMPT_CACHE_SIZE),
         ]
 
     def _port_ouvert(self) -> bool:

@@ -24,6 +24,10 @@ export type Track = {
 type AudioApi = {
   track: Track | null
   playing: boolean
+  /** Le média ne se lit pas (fichier introuvable ou illisible) : le lecteur le dit au lieu de rester muet. */
+  erreur: boolean
+  /** La personne a demandé l'écoute (bouton « Écouter », horodatage, reprise) : le mini-lecteur n'apparaît qu'alors (ou pour dire une erreur). */
+  lectureDemandee: boolean
   /** Seconde courante, ARRONDIE (évite un re-render 4×/s de toute l'app). */
   currentTime: number
   duration: number
@@ -84,10 +88,19 @@ function oublierRecent(name: string) {
   } catch { /* sans effet */ }
 }
 
-function jouerSansPromesse(el: HTMLAudioElement) {
+/**
+ * Lance la lecture sans attendre la promesse. Un refus n'est un ÉCHEC que si le format n'est pas pris en charge
+ * (`NotSupportedError`) : `AbortError` (lecture interrompue par un changement de piste) et `NotAllowedError` (lecture
+ * automatique refusée par le navigateur, fréquente sur Safari et iOS) ne disent rien d'un fichier illisible.
+ */
+function jouerSansPromesse(el: HTMLAudioElement, surEchec?: () => void) {
   try {
     const p = el.play()
-    if (p && typeof (p as Promise<void>).catch === 'function') (p as Promise<void>).catch(() => {})
+    if (p && typeof (p as Promise<void>).catch === 'function') {
+      (p as Promise<void>).catch((e: unknown) => {
+        if ((e as { name?: string } | null)?.name === 'NotSupportedError') surEchec?.()
+      })
+    }
   } catch { /* jsdom / autoplay bloqué : sans effet */ }
 }
 
@@ -97,6 +110,9 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [erreur, setErreur] = useState(false)
+  const [lectureDemandee, setLectureDemandee] = useState(false)
+  const signalerEchec = useCallback(() => { setErreur(true); setPlaying(false) }, [])
   // Ce qu'on veut faire dès que les métadonnées du média sont prêtes.
   const enAttente = useRef<{ startAt?: number; autoplay?: boolean } | null>(null)
 
@@ -110,15 +126,15 @@ export function AudioProvider({ children }: { children: ReactNode }) {
           el.currentTime = cible
           setCurrentTime(Math.floor(cible))
           enAttente.current = null // position explicite : plus rien à appliquer aux métadonnées
-          if (opts?.autoplay) jouerSansPromesse(el)
+          if (opts?.autoplay) { setLectureDemandee(true); jouerSansPromesse(el, signalerEchec) }
         }
         return prev
       }
       enAttente.current = { startAt: opts?.startAt, autoplay: opts?.autoplay }
-      setCurrentTime(0); setDuration(0)
+      setCurrentTime(0); setDuration(0); setErreur(false); setLectureDemandee(Boolean(opts?.autoplay))
       return next
     })
-  }, [])
+  }, [signalerEchec])
 
   const seek = useCallback((seconds: number, opts?: { autoplay?: boolean }) => {
     const el = audioRef.current
@@ -135,21 +151,21 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     enAttente.current = { startAt: seconds, autoplay: opts?.autoplay }
     el.currentTime = seconds
     setCurrentTime(Math.floor(seconds))
-    if (opts?.autoplay) jouerSansPromesse(el)
-  }, [])
+    if (opts?.autoplay) { setLectureDemandee(true); jouerSansPromesse(el, signalerEchec) }
+  }, [signalerEchec])
 
   const toggle = useCallback(() => {
     const el = audioRef.current
     if (!el) return
-    if (el.paused) jouerSansPromesse(el)
+    if (el.paused) { setLectureDemandee(true); jouerSansPromesse(el, signalerEchec) }
     else el.pause()
-  }, [])
+  }, [signalerEchec])
 
   const close = useCallback(() => {
     const el = audioRef.current
     if (el && track) { ecrirePosition(track.name, el.currentTime); ecrireRecent(track, el.currentTime) }
     if (el) el.pause()
-    setTrack(null); setPlaying(false); setCurrentTime(0); setDuration(0)
+    setTrack(null); setPlaying(false); setCurrentTime(0); setDuration(0); setErreur(false); setLectureDemandee(false)
   }, [track])
 
   const savedPosition = useCallback((name: string) => lirePosition(name), [])
@@ -169,13 +185,14 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const onLoadedMetadata = useCallback(() => {
     const el = audioRef.current
     if (!el || !track) return
+    setErreur(false)
     setDuration(Number.isFinite(el.duration) ? el.duration : 0)
     const demande = enAttente.current
     enAttente.current = null
     const startAt = demande?.startAt ?? lirePosition(track.name)
     if (startAt > 0) { el.currentTime = startAt; setCurrentTime(Math.floor(startAt)) }
-    if (demande?.autoplay) jouerSansPromesse(el)
-  }, [track])
+    if (demande?.autoplay) jouerSansPromesse(el, signalerEchec)
+  }, [track, signalerEchec])
 
   const onTimeUpdate = useCallback(() => {
     const el = audioRef.current
@@ -196,8 +213,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, [track])
 
   const value = useMemo<AudioApi>(() => ({
-    track, playing, currentTime, duration, play, seek, toggle, close, savedPosition,
-  }), [track, playing, currentTime, duration, play, seek, toggle, close, savedPosition])
+    track, playing, erreur, lectureDemandee, currentTime, duration, play, seek, toggle, close, savedPosition,
+  }), [track, playing, erreur, lectureDemandee, currentTime, duration, play, seek, toggle, close, savedPosition])
 
   return (
     <Ctx.Provider value={value}>
@@ -210,6 +227,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
           onLoadedMetadata={onLoadedMetadata}
           onTimeUpdate={onTimeUpdate}
           onDurationChange={onDurationChange}
+          onError={signalerEchec}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onEnded={() => { setPlaying(false); if (track) { ecrirePosition(track.name, 0); oublierRecent(track.name) } }}
@@ -225,7 +243,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
  * L'application réelle monte toujours l'`AudioProvider` à la racine.
  */
 const STUB: AudioApi = Object.freeze({
-  track: null, playing: false, currentTime: -1, duration: 0,
+  track: null, playing: false, erreur: false, lectureDemandee: false, currentTime: -1, duration: 0,
   play: () => {}, seek: () => {}, toggle: () => {}, close: () => {}, savedPosition: () => 0,
 })
 

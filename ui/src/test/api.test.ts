@@ -166,9 +166,8 @@ describe('client API', () => {
         // L'Assistant transporte le provider LLM choisi, comme la transcription
         // et le compte-rendu : plus de forçage muet.
         //
-        // Le défaut est `mlx` (le local tourne sur MLX, voir
-        // `lib/llmProvider.ts`). Ce test épingle le REPLI d'un stockage vide ;
-        // un choix déjà persisté n'est pas écrasé par `getLlmProvider`.
+        // Sans fournisseur passé, le défaut est le modèle local de cette installation (`mlx`, voir `FOURNISSEUR_LOCAL_DE_REPLI`) ;
+        // un fournisseur retenu par le compte est passé par l'appelant (`AskPanel`).
         llm_provider: 'mlx',
       }),
     })

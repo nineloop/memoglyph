@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { EclFaits } from '../components/EclFaits'
 import { LangProvider } from '../components/LangProvider'
 import { getConfig, getFaitsReunion, getJobStatus, relancerFaitsReunion, type FaitEcl } from '../api'
+import { aucuneFenetreDeConfirmation, avecConfirmation, confirmer as confirmerLaFenetre, fenetreDeConfirmation, phraseDeLaFenetre, refuser } from './confirmation'
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api')
@@ -30,7 +31,7 @@ beforeEach(() => {
 describe('EclFaits', () => {
   it('affiche la citation d’abord, l’énoncé marqué reformulé, et « à vérifier » en local', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL, CLOUD] })
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('« on fixe le prix à 25 euros »')).toBeTruthy()
     expect(screen.getByText('Le prix est fixé à 25 euros.')).toBeTruthy()
     expect(screen.getAllByText('Reformulé')).toHaveLength(2)
@@ -43,14 +44,14 @@ describe('EclFaits', () => {
 
   it('n’affiche aucun taux, même si un serveur plus ancien en rend un', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [{ ...LOCAL, taux: 0.62 } as FaitEcl] })
-    const { container } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const { container } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('À vérifier')).toBeTruthy()
     expect(container.querySelector('.ecl-faits')?.textContent).not.toMatch(/62|%|précision/i)
   })
 
   it('sans taux mesuré, aucun pourcentage : « à vérifier » en local, rien en cloud', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL, { ...CLOUD, modele: 'gpt-5.6-luna' }] })
-    const { container } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const { container } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('À vérifier')).toBeTruthy()
     expect(container.querySelector('.ecl-faits')?.textContent).not.toMatch(/%/)
     expect(screen.queryByText(/précision/i)).toBeNull()
@@ -58,12 +59,12 @@ describe('EclFaits', () => {
 
   it('un fait cloud ne montre ni taux de précision ni « à vérifier »', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [{ ...CLOUD, modele: 'claude-sonnet-5-5', taux: 0.67 } as FaitEcl] })
-    const { container, unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const { container, unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('modèle : claude-sonnet-5-5')).toBeTruthy()
     expect(container.querySelector('.ecl-faits')?.textContent).not.toMatch(/67|%|précision/i)
     expect(screen.queryByText(/À vérifier/)).toBeNull()
     unmount()
-    const anglais = render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const anglais = render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('model: claude-sonnet-5-5')).toBeTruthy()
     expect(anglais.container.querySelector('.ecl-faits')?.textContent).not.toMatch(/67|%|precision/i)
   })
@@ -74,16 +75,15 @@ describe('EclFaits', () => {
       local_providers: ['mlx'], default_llm_provider: 'mlx', llm_ready: { anthropic: true } } as never)
     vi.mocked(relancerFaitsReunion).mockResolvedValue({ job_id: 'J1' })
     vi.mocked(getJobStatus).mockResolvedValue({ id: 'J1', status: 'done', progress: 1, message: '', result: null, error: null })
-    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
-    await screen.findByRole('option', { name: 'Anthropic Claude (cloud)' })
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
+    await screen.findByRole('option', { name: 'Anthropic Claude · En ligne' })
     const choix = screen.getByRole('combobox') as HTMLSelectElement
     expect(choix.value).toBe('anthropic')
-    expect(screen.getByRole('option', { name: 'MLX (local)' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'MLX · Local' })).toBeTruthy()
     await userEvent.click(screen.getByRole('button', { name: 'Relancer l’extraction des faits' }))
-    expect(confirmer).toHaveBeenCalled()
+    expect(await fenetreDeConfirmation()).toHaveAccessibleName('Envoi vers un fournisseur en ligne')
+    await confirmerLaFenetre(userEvent)
     expect(relancerFaitsReunion).toHaveBeenCalledWith('M1', 'all', 'anthropic')
-    confirmer.mockRestore()
   })
 
   it('l\'échec d\'une relance se dit par son CODE traduit, jamais par le texte brut du serveur', async () => {
@@ -93,7 +93,7 @@ describe('EclFaits', () => {
     vi.mocked(relancerFaitsReunion).mockResolvedValue({ job_id: 'J2' })
     vi.mocked(getJobStatus).mockResolvedValue({ id: 'J2', status: 'error', progress: 0.5, message: '', result: null,
       error: 'Extraction vide : aucune unité retenue sur 3 appel(s)', error_code: 'step.error.emptyExtraction', error_params: {} })
-    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     await screen.findByRole('combobox')
     await userEvent.click(screen.getByRole('button', { name: /Re-extract/ }))
     expect(await screen.findByText('Extraction failed: The model kept nothing from this meeting. Try another model.')).toBeTruthy()
@@ -106,7 +106,7 @@ describe('EclFaits', () => {
       llm_ready: { mlx: true } } as never)
     vi.mocked(relancerFaitsReunion).mockResolvedValue({ job_id: 'J3' })
     vi.mocked(getJobStatus).mockResolvedValue({ id: 'J3', status: 'error', progress: 0, message: '', result: null, error: 'Panne ancienne' })
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     await screen.findByRole('combobox')
     await userEvent.click(screen.getByRole('button', { name: 'Relancer l’extraction des faits' }))
     expect(await screen.findByText(/Panne ancienne/)).toBeTruthy()
@@ -117,70 +117,76 @@ describe('EclFaits', () => {
     vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx', 'anthropic'], local_providers: ['mlx'],
       default_llm_provider: 'mlx', llm_ready: { anthropic: true } } as never)
     vi.mocked(relancerFaitsReunion).mockClear()
-    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(false)
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
-    await screen.findByRole('option', { name: 'Anthropic Claude (cloud)' })
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
+    await screen.findByRole('option', { name: 'Anthropic Claude · En ligne' })
     const choix = screen.getByRole('combobox') as HTMLSelectElement
     expect(choix.className).toBe('mini-select')
     await userEvent.click(screen.getByRole('button', { name: 'Relancer l’extraction des faits' }))
-    expect(confirmer).toHaveBeenCalledWith(
-      'Le transcript de cette réunion partira chez Anthropic Claude (cloud). Confirmer ?')
+    expect(await phraseDeLaFenetre()).toBe('Le transcript de cette réunion partira chez Anthropic Claude.')   // le bouton dit l'action : pas de « Confirmer ? »
+    expect(within(await fenetreDeConfirmation()).getByRole('button', { name: 'Envoyer le transcript' })).toBeInTheDocument()
+    await refuser(userEvent)
     expect(relancerFaitsReunion).not.toHaveBeenCalled()                         // refusée : rien ne part
-    confirmer.mockRestore()
   })
 
   it('sans clé Anthropic, ou en ultra-confidentiel, le défaut reste local', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
     vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx', 'anthropic'], local_providers: ['mlx'],
       default_llm_provider: 'mlx', llm_ready: { anthropic: false } } as never)
-    const { unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
-    await screen.findByRole('option', { name: 'Anthropic Claude (cloud)' })
+    const { unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
+    await screen.findByRole('option', { name: 'Anthropic Claude · En ligne' })
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('mlx')
     unmount()
     vi.mocked(getConfig).mockResolvedValue({ llm_providers: ['mlx', 'anthropic'], local_providers: ['mlx'],
       default_llm_provider: 'mlx', llm_ready: { anthropic: true } } as never)
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} ultra /></LangProvider>)
-    await screen.findByRole('option', { name: 'MLX (local)' })
-    expect(screen.queryByRole('option', { name: 'Anthropic Claude (cloud)' })).toBeNull()
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} ultra /></LangProvider>, { wrapper: avecConfirmation })
+    await screen.findByRole('option', { name: 'MLX · Local' })
+    expect(screen.queryByRole('option', { name: /Anthropic Claude/ })).toBeNull()
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('mlx')
   })
 
   it('l’horodatage ouvre le passage du transcript', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
     const onSource = vi.fn()
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={onSource} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={onSource} /></LangProvider>, { wrapper: avecConfirmation })
     await userEvent.click(await screen.findByRole('button', { name: 'Voir le passage à 00:01:02' }))
     expect(onSource).toHaveBeenCalledWith('reunion.md', '00:01:02')
   })
 
   it('dit qu’une réunion n’a aucun fait, en français et en anglais', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [] })
-    const { unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const { unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('Aucun fait relevé pour cette réunion.')).toBeTruthy()
     unmount()
-    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('No facts recorded for this meeting.')).toBeTruthy()
   })
 
   it('en anglais, la mention et le type sont traduits', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
-    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('To verify')).toBeTruthy()
     expect(screen.queryByText(/precision/i)).toBeNull()
     expect(screen.getByText('Decision')).toBeTruthy()
     expect(screen.getByText('Reworded')).toBeTruthy()
   })
 
+  it('une erreur de lecture est dite en une phrase : ni « HTTP », ni le texte de l’exception', async () => {
+    vi.mocked(getFaitsReunion).mockImplementation(() => Promise.reject(new Error('HTTP 500: lecture-brute')))
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
+    expect(await screen.findByText('Faits illisibles.')).toBeTruthy()
+    expect(document.body.textContent).not.toMatch(/HTTP|lecture-brute/)
+  })
+
   it('une erreur de lecture est dite, pas masquée', async () => {
     vi.mocked(getFaitsReunion).mockImplementation(() => Promise.reject(new Error('404')))
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText(/Faits illisibles/)).toBeTruthy()
   })
 
   it('montre la suite de la citation à part, le mode et le fournisseur', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [{
       ...LOCAL, citation: 'on garde le rouge', affiche: 'on garde le rouge oui, d’accord pour tous', fournisseur: 'mlx' }] })
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('« on garde le rouge »')).toBeTruthy()
     expect(screen.getByText(/… oui, d’accord pour tous/)).toBeTruthy()               // la suite, distincte
     expect(screen.getByText('local · mlx')).toBeTruthy()
@@ -190,38 +196,36 @@ describe('EclFaits', () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
     vi.mocked(relancerFaitsReunion).mockResolvedValue({ job_id: 'J1' })
     vi.mocked(getJobStatus).mockResolvedValue({ id: 'J1', status: 'done', progress: 1, message: '', result: null, error: null })
-    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     await userEvent.selectOptions(await screen.findByRole('combobox'), 'openai')
     await userEvent.click(screen.getByRole('button', { name: 'Relancer l’extraction des faits' }))
-    expect(confirmer).toHaveBeenCalledWith(expect.stringContaining('OpenAI (cloud)'))      // le libellé, pas l’identifiant
+    expect(await phraseDeLaFenetre()).toContain('OpenAI')                          // le libellé, pas l’identifiant
+    await confirmerLaFenetre(userEvent)
     expect(relancerFaitsReunion).toHaveBeenCalledWith('M1', 'all', 'openai')
     expect(await screen.findByText('L’extraction précédente est gardée, datée.')).toBeTruthy()
     expect(getFaitsReunion).toHaveBeenCalledTimes(2)
-    confirmer.mockRestore()
   })
 
   it('un refus de confirmation ne relance rien ; en local, pas de confirmation', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
     vi.mocked(relancerFaitsReunion).mockResolvedValue({ job_id: 'J1' })
     vi.mocked(getJobStatus).mockResolvedValue({ id: 'J1', status: 'done', progress: 1, message: '', result: null, error: null })
-    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(false)
-    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     await userEvent.selectOptions(await screen.findByRole('combobox'), 'mistral')
     await userEvent.click(screen.getByRole('button', { name: 'Re-extract the facts' }))
+    expect(await fenetreDeConfirmation()).toHaveAccessibleName('Sending to an online provider')
+    await refuser(userEvent)
     expect(relancerFaitsReunion).not.toHaveBeenCalled()
     await userEvent.selectOptions(screen.getByRole('combobox'), 'mlx')
-    confirmer.mockClear()
     await userEvent.click(screen.getByRole('button', { name: 'Re-extract the facts' }))
-    expect(confirmer).not.toHaveBeenCalled()
+    aucuneFenetreDeConfirmation()                                                   // en local, aucune fenêtre
     expect(relancerFaitsReunion).toHaveBeenCalledWith('M1', 'all', 'mlx')
-    confirmer.mockRestore()
   })
 
   it('un modèle local (repli sur le modèle du CR) : « à vérifier » et ce modèle-là', async () => {
     const repli = { ...LOCAL, modele: 'mlx-community/Qwen3-4B-Instruct-2507-4bit', fournisseur: 'mlx' }
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [repli] })
-    const { container } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const { container } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('À vérifier')).toBeTruthy()
     expect(screen.getByText('modèle : mlx-community/Qwen3-4B-Instruct-2507-4bit')).toBeTruthy()   // le modèle exécuté
     expect(container.querySelector('.ecl-faits')?.textContent).not.toMatch(/%/)              // aucun taux d’emprunt
@@ -232,7 +236,7 @@ describe('EclFaits', () => {
       statut: 'perime', motif_peremption: 'citation_absente' }
     const actuel: FaitEcl = { ...LOCAL, citation: 'on fixe le prix à 35 euros', enonce: 'Le prix est fixé à 35 euros.' }
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [actuel], perimes: [perime] })
-    const { container, unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const { container, unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     const section = await screen.findByRole('region', { name: /Faits périmés/ })
     expect(section.textContent).toContain('Périmé')
     expect(section.textContent).toContain('la citation ne figure plus dans le transcript')
@@ -244,7 +248,7 @@ describe('EclFaits', () => {
     expect(actuels[0].textContent).not.toContain('25 euros')                                    // jamais parmi les actuels
     expect(screen.getAllByText('Reformulé')).toHaveLength(1)
     unmount()
-    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     const enAnglais = await screen.findByRole('region', { name: /Stale facts/ })
     expect(enAnglais.textContent).toContain('Stale')
     expect(enAnglais.textContent).toContain('the quote is no longer in the transcript')
@@ -253,7 +257,7 @@ describe('EclFaits', () => {
   it('sans fait actuel, la réunion le dit et montre encore ses faits périmés', async () => {
     const perime: FaitEcl = { ...LOCAL, statut: 'perime', motif_peremption: 'contenance' }
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [], perimes: [perime] })
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('Aucun fait relevé pour cette réunion.')).toBeTruthy()
     const section = screen.getByRole('region', { name: /Faits périmés/ })
     expect(section.textContent).toContain('l’énoncé n’est plus porté par la citation')
@@ -261,7 +265,7 @@ describe('EclFaits', () => {
 
   it('en lecture seule, aucune relance n’est proposée', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [LOCAL] })
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="shared" onSource={() => {}} lectureSeule /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="shared" onSource={() => {}} lectureSeule /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('« on fixe le prix à 25 euros »')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Relancer l’extraction des faits' })).toBeNull()
     expect(getConfig).not.toHaveBeenCalled()
@@ -269,7 +273,7 @@ describe('EclFaits', () => {
 
   it('une réunion sans faits propose la première extraction', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [] })
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('Aucun fait relevé pour cette réunion.')).toBeTruthy()
     expect(await screen.findByRole('button', { name: 'Relancer l’extraction des faits' })).toBeTruthy()
   })
@@ -277,16 +281,16 @@ describe('EclFaits', () => {
   it('une extraction partielle est marquée, avec ses tranches en échec', async () => {
     const partielle = { tranches_en_echec: 1, tranches: 3 }
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [{ ...LOCAL, partielle }] })
-    const { unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    const { unmount } = render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText(/Extraction partielle : 1 tranche sur 3 en échec/)).toBeTruthy()
     unmount()
-    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="en"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText(/Partial extraction: 1 of 3 chunks failed/)).toBeTruthy()
   })
 
   it('une extraction complète ne porte pas la marque', async () => {
     vi.mocked(getFaitsReunion).mockResolvedValue({ meeting_id: 'M1', faits: [{ ...LOCAL, partielle: null }] })
-    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>)
+    render(<LangProvider initiale="fr"><EclFaits meetingId="M1" viewScope="all" onSource={() => {}} /></LangProvider>, { wrapper: avecConfirmation })
     expect(await screen.findByText('« on fixe le prix à 25 euros »')).toBeTruthy()
     expect(screen.queryByText(/Extraction partielle/)).toBeNull()
   })

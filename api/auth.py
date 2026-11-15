@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
@@ -63,7 +64,13 @@ _HACHEUR = PasswordHasher()
 
 
 class ErreurAuth(ValueError):
-    """Refus lisible : identifiant invalide, mot de passe trop court, code faux."""
+    """Refus lisible : identifiant invalide, mot de passe trop court, code faux.
+
+    `code` : la clé stable (`domaine.raison`) que l'interface traduit ; `None` quand le refus n'en a pas."""
+
+    def __init__(self, message: str = "", code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class TropDeTentatives(ErreurAuth):
@@ -145,6 +152,10 @@ def _connexion() -> sqlite3.Connection:
     if "cloud_ultra_modifie_le" not in colonnes:
         con.execute("ALTER TABLE utilisateurs ADD COLUMN cloud_ultra_modifie_le TEXT")
         con.commit()
+    # Magasin créé avant les réglages du traitement retenus par compte : colonne vide (aucun réglage retenu).
+    if "reglages_traitement" not in colonnes:
+        con.execute("ALTER TABLE utilisateurs ADD COLUMN reglages_traitement TEXT")
+        con.commit()
     return con
 
 
@@ -161,10 +172,10 @@ def _valider(identifiant: str, mot_de_passe: str) -> str:
     identifiant = (identifiant or "").strip()
     if not _IDENTIFIANT.match(identifiant):
         raise ErreurAuth("Identifiant invalide : 3 à 64 caractères parmi lettres, "
-                         "chiffres, point, tiret et soulignement.")
+                         "chiffres, point, tiret et soulignement.", code="account.id.invalid")
     if len(mot_de_passe or "") < LONGUEUR_MIN_MOT_DE_PASSE:
         raise ErreurAuth(f"Mot de passe trop court : {LONGUEUR_MIN_MOT_DE_PASSE} "
-                         "caractères au minimum.")
+                         "caractères au minimum.", code="account.password.tooShort")
     return identifiant
 
 
@@ -178,7 +189,7 @@ def _inserer(con: sqlite3.Connection, identifiant: str, mot_de_passe: str,
             (utilisateur.id, identifiant, _HACHEUR.hash(mot_de_passe), int(admin),
              _maintenant().isoformat()))
     except sqlite3.IntegrityError as exc:
-        raise ErreurAuth("Cet identifiant est déjà pris.") from exc
+        raise ErreurAuth("Cet identifiant est déjà pris.", code="account.id.taken") from exc
     return utilisateur
 
 
@@ -210,13 +221,13 @@ def desactiver_compte(identifiant: str) -> None:
         ligne = con.execute("SELECT id, admin, actif FROM utilisateurs WHERE identifiant = ?",
                             ((identifiant or "").strip(),)).fetchone()
         if ligne is None:
-            raise ErreurAuth(f"Aucun compte « {identifiant} ».")
+            raise ErreurAuth(f"Aucun compte « {identifiant} ».", code="account.unknown")
         if ligne["admin"] and ligne["actif"]:
             autres = con.execute(
                 "SELECT COUNT(*) FROM utilisateurs WHERE admin = 1 AND actif = 1 AND id != ?",
                 (ligne["id"],)).fetchone()[0]
             if not autres:
-                raise ErreurAuth("Impossible de désactiver le dernier administrateur actif.")
+                raise ErreurAuth("Impossible de désactiver le dernier administrateur actif.", code="account.lastAdmin")
         con.execute("UPDATE utilisateurs SET actif = 0 WHERE id = ?", (ligne["id"],))
         con.execute("UPDATE sessions SET revoquee = 1 WHERE utilisateur_id = ?", (ligne["id"],))
         # Comme les sessions : une réactivation ne rend pas les jetons d'avant.
@@ -228,7 +239,7 @@ def reactiver_compte(identifiant: str) -> None:
         modifies = con.execute("UPDATE utilisateurs SET actif = 1 WHERE identifiant = ?",
                                ((identifiant or "").strip(),)).rowcount
     if not modifies:
-        raise ErreurAuth(f"Aucun compte « {identifiant} ».")
+        raise ErreurAuth(f"Aucun compte « {identifiant} ».", code="account.unknown")
 
 
 # ---------- Limitation des tentatives ----------
@@ -316,11 +327,11 @@ def installer(code: str, identifiant: str, mot_de_passe: str) -> Utilisateur:
     identifiant = _valider(identifiant, mot_de_passe)
     with closing(_connexion()) as con, con:
         if con.execute("SELECT COUNT(*) FROM utilisateurs").fetchone()[0]:
-            raise ErreurAuth("L'installation est déjà faite.")
+            raise ErreurAuth("L'installation est déjà faite.", code="setup.done")
         attendu = con.execute("SELECT empreinte FROM installation").fetchone()
         if not attendu or not hmac.compare_digest(
                 _empreinte((code or "").strip().upper()), attendu["empreinte"]):
-            raise ErreurAuth("Code d'installation invalide.")
+            raise ErreurAuth("Code d'installation invalide.", code="setup.code.invalid")
         utilisateur = _inserer(con, identifiant, mot_de_passe, admin=True)
         con.execute("DELETE FROM installation")
     CODE_PATH.unlink(missing_ok=True)
@@ -417,7 +428,7 @@ def creer_jeton(utilisateur: Utilisateur, nom: str) -> tuple[dict, str]:
     """Crée un jeton d'appareil ; rend sa description et le jeton, à montrer une fois."""
     nom = " ".join((nom or "").split())
     if not nom or len(nom) > LONGUEUR_MAX_NOM_JETON:
-        raise ErreurAuth(f"Nom d'appareil invalide : 1 à {LONGUEUR_MAX_NOM_JETON} caractères.")
+        raise ErreurAuth(f"Nom d'appareil invalide : 1 à {LONGUEUR_MAX_NOM_JETON} caractères.", code="device.name.invalid")
     jeton = PREFIXE_JETON + secrets.token_urlsafe(32)
     with closing(_connexion()) as con, con:
         con.execute(
@@ -481,12 +492,12 @@ def reinitialiser_mot_de_passe(identifiant: str, mot_de_passe: str) -> None:
     """Remplace le mot de passe, révoque les sessions et lève le blocage du compte."""
     if len(mot_de_passe or "") < LONGUEUR_MIN_MOT_DE_PASSE:
         raise ErreurAuth(f"Mot de passe trop court : {LONGUEUR_MIN_MOT_DE_PASSE} "
-                         "caractères au minimum.")
+                         "caractères au minimum.", code="account.password.tooShort")
     with closing(_connexion()) as con, con:
         ligne = con.execute("SELECT id FROM utilisateurs WHERE identifiant = ?",
                             ((identifiant or "").strip(),)).fetchone()
         if ligne is None:
-            raise ErreurAuth(f"Aucun compte « {identifiant} ».")
+            raise ErreurAuth(f"Aucun compte « {identifiant} ».", code="account.unknown")
         con.execute("UPDATE utilisateurs SET hachage = ? WHERE id = ?",
                     (_HACHEUR.hash(mot_de_passe), ligne["id"]))
         con.execute("UPDATE sessions SET revoquee = 1 WHERE utilisateur_id = ?",
@@ -524,6 +535,36 @@ def regler_cloud_ultra(utilisateur: Utilisateur, autorise: bool) -> dict:
                     (int(bool(autorise)), _maintenant().isoformat(timespec="seconds"),
                      utilisateur.id))
     return cloud_ultra(utilisateur)
+
+
+# Les réglages du traitement qu'un compte retient comme valeurs par défaut : LA liste, en UN seul endroit. Le serveur ne
+# stocke ni ne rend aucune autre clé. Ajouter une clé retenue = l'ajouter ici (et à son vocabulaire dans l'API).
+CLES_RETENUES: tuple[str, ...] = ("fournisseur", "langue", "resultats", "sensibilite")
+
+
+def reglages_traitement(utilisateur: Utilisateur) -> Optional[dict]:
+    """Les réglages retenus par le compte, ou `None` si rien n'a été retenu. Seules les clés de `CLES_RETENUES` sortent."""
+    with closing(_connexion()) as con:
+        ligne = con.execute("SELECT reglages_traitement FROM utilisateurs WHERE id = ?", (utilisateur.id,)).fetchone()
+    if ligne is None or not ligne["reglages_traitement"]:
+        return None
+    try:
+        valeur = json.loads(ligne["reglages_traitement"])
+    except ValueError:
+        return None
+    return {cle: valeur[cle] for cle in CLES_RETENUES if cle in valeur} if isinstance(valeur, dict) else None
+
+
+def regler_traitement(utilisateur: Utilisateur, reglages: dict) -> dict:
+    """Retient ces réglages pour CE compte (ils remplacent les précédents) ; rend ce qui est relu. Une clé hors de
+    `CLES_RETENUES` est refusée (`ErreurAuth`), jamais ignorée en silence."""
+    inconnues = set(reglages) - set(CLES_RETENUES)
+    if inconnues:
+        raise ErreurAuth(f"Réglage non retenu : {', '.join(sorted(inconnues))}.")
+    brut = json.dumps({cle: reglages[cle] for cle in CLES_RETENUES if cle in reglages}, ensure_ascii=False, sort_keys=True)
+    with closing(_connexion()) as con, con:
+        con.execute("UPDATE utilisateurs SET reglages_traitement = ? WHERE id = ?", (brut, utilisateur.id))
+    return reglages_traitement(utilisateur) or {}
 
 
 def cloud_ultra_autorise(identifiant: str) -> bool:

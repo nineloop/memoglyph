@@ -140,18 +140,19 @@ it('aucun message ne reste identique par oubli de traduction', () => {
     'finops.transcription', 'finops.audio',
     // « Usage » et « Audio » s'écrivent à l'identique dans les deux langues.
     'app.nav.usage', 'usage.kpi.audio',
-    'app.lang.fr', 'app.lang.en', 'app.status.llmUnknown',
+    'app.lang.fr', 'app.lang.en',
     'app.nav.ask', 'app.nav.maintenance',
     // « Transcription » et « Archives » s'écrivent à l'identique.
     'traitements.nature.transcription', 'traitements.nature.archives',
-    'app.provider.ollamaLocal', 'app.provider.mlxLocal', 'app.provider.mistralCloud',
+    // « Local » s'écrit à l'identique dans les deux langues (le lieu d'un fournisseur dans une liste plate).
+    'fournisseur.lieu.local',
+    'app.provider.mlxLocal', 'app.provider.mistralCloud',
     'app.provider.openaiCloud', 'app.provider.anthropicCloud',
     'app.provider.openrouter', 'app.provider.groq',      // noms propres
     'spoken.codePlaceholder',
     'diar.engine.cloud', 'diar.engine.local',
-    'transcribe.flow.options', 'transcribe.options.title',
-    'transcribe.expert.stt', 'transcribe.expert.llm',
-    'transcribe.mode.sideMistral',
+    'transcribe.flow.options',
+    'transcribe.expert.stt',
     'sensitivity.standard',
     'timeline.stt', 'timeline.archive',
     // « passage » et « document » s'écrivent à l'identique dans les deux langues.
@@ -166,13 +167,14 @@ it('aucun message ne reste identique par oubli de traduction', () => {
     'maint.card.documents',
     'maint.card.semantic.detail.one', 'maint.card.semantic.detail.other',
     'maint.card.voiceprints.detail.one', 'maint.card.voiceprints.detail.other',
-    'maint.diag.title', 'maint.tab.backfill', 'maint.title',
+    'maint.diag.title', 'maint.title',
+    // « documents » s'écrit à l'identique dans les deux langues (le mot « portée » en a été retiré).
+    'maint.card.documents.detail',
     'meeting.fact.date', 'meeting.facts.mode.cloud', 'meeting.facts.mode.local', 'meeting.facts.source',
     'meeting.facts.type.action', 'meeting.info.source', 'meeting.tab.versions',
     // « Capture » et « replay » s'écrivent à l'identique dans les deux langues.
     'meeting.info.capture', 'meeting.info.capture.replay',
     'meeting.versions.transcripts',
-    'reader.backTranscript',
     'report.genre.interview', 'report.genre.keynote',
     'voices.occurrences.count.one', 'voices.occurrences.count.other',
     'voices.occurrences.title',

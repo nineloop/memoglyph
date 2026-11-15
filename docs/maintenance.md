@@ -4,8 +4,9 @@ Archives historiques, corbeille et suppression, portée des projets et des voix.
 
 ## Maintenance des archives historiques
 
-L'écran **Maintenance** distingue les archives fidèles déjà présentes, les
-originaux encore exploitables et les documents devenus impossibles à compléter.
+L'écran **Maintenance** (« Copie audio conservée ») distingue les copies audio déjà
+présentes, les originaux disponibles pour en créer une et les documents impossibles à
+compléter sans original.
 Le CLI simule toujours par défaut :
 
 ```bash
@@ -33,7 +34,7 @@ est annoncée et l'opération peut être relancée.
 ### Portée projet — et la contrepartie sur les voix
 
 Un projet **borne l'accès** aux documents, plus seulement l'affichage : lire,
-télécharger, écouter, générer un compte-rendu, déplacer ou supprimer exige de
+télécharger, écouter, générer un compte rendu, déplacer ou supprimer exige de
 dire depuis quelle portée (`view_scope`), sans valeur par défaut. La portée d'un
 document est celle de son **dossier** ; `view_scope=all` reste le seul
 élargissement, explicite, et les liens partagés `?projet=all` fonctionnent.

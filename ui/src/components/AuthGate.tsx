@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useState, type FormEvent, type Reac
 
 import { connecter, deconnecter, getEtatAuth, installer, type Utilisateur } from '../api'
 import { useLang } from '../lib/langContext'
+import { phraseDErreur } from '../lib/erreurs'
 import { SessionContext } from '../lib/sessionContext'
 import type { Session } from '../lib/sessionContext'
 
@@ -110,7 +111,7 @@ function Champ({ id, label, type = 'text', value, onChange, autoComplete }: {
 }
 
 function EcranInstallation({ onEntree }: { onEntree: (u: Utilisateur) => void }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [code, setCode] = useState('')
   const [identifiant, setIdentifiant] = useState('')
   const [motDePasse, setMotDePasse] = useState('')
@@ -129,7 +130,7 @@ function EcranInstallation({ onEntree }: { onEntree: (u: Utilisateur) => void })
     try {
       onEntree((await installer(code, identifiant, motDePasse)).utilisateur)
     } catch (exc) {
-      setErreur(t('auth.error.failed', { detail: (exc as Error).message }))
+      setErreur(phraseDErreur(t, lang, exc, t('repli.installation')))
     } finally {
       setEnvoi(false)
     }
@@ -138,6 +139,11 @@ function EcranInstallation({ onEntree }: { onEntree: (u: Utilisateur) => void })
   return (
     <main className="auth-screen">
       <form className="auth-card" onSubmit={soumettre} aria-labelledby="auth-install-title">
+        <div className="auth-brand">
+          <img className="brand-mark-clair" src="/brand/memoglyph-symbole.svg" alt="" />
+          <img className="brand-mark-sombre" src="/brand/memoglyph-symbole-sombre.svg" alt="" />
+          <span>Memoglyph</span>
+        </div>
         <h1 id="auth-install-title">{t('auth.install.title')}</h1>
         <p>{t('auth.install.lead')}</p>
         <Champ id="auth-code" label={t('auth.install.code')} value={code} onChange={setCode}
@@ -146,6 +152,7 @@ function EcranInstallation({ onEntree }: { onEntree: (u: Utilisateur) => void })
                onChange={setIdentifiant} autoComplete="username" />
         <Champ id="auth-password" label={t('auth.field.password')} type="password" value={motDePasse}
                onChange={setMotDePasse} autoComplete="new-password" />
+        <p className="auth-hint">{t('auth.field.passwordHint')}</p>
         <Champ id="auth-confirm" label={t('auth.field.confirm')} type="password" value={confirmation}
                onChange={setConfirmation} autoComplete="new-password" />
         {erreur && <p className="auth-error" role="alert">{erreur}</p>}
@@ -156,7 +163,7 @@ function EcranInstallation({ onEntree }: { onEntree: (u: Utilisateur) => void })
 }
 
 function EcranConnexion({ onEntree, expiree }: { onEntree: (u: Utilisateur) => void; expiree: boolean }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [identifiant, setIdentifiant] = useState('')
   const [motDePasse, setMotDePasse] = useState('')
   const [erreur, setErreur] = useState('')
@@ -169,7 +176,7 @@ function EcranConnexion({ onEntree, expiree }: { onEntree: (u: Utilisateur) => v
     try {
       onEntree((await connecter(identifiant, motDePasse)).utilisateur)
     } catch (exc) {
-      setErreur(t('auth.error.failed', { detail: (exc as Error).message }))
+      setErreur(phraseDErreur(t, lang, exc, t('repli.connexion')))
     } finally {
       setEnvoi(false)
     }

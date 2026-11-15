@@ -19,12 +19,12 @@ function rendre(lang: Lang, node: React.ReactNode) {
 it('ScopeControl suit la langue de l’interface', () => {
   const { unmount } = rendre('fr',
     <ScopeControl allProjects canToggle={false} scopeLabel="Climat" onToggle={() => {}} detail="" />)
-  expect(screen.getByText('Portée : Tous mes projets')).toBeInTheDocument()
+  expect(screen.getByText('Dans : Tous mes projets')).toBeInTheDocument()
   unmount()
 
   rendre('en',
     <ScopeControl allProjects={false} canToggle scopeLabel="Climate" onToggle={() => {}} detail="" />)
-  expect(screen.getByText('Scope: Project Climate')).toBeInTheDocument()
+  expect(screen.getByText('In: Project Climate')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Search across all my projects' })).toBeInTheDocument()
 })
 
