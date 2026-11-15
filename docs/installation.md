@@ -21,6 +21,8 @@ cp .env.example .env
 ./start.sh
 ```
 
+Après une mise à jour du dépôt, relancer `npm --prefix ui ci` : sinon les dépendances installées de l'interface gardent leurs versions précédentes.
+
 L'application indique l'adresse retenue, normalement
 [http://127.0.0.1:8770](http://127.0.0.1:8770). Si ces ports sont occupés, le
 script choisit automatiquement la paire libre suivante.

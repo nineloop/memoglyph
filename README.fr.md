@@ -117,4 +117,4 @@ make check
 
 Le code est sous licence Apache-2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). Les modèles gardent leurs propres licences. Le nom et le logo Memoglyph ne sont pas couverts par cette licence ; les fichiers de la marque sont décrits dans [docs/assets/brand/](docs/assets/brand/README.md).
 
-Version v1.3.0.
+Version v1.3.1.

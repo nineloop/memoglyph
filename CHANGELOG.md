@@ -2,6 +2,17 @@
 
 All notable changes to Memoglyph are documented in this file. Versions are listed from the most recent to the oldest; dates use the ISO 8601 format.
 
+## v1.3.1 (2026-11-15)
+
+Update of the interface dependencies in `ui/package-lock.json` (Vite, Vitest, PostCSS and their own dependencies): `npm audit` reported seven known vulnerabilities on v1.3.0 and none after this update. The application code is unchanged.
+
+### Changes
+- Dependencies: `ui/package-lock.json` is updated and `ui/package.json` is not. vite 8.1.5 → 8.3.8, vitest 4.1.10 → 4.1.12, postcss 8.5.19 → 8.5.33, nanoid 3.3.16 → 3.3.20, source-map-js 1.2.1 → 1.2.2, undici 7.28.0 → 7.30.2, with their own dependencies. The runtime libraries (react, react-dom, scheduler) are unchanged.
+- Advisories addressed, as reported by `npm audit` on v1.3.0: `vite` `GHSA-587h-7wmj-h5pm`, `GHSA-698v-4r3x-3vcv`, `GHSA-9jrq-w75r-8gcw`, `GHSA-r825-w8mm-5pxw`, `GHSA-rq7h-c2jc-7f22`; `postcss` `GHSA-fxqj-rqcc-2cmp`; `nanoid` `GHSA-2v37-7h3g-55p8`; `source-map-js` `GHSA-68fv-2mgg-jv7q`; `vitest` and `@vitest/mocker` `GHSA-82fw-gwwq-j7x9`, `GHSA-qxg6-89mg-rqv8`; `undici` (23) `GHSA-2gqq-gqf2-x968`, `GHSA-2jfj-6hjv-fm6j`, `GHSA-2m5v-pch6-74hx`, `GHSA-3wwx-pv8p-q78v`, `GHSA-3xpg-4rpp-hhhm`, `GHSA-4cwx-7wf7-3272`, `GHSA-4qv8-2p9j-2685`, `GHSA-4w7w-5xrc-9h26`, `GHSA-55wc-3pg8-jfw6`, `GHSA-8436-99hf-9mmv`, `GHSA-8xcm-r25x-g524`, `GHSA-9fm3-97px-rjf6`, `GHSA-f72v-6w45-q472`, `GHSA-jr45-8vmc-qm54`, `GHSA-m8rv-5g2x-5cg5`, `GHSA-pmjh-fq2x-6v4x`, `GHSA-qrxm-fqhp-jwvm`, `GHSA-r53p-7pc4-xj5r`, `GHSA-rfgv-xxqx-mfg5`, `GHSA-rx4f-c7p8-82vq`, `GHSA-v3r7-h72x-cjcm`, `GHSA-w293-vg96-wgc3`, `GHSA-xjj6-f33q-929c`.
+- The stylesheet produced by the interface build is identical to the one of v1.3.0.
+- To apply it on an existing installation, run `npm --prefix ui ci` again; otherwise the installed interface dependencies keep their previous versions.
+- Documentation: the installation page says to reinstall the interface dependencies after an update.
+
 ## v1.3.0 (2026-11-15)
 
 The interface is reworked for clarity and accessibility: your processing settings follow your account, failures say one plain sentence, the main screens are easier to read, and the application can be used with a keyboard and a screen reader. The optional speaker identification no longer sends usage statistics to its publisher, and the local MLX server keeps four prompt caches instead of ten, which lowers its memory use.

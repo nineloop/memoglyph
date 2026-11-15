@@ -119,4 +119,4 @@ make check
 
 The code is under the Apache-2.0 license ([LICENSE](LICENSE), [NOTICE](NOTICE)). Models keep their own licenses. The Memoglyph name and logo are not covered by that license; the brand files are described in [docs/assets/brand/](docs/assets/brand/README.md).
 
-Version v1.3.0.
+Version v1.3.1.
